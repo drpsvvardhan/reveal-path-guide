@@ -3,6 +3,7 @@ import { useManifest } from "@/context/ManifestContext";
 import { useDocuments } from "@/context/DocumentContext";
 import { Send, Loader2, FileText, ChevronDown, Copy, ClipboardCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import PatientCognitiveText from "@/components/PatientCognitiveText";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -10,26 +11,6 @@ interface ChatMessage {
 }
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
-
-function buildPatientContext(manifest: any): string {
-  const parts: string[] = [];
-  const p = manifest.patient;
-  if (p) parts.push(`Patient: ${p.firstName}, ${p.age}y, ${p.sex}`);
-  if (manifest.patientThesis?.title) parts.push(`Primary thesis: ${manifest.patientThesis.title}`);
-  if (manifest.patientThesis?.body) parts.push(manifest.patientThesis.body);
-  if (manifest.symptomBridges?.length) parts.push(`Symptom bridges:\n- ${manifest.symptomBridges.join("\n- ")}`);
-  if (manifest.reversibility) {
-    const r = manifest.reversibility;
-    if (r.weeks?.length) parts.push(`Reversible in weeks: ${r.weeks.join("; ")}`);
-    if (r.months?.length) parts.push(`Reversible in months: ${r.months.join("; ")}`);
-  }
-  if (manifest.sequencedActions?.startHere) {
-    parts.push(`Current priority action: ${manifest.sequencedActions.startHere.title} — ${manifest.sequencedActions.startHere.description}`);
-  }
-  if (manifest.careTeam?.physician) parts.push(`Physician: ${manifest.careTeam.physician.name}`);
-  if (manifest.careTeam?.coach) parts.push(`Coach: ${manifest.careTeam.coach.name}`);
-  return parts.join("\n\n");
-}
 
 const AI_MODELS = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", provider: "Anthropic" },
@@ -91,7 +72,7 @@ const AskSection: React.FC = () => {
         },
         body: JSON.stringify({
           messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
-          patientContext: buildPatientContext(manifest),
+          manifest, // send the full manifest for grounded reasoning
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: selectedModel,
         }),
@@ -149,28 +130,13 @@ const AskSection: React.FC = () => {
     setTimeout(() => setCopiedQ(null), 2000);
   };
 
-  const renderContent = (content: string) => {
-    return content.split(/\*\*(.*?)\*\*/g).map((part, j) =>
-      j % 2 === 1 ? (
-        <strong
-          key={j}
-          className="block mt-4 mb-1.5 font-sans font-semibold text-xs uppercase tracking-wider text-secondary first:mt-0"
-        >
-          {part}
-        </strong>
-      ) : (
-        <span key={j}>{part}</span>
-      )
-    );
-  };
-
   return (
     <section className="animate-fade-in space-y-5">
       <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary">
         Ask anything
       </h2>
       <p className="text-muted-foreground text-sm max-w-xl">
-        Your personal reasoning console. Ask about your results, protocol, uploaded records, or anything you're unsure about.
+        Your personal reasoning console. Ask about your results, protocol, uploaded records, or anything you're unsure about. Responses are grounded in your actual data.
       </p>
 
       {/* Model selector */}
@@ -266,9 +232,11 @@ const AskSection: React.FC = () => {
                   : "bg-card border border-border mr-4"
               }`}
             >
-              <p className={`text-sm whitespace-pre-line leading-relaxed ${msg.role === "assistant" ? "text-foreground" : ""}`}>
-                {msg.role === "assistant" ? renderContent(msg.content) : msg.content}
-              </p>
+              {msg.role === "assistant" ? (
+                <PatientCognitiveText content={msg.content} />
+              ) : (
+                <p className="text-sm whitespace-pre-line leading-relaxed">{msg.content}</p>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
