@@ -1,16 +1,85 @@
-import React from "react";
+import React, { useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { ArrowRight, Lock, Copy, ClipboardCheck } from "lucide-react";
+import { ArrowRight, Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, CheckCircle2, Clock, HelpCircle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
+type ActionStatus = "none" | "done" | "started" | "need-help";
+
+const statusConfig: Record<ActionStatus, { label: string; class: string; icon: React.ElementType }> = {
+  none: { label: "Mark progress", class: "border-border text-muted-foreground hover:border-secondary/40", icon: Clock },
+  done: { label: "Done today", class: "border-secondary/40 bg-secondary/10 text-secondary", icon: CheckCircle2 },
+  started: { label: "Started", class: "border-amber/40 bg-amber-light text-amber", icon: Clock },
+  "need-help": { label: "Need help", class: "border-accent/40 bg-coral-light text-accent", icon: HelpCircle },
+};
+
+const statusCycle: ActionStatus[] = ["none", "started", "done", "need-help"];
+
+const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: string; whatToNotice?: string } }> = ({ action }) => {
+  const [open, setOpen] = useState(false);
+  const hasContent = action.whyFirst || action.whatItAffects || action.whatToNotice;
+  if (!hasContent) return null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-secondary hover:text-secondary/80 transition-colors mt-2">
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {open ? "Less detail" : "Why this? What to notice?"}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-2 border-t border-border pt-2">
+        {action.whyFirst && (
+          <div>
+            <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-secondary mb-0.5">Why this first</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{action.whyFirst}</p>
+          </div>
+        )}
+        {action.whatItAffects && (
+          <div>
+            <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-secondary mb-0.5">What it affects</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{action.whatItAffects}</p>
+          </div>
+        )}
+        {action.whatToNotice && (
+          <div>
+            <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-secondary mb-0.5">What to notice</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{action.whatToNotice}</p>
+          </div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
 const ActionSection: React.FC = () => {
   const { manifest } = useManifest();
   const { sequencedActions, doctorQuestions, monitoringPlan, expectedProgress } = manifest;
-  const [copiedIdx, setCopiedIdx] = React.useState<number | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [actionStates, setActionStates] = useState<Record<string, ActionStatus>>({});
 
   const copyQuestion = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
+  const cycleStatus = (key: string) => {
+    const current = actionStates[key] || "none";
+    const nextIdx = (statusCycle.indexOf(current) + 1) % statusCycle.length;
+    setActionStates((prev) => ({ ...prev, [key]: statusCycle[nextIdx] }));
+  };
+
+  const renderStatusPill = (key: string) => {
+    const status = actionStates[key] || "none";
+    const config = statusConfig[status];
+    const Icon = config.icon;
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); cycleStatus(key); }}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-sans font-medium transition-all ${config.class}`}
+      >
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </button>
+    );
   };
 
   return (
@@ -22,14 +91,18 @@ const ActionSection: React.FC = () => {
       {/* Start Here */}
       {sequencedActions?.startHere && (
         <div className="rounded-xl border-2 border-secondary/30 bg-teal-light p-6">
-          <span className="text-xs font-sans font-semibold uppercase tracking-wider text-secondary mb-2 block">
-            Start here
-          </span>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-secondary">
+              Start here
+            </span>
+            {renderStatusPill("start")}
+          </div>
           <h3 className="font-serif text-xl text-foreground mb-2">{sequencedActions.startHere.title}</h3>
           <p className="text-muted-foreground mb-2">{sequencedActions.startHere.description}</p>
           {sequencedActions.startHere.details && (
             <p className="text-sm text-foreground/70 border-t border-secondary/10 pt-3 mt-3">{sequencedActions.startHere.details}</p>
           )}
+          <WhyExpander action={sequencedActions.startHere} />
         </div>
       )}
 
@@ -41,8 +114,12 @@ const ActionSection: React.FC = () => {
           </h3>
           {sequencedActions.thenAdd.map((a, i) => (
             <div key={i} className="rounded-lg border border-border bg-card p-4">
-              <p className="font-sans font-medium text-foreground text-sm mb-1">{a.title}</p>
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <p className="font-sans font-medium text-foreground text-sm">{a.title}</p>
+                {renderStatusPill(`then-${i}`)}
+              </div>
               <p className="text-sm text-muted-foreground">{a.description}</p>
+              <WhyExpander action={a} />
             </div>
           ))}
         </div>

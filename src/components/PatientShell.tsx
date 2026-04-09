@@ -4,6 +4,9 @@ import { useManifest } from "@/context/ManifestContext";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
+import TodayBar from "@/components/TodayBar";
+import QuickActions from "@/components/QuickActions";
+import WeeklySnapshot from "@/components/WeeklySnapshot";
 import JourneySection from "@/components/sections/JourneySection";
 import ThesisSection from "@/components/sections/ThesisSection";
 import HelpingFeedingSection from "@/components/sections/HelpingFeedingSection";
@@ -64,6 +67,15 @@ const PatientShell: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Today Bar + Quick Actions on Journey */}
+        {activeSection === "journey" && (
+          <div className="px-6 pt-6 md:px-10 max-w-3xl space-y-4">
+            <TodayBar />
+            <QuickActions onNavigate={handleNavigate} />
+            <WeeklySnapshot />
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           <motion.div

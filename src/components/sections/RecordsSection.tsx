@@ -1,15 +1,9 @@
 import React, { useRef, useState } from "react";
 import { useDocuments, PatientDocument } from "@/context/DocumentContext";
-import { Upload, FileText, X, Trash2, AlertCircle } from "lucide-react";
+import { Upload, FileText, X, Trash2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ACCEPTED_TYPES = [
-  "text/plain",
-  "text/csv",
-  "application/json",
-  "application/pdf",
-];
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = [".txt", ".csv", ".json", ".pdf", ".lab", ".hl7", ".xml", ".html"];
 
 function classifyDocument(name: string): string {
@@ -37,19 +31,17 @@ const RecordsSection: React.FC = () => {
 
   const processFile = async (file: File) => {
     setError(null);
-
     if (file.size > MAX_FILE_SIZE) {
       setError(`File too large: ${file.name}. Maximum size is 5MB.`);
       return;
     }
-
     try {
       const text = await file.text();
       const docType = classifyDocument(file.name);
       addDocument({
         name: file.name,
         type: docType,
-        content: text.slice(0, 50000), // Limit content for context window
+        content: text.slice(0, 50000),
         size: file.size,
       });
     } catch {
@@ -85,24 +77,43 @@ const RecordsSection: React.FC = () => {
         These will be used to give you more personalized guidance in the AI console.
       </p>
 
+      {/* Quick upload cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { label: "Lab results", icon: "🩸" },
+          { label: "Imaging", icon: "📷" },
+          { label: "Prescription", icon: "💊" },
+          { label: "Clinical notes", icon: "📋" },
+        ].map((card) => (
+          <button
+            key={card.label}
+            onClick={() => fileRef.current?.click()}
+            className="rounded-lg border border-border bg-card p-3 text-center hover:bg-muted/60 hover:border-secondary/30 transition-all"
+          >
+            <span className="text-lg block mb-1">{card.icon}</span>
+            <span className="text-xs font-sans font-medium text-foreground">{card.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={() => fileRef.current?.click()}
-        className={`relative rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
+        className={`relative rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
           dragOver
             ? "border-secondary bg-teal-light"
             : "border-border hover:border-secondary/40 hover:bg-muted/30"
         }`}
       >
-        <Upload className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+        <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
         <p className="font-sans font-medium text-foreground text-sm mb-1">
           Drop files here or click to browse
         </p>
         <p className="text-xs text-muted-foreground">
-          Labs, imaging reports, clinical notes, prescriptions · TXT, CSV, JSON, XML, HTML · Max 5MB
+          TXT, CSV, JSON, XML, HTML · Max 5MB
         </p>
         <input
           ref={fileRef}
@@ -114,7 +125,6 @@ const RecordsSection: React.FC = () => {
         />
       </div>
 
-      {/* Error */}
       {error && (
         <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3">
           <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
@@ -157,9 +167,10 @@ const RecordsSection: React.FC = () => {
                     </span>
                     <span className="text-xs text-muted-foreground">{formatSize(doc.size)}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {doc.content.slice(0, 150)}...
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-1.5 text-xs text-secondary">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Reviewed and integrated into your plan
+                  </div>
                 </div>
                 <button
                   onClick={() => removeDocument(doc.id)}
