@@ -20,18 +20,42 @@ export type Database = {
           id: string
           logged_at: string
           patient_id: string
+          user_id: string | null
         }
         Insert: {
           entry: string
           id?: string
           logged_at?: string
           patient_id?: string
+          user_id?: string | null
         }
         Update: {
           entry?: string
           id?: string
           logged_at?: string
           patient_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -41,18 +65,21 @@ export type Database = {
           patient_id: string
           recorded_at: string
           transcript: string
+          user_id: string | null
         }
         Insert: {
           id?: string
           patient_id?: string
           recorded_at?: string
           transcript: string
+          user_id?: string | null
         }
         Update: {
           id?: string
           patient_id?: string
           recorded_at?: string
           transcript?: string
+          user_id?: string | null
         }
         Relationships: []
       }
