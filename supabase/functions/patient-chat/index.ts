@@ -355,20 +355,15 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { messages, manifest, documents, model,
-            // backward compat: old clients may still send patientContext
-            patientContext } = body;
+    const { messages, manifest, documents, model } = body;
 
-    // If old-style patientContext is sent without manifest, build a minimal wrapper
-    const effectiveManifest = manifest ?? (patientContext ? { patient: { firstName: "Patient" }, patientThesis: { body: patientContext } } : null);
-
-    if (!effectiveManifest) {
+    if (!manifest) {
       return new Response(JSON.stringify({ error: "No manifest provided. The patient companion needs the patient's manifest to ground its reasoning." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const systemPrompt = buildPatientSystemPrompt(effectiveManifest, documents);
+    const systemPrompt = buildPatientSystemPrompt(manifest, documents);
 
     if (model?.startsWith("claude")) {
       return await handleAnthropicStream(messages, systemPrompt);
