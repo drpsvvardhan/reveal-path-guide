@@ -3,6 +3,7 @@ import { UtensilsCrossed, Mic, MessageCircle, Upload, ListChecks, Phone, ArrowLe
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useManifest } from "@/context/ManifestContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface QuickActionItem {
   icon: React.ElementType;
