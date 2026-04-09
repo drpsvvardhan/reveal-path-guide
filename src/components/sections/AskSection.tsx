@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useDocuments } from "@/context/DocumentContext";
-import { Send, Loader2, FileText } from "lucide-react";
+import { Send, Loader2, FileText, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChatMessage {
@@ -31,6 +31,14 @@ function buildPatientContext(manifest: any): string {
   return parts.join("\n\n");
 }
 
+const AI_MODELS = [
+  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "Google" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "Google" },
+  { id: "openai/gpt-5.2", label: "GPT-5.2", provider: "OpenAI" },
+  { id: "openai/gpt-5-mini", label: "GPT-5 Mini", provider: "OpenAI" },
+];
+
 const AskSection: React.FC = () => {
   const { manifest } = useManifest();
   const { documents } = useDocuments();
@@ -39,6 +47,8 @@ const AskSection: React.FC = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,6 +91,7 @@ const AskSection: React.FC = () => {
           messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
           patientContext: buildPatientContext(manifest),
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
+          model: selectedModel,
         }),
       });
 
@@ -155,7 +166,34 @@ const AskSection: React.FC = () => {
         Your personal reasoning console. Ask about your results, protocol, uploaded records, or anything you're unsure about.
       </p>
 
-      {/* Document indicator */}
+      {/* Model selector */}
+      <div className="relative">
+        <button
+          onClick={() => setShowModelPicker(!showModelPicker)}
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"
+        >
+          <span className="text-muted-foreground">Model:</span>
+          <span className="font-medium">{AI_MODELS.find(m => m.id === selectedModel)?.label}</span>
+          <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${showModelPicker ? "rotate-180" : ""}`} />
+        </button>
+        {showModelPicker && (
+          <div className="absolute top-full left-0 mt-1 z-20 rounded-lg border border-border bg-card shadow-lg py-1 min-w-[220px]">
+            {AI_MODELS.map((model) => (
+              <button
+                key={model.id}
+                onClick={() => { setSelectedModel(model.id); setShowModelPicker(false); }}
+                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between hover:bg-muted transition-colors ${
+                  selectedModel === model.id ? "text-secondary font-medium" : "text-foreground"
+                }`}
+              >
+                <span>{model.label}</span>
+                <span className="text-xs text-muted-foreground">{model.provider}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {documents.length > 0 && (
         <div className="flex items-center gap-2 rounded-lg bg-navy-light px-3 py-2 text-xs text-foreground">
           <FileText className="h-3.5 w-3.5 text-primary" />
