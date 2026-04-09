@@ -1,10 +1,11 @@
 import React, { useRef, useState } from "react";
 import { useDocuments, PatientDocument } from "@/context/DocumentContext";
-import { Upload, FileText, X, Trash2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, FileText, X, Trash2, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB for PDFs
 const ACCEPTED_EXTENSIONS = [".txt", ".csv", ".json", ".pdf", ".lab", ".hl7", ".xml", ".html"];
+const PARSE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-document`;
 
 function classifyDocument(name: string): string {
   const lower = name.toLowerCase();
@@ -23,29 +24,87 @@ function classifyDocument(name: string): string {
   return "Medical Record";
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip data URL prefix to get pure base64
+      const base64 = result.split(",")[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const RecordsSection: React.FC = () => {
   const { documents, addDocument, removeDocument, clearDocuments } = useDocuments();
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parsing, setParsing] = useState<string | null>(null); // filename being parsed
 
   const processFile = async (file: File) => {
     setError(null);
     if (file.size > MAX_FILE_SIZE) {
-      setError(`File too large: ${file.name}. Maximum size is 5MB.`);
+      setError(`File too large: ${file.name}. Maximum size is 20MB.`);
       return;
     }
-    try {
-      const text = await file.text();
-      const docType = classifyDocument(file.name);
-      addDocument({
-        name: file.name,
-        type: docType,
-        content: text.slice(0, 50000),
-        size: file.size,
-      });
-    } catch {
-      setError(`Could not read file: ${file.name}. Please try a text-based format.`);
+
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+
+    if (isPdf) {
+      // Send PDF to edge function for AI-powered extraction
+      setParsing(file.name);
+      try {
+        const base64 = await fileToBase64(file);
+        const resp = await fetch(PARSE_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            fileBase64: base64,
+            fileName: file.name,
+            mimeType: file.type,
+          }),
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.error || `Parse failed (${resp.status})`);
+        }
+
+        const { text } = await resp.json();
+        const docType = classifyDocument(file.name);
+        addDocument({
+          name: file.name,
+          type: docType,
+          content: text.slice(0, 50000),
+          size: file.size,
+        });
+      } catch (e: any) {
+        console.error("PDF parse error:", e);
+        setError(`Could not parse PDF: ${file.name}. ${e.message || "Please try again."}`);
+      } finally {
+        setParsing(null);
+      }
+    } else {
+      // Text-based files — read directly
+      try {
+        const text = await file.text();
+        const docType = classifyDocument(file.name);
+        addDocument({
+          name: file.name,
+          type: docType,
+          content: text.slice(0, 50000),
+          size: file.size,
+        });
+      } catch {
+        setError(`Could not read file: ${file.name}. Please try a text-based format.`);
+      }
     }
   };
 
@@ -74,7 +133,7 @@ const RecordsSection: React.FC = () => {
       </h2>
       <p className="text-muted-foreground text-sm max-w-xl">
         Upload your lab results, imaging reports, clinical notes, or any medical records.
-        These will be used to give you more personalized guidance in the AI console.
+        PDFs are automatically parsed and extracted so the AI can reference your actual values.
       </p>
 
       {/* Quick upload cards */}
@@ -88,7 +147,8 @@ const RecordsSection: React.FC = () => {
           <button
             key={card.label}
             onClick={() => fileRef.current?.click()}
-            className="rounded-lg border border-border bg-card p-3 text-center hover:bg-muted/60 hover:border-secondary/30 transition-all"
+            disabled={!!parsing}
+            className="rounded-lg border border-border bg-card p-3 text-center hover:bg-muted/60 hover:border-secondary/30 transition-all disabled:opacity-50"
           >
             <span className="text-lg block mb-1">{card.icon}</span>
             <span className="text-xs font-sans font-medium text-foreground">{card.label}</span>
@@ -101,20 +161,35 @@ const RecordsSection: React.FC = () => {
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
-        className={`relative rounded-xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
+        onClick={() => !parsing && fileRef.current?.click()}
+        className={`relative rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+          parsing ? "opacity-50 cursor-wait" :
           dragOver
-            ? "border-secondary bg-teal-light"
-            : "border-border hover:border-secondary/40 hover:bg-muted/30"
+            ? "border-secondary bg-teal-light cursor-pointer"
+            : "border-border hover:border-secondary/40 hover:bg-muted/30 cursor-pointer"
         }`}
       >
-        <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-        <p className="font-sans font-medium text-foreground text-sm mb-1">
-          Drop files here or click to browse
-        </p>
-        <p className="text-xs text-muted-foreground">
-          TXT, CSV, JSON, XML, HTML · Max 5MB
-        </p>
+        {parsing ? (
+          <>
+            <Loader2 className="h-6 w-6 mx-auto mb-2 text-secondary animate-spin" />
+            <p className="font-sans font-medium text-foreground text-sm mb-1">
+              Parsing {parsing}...
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Extracting text, values, and structure from your document
+            </p>
+          </>
+        ) : (
+          <>
+            <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
+            <p className="font-sans font-medium text-foreground text-sm mb-1">
+              Drop files here or click to browse
+            </p>
+            <p className="text-xs text-muted-foreground">
+              PDF, TXT, CSV, JSON, XML, HTML · Max 20MB
+            </p>
+          </>
+        )}
         <input
           ref={fileRef}
           type="file"
@@ -166,10 +241,15 @@ const RecordsSection: React.FC = () => {
                       {doc.type}
                     </span>
                     <span className="text-xs text-muted-foreground">{formatSize(doc.size)}</span>
+                    {doc.name.toLowerCase().endsWith(".pdf") && (
+                      <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                        AI-parsed
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-1.5 text-xs text-secondary">
                     <CheckCircle2 className="h-3 w-3" />
-                    Reviewed and integrated into your plan
+                    Extracted and integrated into AI context
                   </div>
                 </div>
                 <button
