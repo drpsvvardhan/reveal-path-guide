@@ -41,6 +41,7 @@ const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
   const { signOut, user } = useAuth();
   const [activeSection, setActiveSection] = useState("journey");
+  const [profileOpen, setProfileOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
   const handleNavigate = (id: string) => {
