@@ -173,3 +173,26 @@ export interface PatientRevealManifest {
   todayBar?: TodayBar;
   weeklySnapshot?: WeeklySnapshot;
 }
+
+// ============================================================================
+// QUESTION QUEUE TYPES
+// ============================================================================
+
+export interface QueuedQuestion {
+  id: string;
+  user_id: string;
+  question: string;
+  rationale: string | null;
+  source: "auto" | "manual";
+  status: "queued" | "archived";
+  priority: number;
+  source_user_message: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface QueueShareInfo {
+  shareToken: string | null;
+  shareUrl: string | null;
+}
