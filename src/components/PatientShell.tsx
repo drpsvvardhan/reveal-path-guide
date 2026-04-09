@@ -2,7 +2,8 @@ import React, { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
+import { useState as useMenuState } from "react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
@@ -65,13 +66,49 @@ const PatientShell: React.FC = () => {
                 {activeNav?.label ?? "Journey"}
               </h2>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="md:hidden">
-                <p className="text-xs text-primary font-sans font-medium tracking-wider">Vizzhy</p>
-              </div>
-              <button onClick={signOut} title="Sign out" className="p-1.5 rounded-md hover:bg-muted/60 transition-colors">
-                <LogOut className="h-4 w-4 text-muted-foreground" />
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen((o) => !o)}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-muted/60 transition-colors"
+              >
+                <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-sans font-semibold text-primary shrink-0">
+                  {(user?.user_metadata?.full_name?.[0] ?? user?.email?.[0] ?? "?").toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="text-xs font-sans font-medium text-foreground leading-tight truncate max-w-[140px]">
+                    {user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "User"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-sans leading-tight truncate max-w-[140px]">
+                    {user?.email ?? ""}
+                  </p>
+                </div>
+                <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block" />
               </button>
+
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
+                    <div className="px-3 py-2 border-b border-border sm:hidden">
+                      <p className="text-xs font-sans font-medium text-foreground truncate">
+                        {user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "User"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-sans truncate">{user?.email}</p>
+                    </div>
+                    <div className="px-3 py-2 hidden sm:block border-b border-border">
+                      <p className="text-[10px] text-muted-foreground font-sans">Signed in as</p>
+                      <p className="text-xs font-sans text-foreground truncate">{user?.email}</p>
+                    </div>
+                    <button
+                      onClick={() => { setProfileOpen(false); signOut(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                    >
+                      <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
