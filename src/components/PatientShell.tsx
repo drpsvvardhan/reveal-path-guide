@@ -20,6 +20,7 @@ import AskSection from "@/components/sections/AskSection";
 import ConfidenceSection from "@/components/sections/ConfidenceSection";
 import CareMapSection from "@/components/sections/CareMapSection";
 import CareTeamSection from "@/components/sections/CareTeamSection";
+import QueueSection from "@/components/sections/QueueSection";
 import { navItems } from "@/components/navigation/navItems";
 
 const sections: Record<string, React.FC> = {
@@ -34,6 +35,7 @@ const sections: Record<string, React.FC> = {
   confidence: ConfidenceSection,
   "care-map": CareMapSection,
   "care-team": CareTeamSection,
+  queue: QueueSection,
 };
 
 const PatientShell: React.FC = () => {
