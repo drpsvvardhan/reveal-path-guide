@@ -10,6 +10,7 @@ import HelpingFeedingSection from "@/components/sections/HelpingFeedingSection";
 import SymptomBridgesSection from "@/components/sections/SymptomBridgesSection";
 import ReversibilitySection from "@/components/sections/ReversibilitySection";
 import ActionSection from "@/components/sections/ActionSection";
+import RecordsSection from "@/components/sections/RecordsSection";
 import AskSection from "@/components/sections/AskSection";
 import ConfidenceSection from "@/components/sections/ConfidenceSection";
 import CareMapSection from "@/components/sections/CareMapSection";
@@ -23,6 +24,7 @@ const sections: Record<string, React.FC> = {
   symptoms: SymptomBridgesSection,
   reversibility: ReversibilitySection,
   actions: ActionSection,
+  records: RecordsSection,
   ask: AskSection,
   confidence: ConfidenceSection,
   "care-map": CareMapSection,
@@ -47,7 +49,6 @@ const PatientShell: React.FC = () => {
       <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
 
       <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 md:pb-8">
-        {/* Patient header bar */}
         <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border px-6 py-3 md:px-10">
           <div className="flex items-center justify-between">
             <div>
