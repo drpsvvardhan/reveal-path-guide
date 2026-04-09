@@ -83,7 +83,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .eq("user_id", user.id)
         .maybeSingle();
       if (data?.share_token) {
-        const url = `${window.location.origin}/shared/${data.share_token}`;
+        const url = `${window.location.origin}/share/${data.share_token}`;
         setShareInfo({ shareToken: data.share_token, shareUrl: url });
       }
     })();
@@ -207,7 +207,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       token = updated.share_token;
     }
 
-    const url = `${window.location.origin}/shared/${token}`;
+    const url = `${window.location.origin}/share/${token}`;
     setShareInfo({ shareToken: token, shareUrl: url });
     return token;
   }, [user, shareInfo.shareToken]);
@@ -223,7 +223,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error("Token revoke failed:", dbError);
       return;
     }
-    const url = `${window.location.origin}/shared/${newToken}`;
+    const url = `${window.location.origin}/share/${newToken}`;
     setShareInfo({ shareToken: newToken, shareUrl: url });
   }, [user]);
 
