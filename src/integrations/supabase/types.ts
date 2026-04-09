@@ -62,23 +62,68 @@ export type Database = {
         }
         Relationships: []
       }
+      patient_question_queue: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          priority: number
+          question: string
+          rationale: string | null
+          source: string
+          source_user_message: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          priority?: number
+          question: string
+          rationale?: string | null
+          source?: string
+          source_user_message?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          priority?: number
+          question?: string
+          rationale?: string | null
+          source?: string
+          source_user_message?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           display_name: string | null
           id: string
+          share_token: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           display_name?: string | null
           id?: string
+          share_token?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           display_name?: string | null
           id?: string
+          share_token?: string | null
           user_id?: string
         }
         Relationships: []
