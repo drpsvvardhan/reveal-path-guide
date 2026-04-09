@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { LogOut, ChevronDown } from "lucide-react";
-import { useState as useMenuState } from "react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
