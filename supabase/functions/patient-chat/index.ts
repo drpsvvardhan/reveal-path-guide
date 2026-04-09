@@ -585,6 +585,9 @@ serve(async (req) => {
           } catch { /* ignore */ }
         }
       },
+      // Must be async/await — Deno Deploy terminates the worker as soon as
+      // flush() returns, so fire-and-forget patterns will lose their inserts.
+      // The await keeps the worker alive until the database write completes.
       async flush() {
         if (userId && capturedResponse) {
           console.log("Captured response length:", capturedResponse.length);
