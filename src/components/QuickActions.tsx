@@ -26,7 +26,7 @@ interface QuickActionsProps {
 }
 
 /* ── Food Logger Overlay ── */
-const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ onClose, patientId }) => {
+const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string; userId: string }> = ({ onClose, patientId, userId }) => {
   const [entry, setEntry] = useState("");
   const [logged, setLogged] = useState<{ id: string; entry: string; logged_at: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -38,20 +38,20 @@ const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ 
       const { data } = await supabase
         .from("food_logs")
         .select("id, entry, logged_at")
-        .eq("patient_id", patientId)
+        .eq("user_id", userId)
         .gte("logged_at", today.toISOString())
         .order("logged_at", { ascending: false });
       if (data) setLogged(data);
     };
     fetchLogs();
-  }, [patientId]);
+  }, [userId]);
 
   const handleLog = async () => {
     if (!entry.trim() || saving) return;
     setSaving(true);
     const { data, error } = await supabase
       .from("food_logs")
-      .insert({ patient_id: patientId, entry: entry.trim() })
+      .insert({ patient_id: patientId, user_id: userId, entry: entry.trim() })
       .select("id, entry, logged_at")
       .single();
     setSaving(false);
