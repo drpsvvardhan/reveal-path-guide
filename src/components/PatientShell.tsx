@@ -32,10 +32,10 @@ const sections: Record<string, React.FC> = {
   actions: ActionSection,
   records: RecordsSection,
   ask: AskSection,
+  queue: QueueSection,
   confidence: ConfidenceSection,
   "care-map": CareMapSection,
   "care-team": CareTeamSection,
-  queue: QueueSection,
 };
 
 const PatientShell: React.FC = () => {
