@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useManifest } from "@/context/ManifestContext";
+import { useAuth } from "@/context/AuthContext";
 import { useDocuments } from "@/context/DocumentContext";
 import { Send, Loader2, FileText, ChevronDown, Copy, ClipboardCheck, AlertCircle, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
