@@ -58,17 +58,16 @@ const PatientShell: React.FC = () => {
               <p className="text-xs text-muted-foreground font-sans">
                 {manifest.patient.firstName}, {manifest.patient.age} · {manifest.patient.sex}
               </p>
-              <h2 className="font-serif text-base md:text-lg text-foreground">
+              <h2 className="font-serif text-base md:text-lg">
                 {activeNav?.label ?? "Journey"}
               </h2>
             </div>
             <div className="md:hidden">
-              <p className="text-xs text-muted-foreground font-sans font-medium tracking-wider">Vizzhy</p>
+              <p className="text-xs text-primary font-sans font-medium tracking-wider">Vizzhy</p>
             </div>
           </div>
         </div>
 
-        {/* Today Bar + Quick Actions on Journey */}
         {activeSection === "journey" && (
           <div className="px-6 pt-6 md:px-10 max-w-3xl space-y-4">
             <TodayBar />

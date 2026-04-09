@@ -26,7 +26,7 @@ const MobileNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
               data-nav={item.id}
               onClick={() => onNavigate(item.id)}
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg shrink-0 min-w-[56px] transition-colors ${
-                active ? "text-secondary" : "text-muted-foreground"
+                active ? "text-primary" : "text-muted-foreground"
               }`}
             >
               <Icon className="h-4 w-4" />
