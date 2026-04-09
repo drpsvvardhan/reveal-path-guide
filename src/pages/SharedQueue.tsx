@@ -56,7 +56,7 @@ const SharedQueue: React.FC = () => {
 
         if (queueError) throw queueError;
 
-        setQuestions(queueData || []);
+        setQuestions((queueData || []) as SharedQuestion[]);
       } catch (e: any) {
         console.error("Shared queue load failed:", e);
         setError(e.message || "Could not load the shared questions");
