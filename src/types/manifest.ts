@@ -46,6 +46,9 @@ export interface Action {
   title: string;
   description: string;
   details?: string;
+  whyFirst?: string;
+  whatItAffects?: string;
+  whatToNotice?: string;
 }
 
 export interface ActionWithReason extends Action {
@@ -95,6 +98,9 @@ export interface Checkpoint {
   label: string;
   date: string;
   description: string;
+  owner?: string;
+  checking?: string;
+  whyItMatters?: string;
 }
 
 export interface Responsibility {
@@ -113,6 +119,7 @@ export interface TeamMember {
   role: string;
   specialty?: string;
   contact?: string;
+  watching?: string;
 }
 
 export interface Appointment {
@@ -132,6 +139,21 @@ export interface Coach {
   starterQuestions: string[];
 }
 
+export interface TodayBar {
+  focus: string;
+  keyAction: string;
+  nextCheckpoint: string;
+  statusNote: string;
+  lastUpdated?: string;
+}
+
+export interface WeeklySnapshot {
+  keyImprovement: string;
+  fragileArea: string;
+  keepDoing: string;
+  periodLabel?: string;
+}
+
 export interface PatientRevealManifest {
   patient: PatientInfo;
   studyOverview: StudyOverview;
@@ -148,4 +170,6 @@ export interface PatientRevealManifest {
   careMap: CareMap;
   careTeam: CareTeam;
   coach: Coach;
+  todayBar?: TodayBar;
+  weeklySnapshot?: WeeklySnapshot;
 }
