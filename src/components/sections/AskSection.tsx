@@ -245,6 +245,7 @@ const AskSection: React.FC = () => {
   const { manifest } = useManifest();
   const { user } = useAuth();
   const { documents } = useDocuments();
+  const { refresh: refreshQueue } = useQueue();
   const starters = manifest.coach?.starterQuestions ?? [];
   const doctorQuestions = manifest.doctorQuestions ?? [];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -343,6 +344,9 @@ const AskSection: React.FC = () => {
       console.error("Chat error:", e);
       setError(e.message || "Something went wrong. Please try again.");
     } finally {
+      setTimeout(() => {
+        refreshQueue().catch((e) => console.error("Queue refresh failed:", e));
+      }, 1500);
       setIsLoading(false);
     }
   };
