@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useManifest } from "@/context/ManifestContext";
+import { useAuth } from "@/context/AuthContext";
 import { useDocuments } from "@/context/DocumentContext";
 import { Send, Loader2, FileText, ChevronDown, Copy, ClipboardCheck, AlertCircle, Eye } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -241,6 +242,7 @@ const AskDoctorCard: React.FC<{ question: string; rationale: string; onCopy: (t:
 
 const AskSection: React.FC = () => {
   const { manifest } = useManifest();
+  const { user } = useAuth();
   const { documents } = useDocuments();
   const starters = manifest.coach?.starterQuestions ?? [];
   const doctorQuestions = manifest.doctorQuestions ?? [];
@@ -294,6 +296,7 @@ const AskSection: React.FC = () => {
           manifest: manifest,
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: selectedModel,
+          userId: user?.id,
         }),
       });
 

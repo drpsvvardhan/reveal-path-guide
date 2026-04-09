@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -470,6 +471,81 @@ async function handleLovableStream(messages: any[], systemPrompt: string, model:
 }
 
 // ============================================================================
+// QUESTION EXTRACTION
+// ============================================================================
+
+function extractQueuedQuestions(responseText: string): { question: string; rationale: string }[] {
+  const sectionMatch = responseText.match(
+    /\*\*What to ask your doctor:?\*\*([\s\S]*?)(?=\*\*[A-Z]|$)/i
+  );
+  if (!sectionMatch) return [];
+
+  const sectionContent = sectionMatch[1];
+  const quotePattern = /["""'']([^"""'']+?)["""'']/g;
+  const results: { question: string; rationale: string }[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = quotePattern.exec(sectionContent)) !== null) {
+    const question = match[1].trim();
+    if (question.length < 10) continue;
+    if (!question.includes("?")) continue;
+
+    const matchEnd = match.index + match[0].length;
+    const nextQuoteIdx = sectionContent.slice(matchEnd).search(/["""'']/);
+    const rationaleEnd = nextQuoteIdx === -1 ? sectionContent.length : matchEnd + nextQuoteIdx;
+    const rationale = sectionContent.slice(matchEnd, rationaleEnd).trim();
+
+    results.push({ question, rationale });
+  }
+
+  return results;
+}
+
+async function queueExtractedQuestions(
+  userId: string,
+  questions: { question: string; rationale: string }[],
+  sourceUserMessage: string
+): Promise<void> {
+  if (questions.length === 0) return;
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Missing Supabase credentials for question queue insert");
+    return;
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const { data: existing } = await supabase
+    .from("patient_question_queue")
+    .select("priority")
+    .eq("user_id", userId)
+    .eq("status", "queued")
+    .order("priority", { ascending: false })
+    .limit(1);
+
+  const startPriority = existing && existing.length > 0 ? existing[0].priority + 1 : 0;
+
+  const rows = questions.map((q, idx) => ({
+    user_id: userId,
+    question: q.question,
+    rationale: q.rationale || null,
+    source: "auto",
+    status: "queued",
+    priority: startPriority + idx,
+    source_user_message: sourceUserMessage,
+  }));
+
+  const { error } = await supabase.from("patient_question_queue").insert(rows);
+  if (error) {
+    console.error("Failed to queue questions:", error);
+  }
+}
+
+// ============================================================================
 // REQUEST HANDLER
 // ============================================================================
 
@@ -478,26 +554,71 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { messages, manifest, documents, model } = body;
+    const { messages, manifest, documents, model, userId } = body;
 
     if (!manifest) {
-      return new Response(JSON.stringify({ error: "No manifest provided. The patient companion needs the patient's manifest to ground its reasoning." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No manifest provided. The patient companion needs the patient's manifest to ground its reasoning." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const systemPrompt = buildPatientSystemPrompt(manifest, documents);
 
+    const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+
+    let capturedResponse = "";
+
+    const captureTransform = new TransformStream({
+      transform(chunk, controller) {
+        const text = new TextDecoder().decode(chunk);
+        controller.enqueue(chunk);
+        const lines = text.split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) capturedResponse += content;
+          } catch { /* ignore */ }
+        }
+      },
+      flush() {
+        if (userId && capturedResponse) {
+          const questions = extractQueuedQuestions(capturedResponse);
+          if (questions.length > 0) {
+            queueExtractedQuestions(userId, questions, lastUserMessage).catch((e) =>
+              console.error("Question queue insert failed:", e)
+            );
+          }
+        }
+      },
+    });
+
+    let upstreamResponse: Response;
     if (model?.startsWith("claude")) {
-      return await handleAnthropicStream(messages, systemPrompt);
+      upstreamResponse = await handleAnthropicStream(messages, systemPrompt);
+    } else {
+      const gatewayModel = model || "google/gemini-3-flash-preview";
+      upstreamResponse = await handleLovableStream(messages, systemPrompt, gatewayModel);
     }
 
-    const gatewayModel = model || "google/gemini-3-flash-preview";
-    return await handleLovableStream(messages, systemPrompt, gatewayModel);
+    if (!upstreamResponse.body || upstreamResponse.headers.get("Content-Type") !== "text/event-stream") {
+      return upstreamResponse;
+    }
+
+    const transformedStream = upstreamResponse.body.pipeThrough(captureTransform);
+
+    return new Response(transformedStream, {
+      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+    });
   } catch (e) {
     console.error("patient-chat error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
