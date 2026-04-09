@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { ArrowRight, Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, HelpCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, HelpCircle, Flame } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 
-type ActionStatus = "none" | "done" | "need-help";
+type ActionStatus = "none" | "done";
 
-/* ── Difficulty & readiness badges ── */
+/* ── Difficulty badges ── */
 const difficultyFor = (title: string): "EASY" | "MODERATE" | "INVOLVED" => {
   const t = title.toLowerCase();
   if (t.includes("walk") || t.includes("sleep") || t.includes("wind") || t.includes("take") || t.includes("medication")) return "EASY";
@@ -20,7 +22,6 @@ const difficultyColors: Record<string, string> = {
   INVOLVED: "bg-rose-500/15 text-rose-700 border-rose-500/25",
 };
 
-/* ── Nudge lines from manifest context ── */
 const nudgeFor = (action: { whyFirst?: string; whatToNotice?: string }): string => {
   if (action.whatToNotice) {
     const short = action.whatToNotice.split(".")[0];
@@ -69,7 +70,7 @@ const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: strin
   );
 };
 
-/* ── Checkmark toggle ── */
+/* ── Checkmark ── */
 const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
@@ -91,7 +92,8 @@ const ActionCard: React.FC<{
   action: any;
   done: boolean;
   onToggle: () => void;
-}> = ({ icon, title, description, action, done, onToggle }) => {
+  loading?: boolean;
+}> = ({ icon, title, description, action, done, onToggle, loading }) => {
   const difficulty = difficultyFor(title);
   const nudge = nudgeFor(action);
 
@@ -131,14 +133,59 @@ const ActionCard: React.FC<{
   );
 };
 
-/* ── Icons for actions ── */
 const actionIcons = ["🏃", "🌙", "💊", "🥗", "🧬", "🧘", "💤", "🩺"];
 
+/* ── Streak helpers ── */
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+const computeStreak = (dates: string[], totalActions: number): number => {
+  if (totalActions === 0) return 0;
+  // Count completions per date
+  const countByDate: Record<string, number> = {};
+  dates.forEach((d) => { countByDate[d] = (countByDate[d] || 0) + 1; });
+  
+  // Walk backwards from today
+  let streak = 0;
+  const d = new Date();
+  while (true) {
+    const ds = d.toISOString().slice(0, 10);
+    if ((countByDate[ds] || 0) >= totalActions) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else if (ds === todayStr()) {
+      // today incomplete is ok, still check yesterday
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
+
+/* ── Streak Badge ── */
+const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
+  if (streak === 0) return null;
+  return (
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className="inline-flex items-center gap-1.5 rounded-full bg-accent/15 border border-accent/25 px-3 py-1"
+    >
+      <Flame className="h-4 w-4 text-accent" />
+      <span className="text-sm font-sans font-semibold text-accent">{streak}-day streak</span>
+    </motion.div>
+  );
+};
+
+/* ── Main Section ── */
 const ActionSection: React.FC = () => {
   const { manifest } = useManifest();
+  const { user } = useAuth();
   const { sequencedActions, doctorQuestions, monitoringPlan, expectedProgress } = manifest;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
+  const [streak, setStreak] = useState(0);
+  const [loaded, setLoaded] = useState(false);
 
   const allActions = useMemo(() => {
     const items: { key: string; title: string; description: string; action: any; icon: string }[] = [];
@@ -163,18 +210,84 @@ const ActionSection: React.FC = () => {
     return items;
   }, [sequencedActions]);
 
-  const completedCount = allActions.filter((a) => completedKeys.has(a.key)).length;
-  const totalCount = allActions.length;
-  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const userId = user?.id;
 
-  const toggleDone = (key: string) => {
+  // Load today's completions + streak data
+  useEffect(() => {
+    if (!userId) return;
+    const load = async () => {
+      // Today's completions
+      const today = todayStr();
+      const { data: todayData } = await supabase
+        .from("action_completions")
+        .select("action_key")
+        .eq("user_id", userId)
+        .eq("completed_date", today);
+      
+      if (todayData) {
+        setCompletedKeys(new Set(todayData.map((r) => r.action_key)));
+      }
+
+      // Last 60 days for streak calc
+      const sixtyAgo = new Date();
+      sixtyAgo.setDate(sixtyAgo.getDate() - 60);
+      const { data: streakData } = await supabase
+        .from("action_completions")
+        .select("completed_date")
+        .eq("user_id", userId)
+        .gte("completed_date", sixtyAgo.toISOString().slice(0, 10));
+
+      if (streakData) {
+        const dates = streakData.map((r) => r.completed_date);
+        setStreak(computeStreak(dates, allActions.length));
+      }
+      setLoaded(true);
+    };
+    load();
+  }, [userId, allActions.length]);
+
+  const toggleDone = useCallback(async (key: string) => {
+    if (!userId) return;
+    const today = todayStr();
+    const isDone = completedKeys.has(key);
+
+    // Optimistic update
     setCompletedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
+      if (isDone) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
+
+    if (isDone) {
+      await supabase
+        .from("action_completions")
+        .delete()
+        .eq("user_id", userId)
+        .eq("action_key", key)
+        .eq("completed_date", today);
+    } else {
+      await supabase
+        .from("action_completions")
+        .insert({ user_id: userId, action_key: key, completed_date: today });
+    }
+
+    // Recalculate streak
+    const sixtyAgo = new Date();
+    sixtyAgo.setDate(sixtyAgo.getDate() - 60);
+    const { data: streakData } = await supabase
+      .from("action_completions")
+      .select("completed_date")
+      .eq("user_id", userId)
+      .gte("completed_date", sixtyAgo.toISOString().slice(0, 10));
+    if (streakData) {
+      setStreak(computeStreak(streakData.map((r) => r.completed_date), allActions.length));
+    }
+  }, [userId, completedKeys, allActions.length]);
+
+  const completedCount = allActions.filter((a) => completedKeys.has(a.key)).length;
+  const totalCount = allActions.length;
+  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const copyQuestion = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -184,10 +297,13 @@ const ActionSection: React.FC = () => {
 
   return (
     <section className="animate-fade-in space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="font-serif text-2xl md:text-3xl text-foreground mb-1">Today's Actions</h2>
-        <p className="text-sm text-muted-foreground font-sans">Personalized for where your body is right now.</p>
+      {/* Header + Streak */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="font-serif text-2xl md:text-3xl text-foreground mb-1">Today's Actions</h2>
+          <p className="text-sm text-muted-foreground font-sans">Personalized for where your body is right now.</p>
+        </div>
+        <StreakBadge streak={streak} />
       </div>
 
       {/* Progress bar */}
@@ -206,6 +322,15 @@ const ActionSection: React.FC = () => {
             transition={{ duration: 0.5, ease: "easeOut" }}
           />
         </div>
+        {pct === 100 && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-xs text-emerald-600 font-sans mt-2 flex items-center gap-1"
+          >
+            <Check className="h-3 w-3" /> All actions completed today — great work!
+          </motion.p>
+        )}
       </div>
 
       {/* Action cards */}
@@ -287,7 +412,7 @@ const ActionSection: React.FC = () => {
         </div>
       )}
 
-      {/* Expected progress timeline */}
+      {/* Expected progress */}
       {expectedProgress && (
         <div className="space-y-4 pt-4">
           <h3 className="font-serif text-xl text-foreground">What to expect</h3>

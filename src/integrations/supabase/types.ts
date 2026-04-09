@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_completions: {
+        Row: {
+          action_key: string
+          completed_date: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action_key: string
+          completed_date?: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action_key?: string
+          completed_date?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       food_logs: {
         Row: {
           entry: string
