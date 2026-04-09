@@ -296,6 +296,7 @@ const AskSection: React.FC = () => {
           manifest: manifest,
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: selectedModel,
+          userId: user?.id,
         }),
       });
 
