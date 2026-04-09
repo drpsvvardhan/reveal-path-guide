@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      food_logs: {
+        Row: {
+          entry: string
+          id: string
+          logged_at: string
+          patient_id: string
+        }
+        Insert: {
+          entry: string
+          id?: string
+          logged_at?: string
+          patient_id?: string
+        }
+        Update: {
+          entry?: string
+          id?: string
+          logged_at?: string
+          patient_id?: string
+        }
+        Relationships: []
+      }
+      voice_notes: {
+        Row: {
+          id: string
+          patient_id: string
+          recorded_at: string
+          transcript: string
+        }
+        Insert: {
+          id?: string
+          patient_id?: string
+          recorded_at?: string
+          transcript: string
+        }
+        Update: {
+          id?: string
+          patient_id?: string
+          recorded_at?: string
+          transcript?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
