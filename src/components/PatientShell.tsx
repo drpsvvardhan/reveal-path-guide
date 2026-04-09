@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
