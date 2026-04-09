@@ -97,7 +97,7 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
         )}
         {hasDetail && (
           <Collapsible open={open} onOpenChange={setOpen}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-secondary hover:text-secondary/80 transition-colors mt-1.5">
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1.5">
               {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {open ? "Less" : "What & why"}
             </CollapsibleTrigger>
