@@ -11,7 +11,7 @@ const CareMapSection: React.FC = () => {
 
   return (
     <section className="animate-fade-in space-y-8">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary">
+      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
         Care Map
       </h2>
 
@@ -19,7 +19,7 @@ const CareMapSection: React.FC = () => {
       {cm.medications?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
-            <Pill className="h-5 w-5 text-secondary" /> Your current protocol
+            <Pill className="h-5 w-5 text-primary" /> Your current protocol
           </h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {cm.medications.map((med, i) => (
@@ -38,7 +38,7 @@ const CareMapSection: React.FC = () => {
       {cm.checkpoints?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
-            <CalendarCheck className="h-5 w-5 text-secondary" /> Checkpoint timeline
+            <CalendarCheck className="h-5 w-5 text-primary" /> Checkpoint timeline
           </h3>
           <div className="relative space-y-0">
             {cm.checkpoints.map((cp, i) => (
@@ -52,7 +52,7 @@ const CareMapSection: React.FC = () => {
       {cm.responsibilities?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
-            <Users className="h-5 w-5 text-secondary" /> Who does what
+            <Users className="h-5 w-5 text-primary" /> Who does what
           </h3>
           <div className="grid gap-4 sm:grid-cols-3">
             {cm.responsibilities.map((r, i) => (
@@ -61,7 +61,7 @@ const CareMapSection: React.FC = () => {
                 <ul className="space-y-1">
                   {r.tasks.map((t, j) => (
                     <li key={j} className="text-xs text-muted-foreground flex gap-2 items-start">
-                      <span className="mt-1.5 h-1 w-1 rounded-full bg-secondary shrink-0" />
+                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary shrink-0" />
                       {t}
                     </li>
                   ))}
@@ -82,7 +82,7 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
   return (
     <div className="flex gap-4 pb-5 last:pb-0">
       <div className="flex flex-col items-center">
-        <div className="h-3 w-3 rounded-full bg-secondary border-2 border-background shrink-0 z-10" />
+        <div className="h-3 w-3 rounded-full bg-primary border-2 border-background shrink-0 z-10" />
         {!isLast && <div className="w-px flex-1 bg-border" />}
       </div>
       <div className="flex-1">
@@ -91,16 +91,17 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
         </p>
         <p className="text-sm text-muted-foreground mt-0.5">{cp.description}</p>
         {cp.owner && (
-          <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-secondary/10 text-secondary rounded-full px-2 py-0.5">
+          <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-lavender-light text-primary rounded-full px-2 py-0.5">
             {cp.owner}
           </span>
         )}
         {hasDetail && (
           <Collapsible open={open} onOpenChange={setOpen}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-secondary hover:text-secondary/80 transition-colors mt-1.5">
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1.5">
               {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {open ? "Less" : "What & why"}
             </CollapsibleTrigger>
+
             <CollapsibleContent className="mt-2 space-y-1.5 border-t border-border pt-2">
               {cp.checking && (
                 <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>

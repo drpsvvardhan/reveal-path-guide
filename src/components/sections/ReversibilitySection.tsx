@@ -2,10 +2,10 @@ import React from "react";
 import { useManifest } from "@/context/ManifestContext";
 
 const tiers = [
-  { key: "weeks" as const, label: "Can improve in weeks", colorClass: "bg-teal-light border-secondary/20" },
-  { key: "months" as const, label: "Can improve in months", colorClass: "bg-navy-light border-primary/10" },
+  { key: "weeks" as const, label: "Can improve in weeks", colorClass: "bg-sky-light border-secondary/20" },
+  { key: "months" as const, label: "Can improve in months", colorClass: "bg-lavender-light border-primary/10" },
   { key: "slow" as const, label: "Changes slowly — worth the effort", colorClass: "bg-amber-light border-amber/15" },
-  { key: "permanent" as const, label: "Harder to reverse — we work around it", colorClass: "bg-coral-light border-coral/10" },
+  { key: "permanent" as const, label: "Harder to reverse — we work around it", colorClass: "bg-pink-light border-accent/10" },
 ];
 
 const ReversibilitySection: React.FC = () => {
@@ -16,7 +16,7 @@ const ReversibilitySection: React.FC = () => {
 
   return (
     <section className="animate-fade-in space-y-6">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary mb-2">
+      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary mb-2">
         What can still change
       </h2>
 
