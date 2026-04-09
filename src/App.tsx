@@ -33,7 +33,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><QueueProvider><Index /></QueueProvider></ProtectedRoute>} />
             <Route path="/shared/:shareToken" element={<SharedQuestionList />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
