@@ -1,20 +1,39 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { ArrowRight, Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, Clock, HelpCircle } from "lucide-react";
+import { ArrowRight, Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, HelpCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 
-type ActionStatus = "none" | "done" | "started" | "need-help";
+type ActionStatus = "none" | "done" | "need-help";
 
-const statusConfig: Record<ActionStatus, { label: string; class: string; icon: React.ElementType }> = {
-  none: { label: "Mark progress", class: "border-border text-muted-foreground hover:border-primary/40", icon: Clock },
-  done: { label: "Done today", class: "border-success/40 bg-sage-light text-success", icon: Check },
-  started: { label: "Started", class: "border-amber/40 bg-amber-light text-amber", icon: Clock },
-  "need-help": { label: "Need help", class: "border-accent/40 bg-pink-light text-accent", icon: HelpCircle },
+/* ── Difficulty & readiness badges ── */
+const difficultyFor = (title: string): "EASY" | "MODERATE" | "INVOLVED" => {
+  const t = title.toLowerCase();
+  if (t.includes("walk") || t.includes("sleep") || t.includes("wind") || t.includes("take") || t.includes("medication")) return "EASY";
+  if (t.includes("blood sugar") || t.includes("dinner") || t.includes("nutrient") || t.includes("stabilize")) return "MODERATE";
+  return "INVOLVED";
 };
 
-const statusCycle: ActionStatus[] = ["none", "started", "done", "need-help"];
+const difficultyColors: Record<string, string> = {
+  EASY: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25",
+  MODERATE: "bg-amber-500/15 text-amber-700 border-amber-500/25",
+  INVOLVED: "bg-rose-500/15 text-rose-700 border-rose-500/25",
+};
 
+/* ── Nudge lines from manifest context ── */
+const nudgeFor = (action: { whyFirst?: string; whatToNotice?: string }): string => {
+  if (action.whatToNotice) {
+    const short = action.whatToNotice.split(".")[0];
+    return short.length > 80 ? short.slice(0, 77) + "…" : short;
+  }
+  if (action.whyFirst) {
+    const short = action.whyFirst.split(".")[0];
+    return short.length > 80 ? short.slice(0, 77) + "…" : short;
+  }
+  return "";
+};
+
+/* ── Why detail expander ── */
 const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: string; whatToNotice?: string } }> = ({ action }) => {
   const [open, setOpen] = useState(false);
   const hasContent = action.whyFirst || action.whatItAffects || action.whatToNotice;
@@ -22,7 +41,7 @@ const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: strin
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-2">
+      <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-3">
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         {open ? "Less detail" : "Why this? What to notice?"}
       </CollapsibleTrigger>
@@ -50,11 +69,112 @@ const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: strin
   );
 };
 
+/* ── Checkmark toggle ── */
+const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, onToggle }) => (
+  <button
+    onClick={(e) => { e.stopPropagation(); onToggle(); }}
+    className={`shrink-0 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
+      done
+        ? "bg-emerald-500 border-emerald-500 text-white scale-105"
+        : "border-muted-foreground/30 hover:border-primary/50"
+    }`}
+  >
+    {done && <Check className="h-4 w-4" strokeWidth={3} />}
+  </button>
+);
+
+/* ── Action Card ── */
+const ActionCard: React.FC<{
+  icon: string;
+  title: string;
+  description: string;
+  action: any;
+  done: boolean;
+  onToggle: () => void;
+}> = ({ icon, title, description, action, done, onToggle }) => {
+  const difficulty = difficultyFor(title);
+  const nudge = nudgeFor(action);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-xl border bg-card p-5 transition-all ${
+        done ? "border-emerald-500/20 opacity-75" : "border-border"
+      }`}
+    >
+      <div className="flex items-start gap-4">
+        <ActionCheck done={done} onToggle={onToggle} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">{icon}</span>
+            <h4 className={`font-serif text-lg leading-snug ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
+              {title}
+            </h4>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">{description}</p>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-sans font-semibold uppercase tracking-wide ${difficultyColors[difficulty]}`}>
+              {difficulty}
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-sans">
+              <Check className="h-3 w-3" /> Ready now
+            </span>
+          </div>
+          {nudge && (
+            <p className="text-xs text-primary/80 italic font-sans mt-2">{nudge}</p>
+          )}
+          <WhyExpander action={action} />
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+/* ── Icons for actions ── */
+const actionIcons = ["🏃", "🌙", "💊", "🥗", "🧬", "🧘", "💤", "🩺"];
+
 const ActionSection: React.FC = () => {
   const { manifest } = useManifest();
   const { sequencedActions, doctorQuestions, monitoringPlan, expectedProgress } = manifest;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-  const [actionStates, setActionStates] = useState<Record<string, ActionStatus>>({});
+  const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
+
+  const allActions = useMemo(() => {
+    const items: { key: string; title: string; description: string; action: any; icon: string }[] = [];
+    if (sequencedActions?.startHere) {
+      items.push({
+        key: "start",
+        title: sequencedActions.startHere.title,
+        description: sequencedActions.startHere.description,
+        action: sequencedActions.startHere,
+        icon: "🛡️",
+      });
+    }
+    sequencedActions?.thenAdd?.forEach((a, i) => {
+      items.push({
+        key: `then-${i}`,
+        title: a.title,
+        description: a.description,
+        action: a,
+        icon: actionIcons[i % actionIcons.length],
+      });
+    });
+    return items;
+  }, [sequencedActions]);
+
+  const completedCount = allActions.filter((a) => completedKeys.has(a.key)).length;
+  const totalCount = allActions.length;
+  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  const toggleDone = (key: string) => {
+    setCompletedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const copyQuestion = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -62,87 +182,63 @@ const ActionSection: React.FC = () => {
     setTimeout(() => setCopiedIdx(null), 2000);
   };
 
-  const cycleStatus = (key: string) => {
-    const current = actionStates[key] || "none";
-    const nextIdx = (statusCycle.indexOf(current) + 1) % statusCycle.length;
-    setActionStates((prev) => ({ ...prev, [key]: statusCycle[nextIdx] }));
-  };
-
-  const renderStatusPill = (key: string) => {
-    const status = actionStates[key] || "none";
-    const config = statusConfig[status];
-    const Icon = config.icon;
-    return (
-      <button
-        onClick={(e) => { e.stopPropagation(); cycleStatus(key); }}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-sans font-medium transition-all ${config.class}`}
-      >
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </button>
-    );
-  };
-
   return (
-    <section className="animate-fade-in space-y-10">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
-        What to do
-      </h2>
+    <section className="animate-fade-in space-y-8">
+      {/* Header */}
+      <div>
+        <h2 className="font-serif text-2xl md:text-3xl text-foreground mb-1">Today's Actions</h2>
+        <p className="text-sm text-muted-foreground font-sans">Personalized for where your body is right now.</p>
+      </div>
 
-      {sequencedActions?.startHere && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border-2 border-primary/30 bg-lavender-light p-6"
-        >
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <span className="text-xs font-sans font-semibold uppercase tracking-wider text-primary">
-              Start here
-            </span>
-            {renderStatusPill("start")}
-          </div>
-          <h3 className="font-serif text-xl mb-2">{sequencedActions.startHere.title}</h3>
-          <p className="text-muted-foreground mb-2">{sequencedActions.startHere.description}</p>
-          {sequencedActions.startHere.details && (
-            <p className="text-sm text-foreground/70 border-t border-primary/10 pt-3 mt-3">{sequencedActions.startHere.details}</p>
-          )}
-          <WhyExpander action={sequencedActions.startHere} />
-        </motion.div>
-      )}
-
-      {sequencedActions?.thenAdd?.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-serif text-lg flex items-center gap-2">
-            <ArrowRight className="h-4 w-4 text-primary" /> Then add
-          </h3>
-          {sequencedActions.thenAdd.map((a, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="glass-card p-4"
-            >
-              <div className="flex items-start justify-between gap-3 mb-1">
-                <p className="font-sans font-medium text-foreground text-sm">{a.title}</p>
-                {renderStatusPill(`then-${i}`)}
-              </div>
-              <p className="text-sm text-muted-foreground">{a.description}</p>
-              <WhyExpander action={a} />
-            </motion.div>
-          ))}
+      {/* Progress bar */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm text-muted-foreground font-sans">
+            {completedCount} of {totalCount} completed
+          </p>
+          <p className="text-sm font-sans font-semibold text-primary">{pct}%</p>
         </div>
-      )}
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <motion.div
+            className="h-full rounded-full bg-emerald-500"
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          />
+        </div>
+      </div>
 
+      {/* Action cards */}
+      <div className="space-y-4">
+        {allActions.map((item, i) => (
+          <motion.div
+            key={item.key}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.06 }}
+          >
+            <ActionCard
+              icon={item.icon}
+              title={item.title}
+              description={item.description}
+              action={item.action}
+              done={completedKeys.has(item.key)}
+              onToggle={() => toggleDone(item.key)}
+            />
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Not yet */}
       {sequencedActions?.notYet?.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-serif text-lg flex items-center gap-2">
-            <Lock className="h-4 w-4 text-muted-foreground" /> Not yet
+        <div className="space-y-3 pt-4">
+          <h3 className="font-serif text-lg flex items-center gap-2 text-muted-foreground">
+            <Lock className="h-4 w-4" /> Not yet
           </h3>
           {sequencedActions.notYet.map((a, i) => (
-            <div key={i} className="rounded-lg border border-border bg-muted/50 p-4">
-              <p className="font-sans font-medium text-foreground text-sm mb-1">{a.title}</p>
-              <p className="text-sm text-muted-foreground mb-2">{a.description}</p>
+            <div key={i} className="rounded-xl border border-border bg-muted/40 p-5 opacity-60">
+              <p className="font-serif text-base text-foreground mb-1">{a.title}</p>
+              <p className="text-sm text-muted-foreground mb-3">{a.description}</p>
               <div className="text-xs text-muted-foreground space-y-1 border-t border-border pt-2">
                 <p><span className="font-medium">Why wait:</span> {a.why}</p>
                 <p><span className="font-medium">Unlocked when:</span> {a.unlockedWhen}</p>
@@ -153,31 +249,33 @@ const ActionSection: React.FC = () => {
         </div>
       )}
 
+      {/* Doctor questions */}
       {doctorQuestions?.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-serif text-lg">Questions to bring to your doctor</h3>
+        <div className="space-y-3 pt-4">
+          <h3 className="font-serif text-xl text-foreground">Questions for your doctor</h3>
           {doctorQuestions.map((q, i) => (
-            <div key={i} className="glass-card p-4 relative group">
+            <div key={i} className="rounded-xl border border-border bg-card p-5 relative group">
               <p className="font-serif text-foreground text-base italic pr-8">"{q.question}"</p>
               <p className="text-xs text-muted-foreground mt-2">{q.rationale}</p>
               <button
                 onClick={() => copyQuestion(q.question, i)}
-                className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-muted transition-colors"
+                className="absolute top-4 right-4 p-1.5 rounded-md hover:bg-muted transition-colors"
                 aria-label="Copy question"
               >
-                {copiedIdx === i ? <ClipboardCheck className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+                {copiedIdx === i ? <ClipboardCheck className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
               </button>
             </div>
           ))}
         </div>
       )}
 
+      {/* Monitoring */}
       {monitoringPlan?.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="font-serif text-lg">What we'll monitor</h3>
+        <div className="space-y-3 pt-4">
+          <h3 className="font-serif text-xl text-foreground">What we'll monitor</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {monitoringPlan.map((m, i) => (
-              <div key={i} className="glass-card p-4">
+              <div key={i} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex justify-between items-start mb-1">
                   <p className="font-sans font-medium text-foreground text-sm">{m.name}</p>
                   <span className="text-xs bg-lavender-light text-primary rounded-full px-2 py-0.5">{m.nextCheck}</span>
@@ -189,9 +287,10 @@ const ActionSection: React.FC = () => {
         </div>
       )}
 
+      {/* Expected progress timeline */}
       {expectedProgress && (
-        <div className="space-y-4">
-          <h3 className="font-serif text-lg">What to expect</h3>
+        <div className="space-y-4 pt-4">
+          <h3 className="font-serif text-xl text-foreground">What to expect</h3>
           <div className="relative space-y-0">
             {[
               { label: "First 2 weeks", text: expectedProgress.weeks2 },
