@@ -1,6 +1,8 @@
 import React, { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
+import { useAuth } from "@/context/AuthContext";
+import { LogOut } from "lucide-react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
@@ -36,6 +38,7 @@ const sections: Record<string, React.FC> = {
 
 const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
+  const { signOut, user } = useAuth();
   const [activeSection, setActiveSection] = useState("journey");
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -62,8 +65,13 @@ const PatientShell: React.FC = () => {
                 {activeNav?.label ?? "Journey"}
               </h2>
             </div>
-            <div className="md:hidden">
-              <p className="text-xs text-primary font-sans font-medium tracking-wider">Vizzhy</p>
+            <div className="flex items-center gap-2">
+              <div className="md:hidden">
+                <p className="text-xs text-primary font-sans font-medium tracking-wider">Vizzhy</p>
+              </div>
+              <button onClick={signOut} title="Sign out" className="p-1.5 rounded-md hover:bg-muted/60 transition-colors">
+                <LogOut className="h-4 w-4 text-muted-foreground" />
+              </button>
             </div>
           </div>
         </div>

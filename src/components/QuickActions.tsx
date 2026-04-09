@@ -3,6 +3,7 @@ import { UtensilsCrossed, Mic, MessageCircle, Upload, ListChecks, Phone, ArrowLe
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useManifest } from "@/context/ManifestContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface QuickActionItem {
   icon: React.ElementType;
@@ -25,7 +26,7 @@ interface QuickActionsProps {
 }
 
 /* ── Food Logger Overlay ── */
-const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ onClose, patientId }) => {
+const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string; userId: string }> = ({ onClose, patientId, userId }) => {
   const [entry, setEntry] = useState("");
   const [logged, setLogged] = useState<{ id: string; entry: string; logged_at: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -37,20 +38,20 @@ const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ 
       const { data } = await supabase
         .from("food_logs")
         .select("id, entry, logged_at")
-        .eq("patient_id", patientId)
+        .eq("user_id", userId)
         .gte("logged_at", today.toISOString())
         .order("logged_at", { ascending: false });
       if (data) setLogged(data);
     };
     fetchLogs();
-  }, [patientId]);
+  }, [userId]);
 
   const handleLog = async () => {
     if (!entry.trim() || saving) return;
     setSaving(true);
     const { data, error } = await supabase
       .from("food_logs")
-      .insert({ patient_id: patientId, entry: entry.trim() })
+      .insert({ patient_id: patientId, user_id: userId, entry: entry.trim() })
       .select("id, entry, logged_at")
       .single();
     setSaving(false);
@@ -103,7 +104,7 @@ const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ 
 };
 
 /* ── Voice Note Overlay ── */
-const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ onClose, patientId }) => {
+const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string; userId: string }> = ({ onClose, patientId, userId }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [notes, setNotes] = useState<{ id: string; transcript: string; recorded_at: string }[]>([]);
   const [transcript, setTranscript] = useState("");
@@ -115,20 +116,20 @@ const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = (
       const { data } = await supabase
         .from("voice_notes")
         .select("id, transcript, recorded_at")
-        .eq("patient_id", patientId)
+        .eq("user_id", userId)
         .order("recorded_at", { ascending: false })
         .limit(10);
       if (data) setNotes(data);
     };
     fetchNotes();
-  }, [patientId]);
+  }, [userId]);
 
   const saveNote = async (text: string) => {
     if (!text.trim() || saving) return;
     setSaving(true);
     const { data, error } = await supabase
       .from("voice_notes")
-      .insert({ patient_id: patientId, transcript: text.trim() })
+      .insert({ patient_id: patientId, user_id: userId, transcript: text.trim() })
       .select("id, transcript, recorded_at")
       .single();
     setSaving(false);
@@ -242,8 +243,10 @@ const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = (
 /* ── Main QuickActions ── */
 const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
   const { manifest } = useManifest();
+  const { user } = useAuth();
   const [activeOverlay, setActiveOverlay] = useState<"food" | "voice" | null>(null);
   const patientId = manifest.patient.id;
+  const userId = user?.id ?? "";
 
   return (
     <div>
@@ -257,8 +260,8 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
             transition={{ duration: 0.2 }}
             className="rounded-xl border border-border bg-card p-4"
           >
-            {activeOverlay === "food" && <FoodLogOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} />}
-            {activeOverlay === "voice" && <VoiceNoteOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} />}
+            {activeOverlay === "food" && <FoodLogOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} userId={userId} />}
+            {activeOverlay === "voice" && <VoiceNoteOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} userId={userId} />}
           </motion.div>
         ) : (
           <motion.div
