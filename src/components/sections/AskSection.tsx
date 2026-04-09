@@ -91,7 +91,7 @@ const AskSection: React.FC = () => {
           messages: allMessages.map((m) => ({ role: m.role, content: m.content })),
           patientContext: buildPatientContext(manifest),
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
-        }),
+          model: selectedModel,
       });
 
       if (!resp.ok) {
