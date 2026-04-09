@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Map, Activity, Scale, Brain, RefreshCw,
-  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users
+  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users, FolderOpen
 } from "lucide-react";
 
 export interface NavItem {
@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
   { id: "symptoms", label: "Why you might be feeling this way", shortLabel: "Symptoms", icon: Brain },
   { id: "reversibility", label: "What can still change", shortLabel: "Change", icon: RefreshCw },
   { id: "actions", label: "What to do", shortLabel: "Actions", icon: ListChecks },
+  { id: "records", label: "Medical Records", shortLabel: "Records", icon: FolderOpen },
   { id: "ask", label: "Ask anything", shortLabel: "Ask", icon: MessageCircle },
   { id: "confidence", label: "How sure are we", shortLabel: "Certainty", icon: ShieldCheck },
   { id: "care-map", label: "Care Map", shortLabel: "Map", icon: GitBranch },
