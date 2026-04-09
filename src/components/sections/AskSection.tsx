@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useDocuments } from "@/context/DocumentContext";
-import { Send, Loader2, FileText } from "lucide-react";
+import { Send, Loader2, FileText, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChatMessage {
