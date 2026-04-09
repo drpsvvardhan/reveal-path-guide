@@ -104,7 +104,7 @@ const FoodLogOverlay: React.FC<{ onClose: () => void; patientId: string; userId:
 };
 
 /* ── Voice Note Overlay ── */
-const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = ({ onClose, patientId }) => {
+const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string; userId: string }> = ({ onClose, patientId, userId }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [notes, setNotes] = useState<{ id: string; transcript: string; recorded_at: string }[]>([]);
   const [transcript, setTranscript] = useState("");
@@ -116,20 +116,20 @@ const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = (
       const { data } = await supabase
         .from("voice_notes")
         .select("id, transcript, recorded_at")
-        .eq("patient_id", patientId)
+        .eq("user_id", userId)
         .order("recorded_at", { ascending: false })
         .limit(10);
       if (data) setNotes(data);
     };
     fetchNotes();
-  }, [patientId]);
+  }, [userId]);
 
   const saveNote = async (text: string) => {
     if (!text.trim() || saving) return;
     setSaving(true);
     const { data, error } = await supabase
       .from("voice_notes")
-      .insert({ patient_id: patientId, transcript: text.trim() })
+      .insert({ patient_id: patientId, user_id: userId, transcript: text.trim() })
       .select("id, transcript, recorded_at")
       .single();
     setSaving(false);
@@ -243,8 +243,10 @@ const VoiceNoteOverlay: React.FC<{ onClose: () => void; patientId: string }> = (
 /* ── Main QuickActions ── */
 const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
   const { manifest } = useManifest();
+  const { user } = useAuth();
   const [activeOverlay, setActiveOverlay] = useState<"food" | "voice" | null>(null);
   const patientId = manifest.patient.id;
+  const userId = user?.id ?? "";
 
   return (
     <div>
@@ -258,8 +260,8 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
             transition={{ duration: 0.2 }}
             className="rounded-xl border border-border bg-card p-4"
           >
-            {activeOverlay === "food" && <FoodLogOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} />}
-            {activeOverlay === "voice" && <VoiceNoteOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} />}
+            {activeOverlay === "food" && <FoodLogOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} userId={userId} />}
+            {activeOverlay === "voice" && <VoiceNoteOverlay onClose={() => setActiveOverlay(null)} patientId={patientId} userId={userId} />}
           </motion.div>
         ) : (
           <motion.div
