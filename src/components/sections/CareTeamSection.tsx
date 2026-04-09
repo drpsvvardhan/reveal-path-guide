@@ -12,7 +12,7 @@ const CareTeamSection: React.FC = () => {
 
   return (
     <section className="animate-fade-in space-y-8">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary">
+      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
         Care Team
       </h2>
 
@@ -20,8 +20,8 @@ const CareTeamSection: React.FC = () => {
         {members.map((member, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-secondary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-secondary" />
+              <div className="h-10 w-10 rounded-full bg-lavender-light flex items-center justify-center">
+                <User className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="font-sans font-semibold text-foreground text-sm">{member.name}</p>
@@ -32,7 +32,7 @@ const CareTeamSection: React.FC = () => {
 
             {/* What they're watching */}
             {member.watching && (
-              <div className="rounded-lg bg-navy-light p-3">
+              <div className="rounded-lg bg-lavender-light p-3">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Eye className="h-3 w-3 text-primary" />
                   <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-primary">Watching</p>
@@ -44,7 +44,7 @@ const CareTeamSection: React.FC = () => {
             {/* Contact actions */}
             <div className="flex gap-2">
               <button className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted transition-colors">
-                <MessageCircle className="h-3.5 w-3.5 text-secondary" />
+                <MessageCircle className="h-3.5 w-3.5 text-primary" />
                 Message
               </button>
               {member.contact?.includes("call") && (
@@ -59,8 +59,8 @@ const CareTeamSection: React.FC = () => {
 
       {/* Telemedicine placeholder */}
       <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 flex items-center gap-4">
-        <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
-          <Video className="h-5 w-5 text-secondary" />
+        <div className="h-10 w-10 rounded-lg bg-sky-light flex items-center justify-center shrink-0">
+          <Video className="h-5 w-5 text-primary" />
         </div>
         <div>
           <p className="font-sans font-medium text-foreground text-sm">Telemedicine</p>
@@ -72,7 +72,7 @@ const CareTeamSection: React.FC = () => {
       {ct.appointments?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-secondary" /> Upcoming
+            <Calendar className="h-5 w-5 text-primary" /> Upcoming
           </h3>
           <div className="space-y-3">
             {ct.appointments.map((appt, i) => (
@@ -81,7 +81,7 @@ const CareTeamSection: React.FC = () => {
                   <p className="font-sans font-medium text-foreground text-sm">{appt.type}</p>
                   <p className="text-xs text-muted-foreground">{appt.provider}</p>
                 </div>
-                <span className="text-xs bg-navy-light text-primary rounded-full px-2.5 py-0.5 self-start">{appt.date}</span>
+                <span className="text-xs bg-lavender-light text-primary rounded-full px-2.5 py-0.5 self-start">{appt.date}</span>
                 {appt.notes && <p className="text-xs text-muted-foreground italic sm:hidden">{appt.notes}</p>}
               </div>
             ))}

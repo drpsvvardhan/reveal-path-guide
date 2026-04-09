@@ -9,14 +9,14 @@ const ConfidenceSection: React.FC = () => {
   if (!cb) return null;
 
   const groups = [
-    { title: "Things we're confident about", items: cb.confident, icon: CheckCircle, colorClass: "text-secondary" },
+    { title: "Things we're confident about", items: cb.confident, icon: CheckCircle, colorClass: "text-success" },
     { title: "Things we're still investigating", items: cb.investigating, icon: Search, colorClass: "text-amber" },
-    { title: "Things worth retesting to be sure", items: cb.retest, icon: RefreshCw, colorClass: "text-coral" },
+    { title: "Things worth retesting to be sure", items: cb.retest, icon: RefreshCw, colorClass: "text-accent" },
   ];
 
   return (
     <section className="animate-fade-in space-y-6">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary">
+      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
         How sure are we
       </h2>
 

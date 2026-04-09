@@ -10,7 +10,7 @@ const HelpingFeedingSection: React.FC = () => {
 
   return (
     <section className="animate-fade-in space-y-6">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-secondary mb-2">
+      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary mb-2">
         What is helping — and what is still feeding the problem
       </h2>
 
@@ -18,10 +18,10 @@ const HelpingFeedingSection: React.FC = () => {
         {/* Helping */}
         <div className="space-y-3">
           <h3 className="font-serif text-xl text-foreground flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-secondary" /> Working for you
+            <CheckCircle className="h-5 w-5 text-success" /> Working for you
           </h3>
           {data.helping.map((item, i) => (
-            <div key={i} className="rounded-lg bg-teal-light border border-secondary/10 p-4">
+            <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-4">
               <p className="font-sans font-medium text-foreground text-sm mb-1">{item.label}</p>
               <p className="text-sm text-muted-foreground">{item.mechanism}</p>
             </div>
