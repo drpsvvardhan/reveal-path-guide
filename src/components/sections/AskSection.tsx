@@ -31,6 +31,14 @@ function buildPatientContext(manifest: any): string {
   return parts.join("\n\n");
 }
 
+const AI_MODELS = [
+  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "Google" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "Google" },
+  { id: "openai/gpt-5.2", label: "GPT-5.2", provider: "OpenAI" },
+  { id: "openai/gpt-5-mini", label: "GPT-5 Mini", provider: "OpenAI" },
+];
+
 const AskSection: React.FC = () => {
   const { manifest } = useManifest();
   const { documents } = useDocuments();
@@ -39,6 +47,8 @@ const AskSection: React.FC = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
