@@ -242,6 +242,7 @@ const AskDoctorCard: React.FC<{ question: string; rationale: string; onCopy: (t:
 
 const AskSection: React.FC = () => {
   const { manifest } = useManifest();
+  const { user } = useAuth();
   const { documents } = useDocuments();
   const starters = manifest.coach?.starterQuestions ?? [];
   const doctorQuestions = manifest.doctorQuestions ?? [];
