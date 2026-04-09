@@ -585,13 +585,18 @@ serve(async (req) => {
           } catch { /* ignore */ }
         }
       },
-      flush() {
+      async flush() {
         if (userId && capturedResponse) {
+          console.log("Captured response length:", capturedResponse.length);
           const questions = extractQueuedQuestions(capturedResponse);
+          console.log("Extracted questions:", questions.length);
           if (questions.length > 0) {
-            queueExtractedQuestions(userId, questions, lastUserMessage).catch((e) =>
-              console.error("Question queue insert failed:", e)
-            );
+            try {
+              await queueExtractedQuestions(userId, questions, lastUserMessage);
+              console.log("Questions queued successfully");
+            } catch (e) {
+              console.error("Question queue insert failed:", e);
+            }
           }
         }
       },
