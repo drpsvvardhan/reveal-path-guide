@@ -9,7 +9,7 @@ const JourneySection: React.FC = () => {
     <section className="space-y-8 animate-fade-in">
       <div>
         <h1 className="text-3xl md:text-4xl font-serif text-foreground mb-3">
-          Here's what we read about you
+          Here's what we found
         </h1>
         <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
           {studyOverview.summary}
@@ -51,6 +51,13 @@ const JourneySection: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Liveness indicator */}
+      {manifest.todayBar?.lastUpdated && (
+        <p className="text-[10px] text-muted-foreground italic pt-2">
+          {manifest.todayBar.lastUpdated}
+        </p>
+      )}
     </section>
   );
 };

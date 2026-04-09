@@ -1,6 +1,6 @@
 import React from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { User, Phone, Calendar } from "lucide-react";
+import { User, Phone, Calendar, MessageCircle, Video, Eye } from "lucide-react";
 
 const CareTeamSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -18,8 +18,8 @@ const CareTeamSection: React.FC = () => {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {members.map((member, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center gap-3 mb-3">
+          <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
+            <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-secondary/10 flex items-center justify-center">
                 <User className="h-5 w-5 text-secondary" />
               </div>
@@ -28,14 +28,44 @@ const CareTeamSection: React.FC = () => {
                 <p className="text-xs text-muted-foreground">{member.role}</p>
               </div>
             </div>
-            {member.specialty && <p className="text-xs text-muted-foreground mb-1">{member.specialty}</p>}
-            {member.contact && (
-              <div className="flex items-center gap-1 text-xs text-secondary mt-2">
-                <Phone className="h-3 w-3" /> {member.contact}
+            {member.specialty && <p className="text-xs text-muted-foreground">{member.specialty}</p>}
+
+            {/* What they're watching */}
+            {member.watching && (
+              <div className="rounded-lg bg-navy-light p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Eye className="h-3 w-3 text-primary" />
+                  <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-primary">Watching</p>
+                </div>
+                <p className="text-xs text-foreground/80 leading-relaxed">{member.watching}</p>
               </div>
             )}
+
+            {/* Contact actions */}
+            <div className="flex gap-2">
+              <button className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted transition-colors">
+                <MessageCircle className="h-3.5 w-3.5 text-secondary" />
+                Message
+              </button>
+              {member.contact?.includes("call") && (
+                <button className="flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted transition-colors">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              )}
+            </div>
           </div>
         ))}
+      </div>
+
+      {/* Telemedicine placeholder */}
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-lg bg-secondary/10 flex items-center justify-center shrink-0">
+          <Video className="h-5 w-5 text-secondary" />
+        </div>
+        <div>
+          <p className="font-sans font-medium text-foreground text-sm">Telemedicine</p>
+          <p className="text-xs text-muted-foreground">Video consultations available for follow-up appointments</p>
+        </div>
       </div>
 
       {/* Appointments */}

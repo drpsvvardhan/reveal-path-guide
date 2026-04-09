@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { Pill, CalendarCheck, Users } from "lucide-react";
+import { Pill, CalendarCheck, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const CareMapSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -33,24 +34,15 @@ const CareMapSection: React.FC = () => {
         </div>
       )}
 
-      {/* Checkpoints */}
+      {/* Enhanced Checkpoints */}
       {cm.checkpoints?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
-            <CalendarCheck className="h-5 w-5 text-secondary" /> Checkpoints
+            <CalendarCheck className="h-5 w-5 text-secondary" /> Checkpoint timeline
           </h3>
           <div className="relative space-y-0">
             {cm.checkpoints.map((cp, i) => (
-              <div key={i} className="flex gap-4 pb-5 last:pb-0">
-                <div className="flex flex-col items-center">
-                  <div className="h-3 w-3 rounded-full bg-secondary border-2 border-background shrink-0 z-10" />
-                  {i < cm.checkpoints.length - 1 && <div className="w-px flex-1 bg-border" />}
-                </div>
-                <div>
-                  <p className="font-sans font-semibold text-sm text-foreground">{cp.label} <span className="font-normal text-muted-foreground">— {cp.date}</span></p>
-                  <p className="text-sm text-muted-foreground mt-0.5">{cp.description}</p>
-                </div>
-              </div>
+              <CheckpointCard key={i} checkpoint={cp} isLast={i === cm.checkpoints.length - 1} />
             ))}
           </div>
         </div>
@@ -80,6 +72,47 @@ const CareMapSection: React.FC = () => {
         </div>
       )}
     </section>
+  );
+};
+
+const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkpoint: cp, isLast }) => {
+  const [open, setOpen] = useState(false);
+  const hasDetail = cp.checking || cp.whyItMatters || cp.owner;
+
+  return (
+    <div className="flex gap-4 pb-5 last:pb-0">
+      <div className="flex flex-col items-center">
+        <div className="h-3 w-3 rounded-full bg-secondary border-2 border-background shrink-0 z-10" />
+        {!isLast && <div className="w-px flex-1 bg-border" />}
+      </div>
+      <div className="flex-1">
+        <p className="font-sans font-semibold text-sm text-foreground">
+          {cp.label} <span className="font-normal text-muted-foreground">— {cp.date}</span>
+        </p>
+        <p className="text-sm text-muted-foreground mt-0.5">{cp.description}</p>
+        {cp.owner && (
+          <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-secondary/10 text-secondary rounded-full px-2 py-0.5">
+            {cp.owner}
+          </span>
+        )}
+        {hasDetail && (
+          <Collapsible open={open} onOpenChange={setOpen}>
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-secondary hover:text-secondary/80 transition-colors mt-1.5">
+              {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {open ? "Less" : "What & why"}
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 space-y-1.5 border-t border-border pt-2">
+              {cp.checking && (
+                <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>
+              )}
+              {cp.whyItMatters && (
+                <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Why it matters:</span> {cp.whyItMatters}</p>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </div>
+    </div>
   );
 };
 

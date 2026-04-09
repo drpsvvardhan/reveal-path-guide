@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useDocuments } from "@/context/DocumentContext";
-import { Send, Loader2, FileText, ChevronDown } from "lucide-react";
+import { Send, Loader2, FileText, ChevronDown, Copy, ClipboardCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ChatMessage {
@@ -43,12 +43,14 @@ const AskSection: React.FC = () => {
   const { manifest } = useManifest();
   const { documents } = useDocuments();
   const starters = manifest.coach?.starterQuestions ?? [];
+  const doctorQuestions = manifest.doctorQuestions ?? [];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [copiedQ, setCopiedQ] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -141,8 +143,13 @@ const AskSection: React.FC = () => {
     }
   };
 
+  const copyDoctorQ = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedQ(idx);
+    setTimeout(() => setCopiedQ(null), 2000);
+  };
+
   const renderContent = (content: string) => {
-    // Simple markdown bold rendering
     return content.split(/\*\*(.*?)\*\*/g).map((part, j) =>
       j % 2 === 1 ? (
         <strong
@@ -201,19 +208,47 @@ const AskSection: React.FC = () => {
         </div>
       )}
 
+      {/* Doctor questions as copyable cards */}
+      {doctorQuestions.length > 0 && messages.length === 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-sans font-medium uppercase tracking-wider text-muted-foreground">
+            Questions for your doctor
+          </p>
+          <div className="space-y-2 max-h-[140px] overflow-y-auto">
+            {doctorQuestions.slice(0, 3).map((q, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2 group">
+                <p className="text-xs text-foreground italic flex-1 line-clamp-2">"{q.question}"</p>
+                <button
+                  onClick={() => copyDoctorQ(q.question, i)}
+                  className="p-1 rounded-md hover:bg-muted transition-colors shrink-0"
+                  aria-label="Copy question"
+                >
+                  {copiedQ === i ? <ClipboardCheck className="h-3.5 w-3.5 text-secondary" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Starter questions */}
       {starters.length > 0 && messages.length === 0 && (
-        <div className="flex flex-wrap gap-2">
-          {starters.map((q, i) => (
-            <button
-              key={i}
-              onClick={() => sendMessage(q)}
-              disabled={isLoading}
-              className="rounded-full border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left disabled:opacity-50"
-            >
-              {q}
-            </button>
-          ))}
+        <div className="space-y-2">
+          <p className="text-xs font-sans font-medium uppercase tracking-wider text-muted-foreground">
+            Suggested questions
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {starters.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => sendMessage(q)}
+                disabled={isLoading}
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors text-left disabled:opacity-50"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -246,7 +281,13 @@ const AskSection: React.FC = () => {
         )}
       </div>
 
-      {/* Error */}
+      {/* Recent history indicator */}
+      {messages.length > 0 && !isLoading && (
+        <div className="text-[10px] text-muted-foreground italic text-center">
+          {messages.filter(m => m.role === "user").length} question{messages.filter(m => m.role === "user").length > 1 ? "s" : ""} this session
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {error}

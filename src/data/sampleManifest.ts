@@ -7,6 +7,19 @@ export const sampleManifest: PatientRevealManifest = {
     age: 54,
     sex: "Female",
   },
+  todayBar: {
+    focus: "Stabilizing gut barrier integrity",
+    keyAction: "Take L-Glutamine (5g) with morning water",
+    nextCheckpoint: "Coaching call in 5 days",
+    statusNote: "We're still focused on the 30-day gut repair phase — stay the course",
+    lastUpdated: "Updated from your latest tracker sync · 2 hours ago",
+  },
+  weeklySnapshot: {
+    keyImprovement: "Morning energy improved — 2 fewer brain fog episodes this week",
+    fragileArea: "Sleep still fragile — average 5.8 hours, below target",
+    keepDoing: "Your Mediterranean meal pattern is supporting gut recovery well",
+    periodLabel: "Based on your last 14 days",
+  },
   studyOverview: {
     summary:
       "We analyzed your bloodwork, genetic markers, gut microbiome, metabolic panel, and lifestyle patterns to build a complete picture of what's driving your symptoms.",
@@ -107,19 +120,31 @@ export const sampleManifest: PatientRevealManifest = {
       title: "Heal the gut barrier first",
       description: "Begin a 30-day gut repair protocol focusing on removing inflammatory triggers and rebuilding intestinal lining integrity.",
       details: "Eliminate alcohol and processed foods for 30 days. Add L-glutamine (5g/day), zinc carnosine, and a targeted probiotic with Akkermansia support.",
+      whyFirst: "The gut barrier is the origin point of your inflammatory cascade. Until it's stabilized, other interventions (hormones, intensive exercise) could backfire or underperform.",
+      whatItAffects: "Reducing gut permeability will lower systemic inflammation (hs-CRP), improve nutrient absorption (helping B12 and D levels), and begin calming the immune over-activation driving your fatigue and brain fog.",
+      whatToNotice: "Within the first 2 weeks: less bloating after meals, slightly more afternoon energy. By week 3–4: brain fog episodes may shorten or become less frequent.",
     },
     thenAdd: [
       {
         title: "Optimize nutrient repletion",
         description: "Address the critical vitamin D, B12, and CoQ10 deficiencies identified in your bloodwork.",
+        whyFirst: "These nutrients are co-factors for energy production and immune regulation. Repleting them while the gut is healing maximizes absorption.",
+        whatItAffects: "Energy, cognitive clarity, immune balance, and mitochondrial function.",
+        whatToNotice: "Gradual improvement in sustained energy — less of a 3pm crash. May take 4–6 weeks to feel the full effect.",
       },
       {
         title: "Stabilize blood sugar patterns",
         description: "Implement time-restricted eating (12-hour window) and protein-first meals to improve insulin sensitivity.",
+        whyFirst: "Your HOMA-IR of 3.2 indicates early insulin resistance, which drives fat storage, energy crashes, and inflammation.",
+        whatItAffects: "Weight, energy stability throughout the day, afternoon brain fog, and long-term metabolic health.",
+        whatToNotice: "More stable energy after meals, reduced sugar cravings, and potentially some early weight shifts within 4–6 weeks.",
       },
       {
         title: "Support sleep architecture",
         description: "Establish a consistent 10pm wind-down protocol and add targeted magnesium glycinate before bed.",
+        whyFirst: "Sleep is when your body repairs — with current inflammatory load and cortisol patterns, improving sleep quality amplifies every other intervention.",
+        whatItAffects: "Recovery, inflammation levels, hormone balance, and cognitive function.",
+        whatToNotice: "Falling asleep faster, fewer middle-of-night wake-ups. May feel slightly different within 1–2 weeks.",
       },
     ],
     notYet: [
@@ -193,11 +218,11 @@ export const sampleManifest: PatientRevealManifest = {
       { name: "Magnesium Glycinate", purpose: "Sleep support, enzymatic function, muscle relaxation", dose: "400mg before bed", notes: "Glycinate form chosen for calming effect" },
     ],
     checkpoints: [
-      { label: "2-week check-in", date: "Week 2", description: "Brief coaching call to assess tolerance, adjust if needed." },
-      { label: "8-week bloodwork", date: "Week 8", description: "Recheck hs-CRP, Vitamin D, basic metabolic panel." },
-      { label: "12-week comprehensive", date: "Week 12", description: "Full re-evaluation: bloodwork, gut markers, symptom assessment. HRT discussion if appropriate." },
-      { label: "16-week microbiome retest", date: "Week 16", description: "Repeat microbiome analysis to measure diversity recovery." },
-      { label: "6-month review", date: "Month 6", description: "Comprehensive progress review with full team. Adjust long-term strategy." },
+      { label: "2-week check-in", date: "Week 2", description: "Brief coaching call to assess tolerance, adjust if needed.", owner: "Care Coach", checking: "Protocol tolerance, early symptom changes", whyItMatters: "Catching issues early prevents dropout and allows fine-tuning" },
+      { label: "8-week bloodwork", date: "Week 8", description: "Recheck hs-CRP, Vitamin D, basic metabolic panel.", owner: "Dr. Patel", checking: "Inflammatory markers, nutrient levels", whyItMatters: "First objective measure of whether the protocol is shifting your biology" },
+      { label: "12-week comprehensive", date: "Week 12", description: "Full re-evaluation: bloodwork, gut markers, symptom assessment. HRT discussion if appropriate.", owner: "Dr. Patel + Coach", checking: "Full panel: inflammation, gut permeability, insulin, hormones", whyItMatters: "Decision point for next phase — determines if HRT is now safe and beneficial" },
+      { label: "16-week microbiome retest", date: "Week 16", description: "Repeat microbiome analysis to measure diversity recovery.", owner: "Lab + Coach", checking: "Bacterial diversity, Akkermansia recovery", whyItMatters: "Validates whether the gut ecosystem is actually rebuilding" },
+      { label: "6-month review", date: "Month 6", description: "Comprehensive progress review with full team. Adjust long-term strategy.", owner: "Full Care Team", checking: "Everything — metabolic, hormonal, gut, symptoms", whyItMatters: "Shift from recovery mode to optimization and long-term maintenance" },
     ],
     responsibilities: [
       { who: "You", tasks: ["Follow the gut repair protocol for 30 days", "Take supplements as directed", "Track energy, sleep, and symptoms in the app", "Attend scheduled check-ins"] },
@@ -211,12 +236,14 @@ export const sampleManifest: PatientRevealManifest = {
       role: "Primary Physician",
       specialty: "Functional & Integrative Medicine",
       contact: "Secure message via portal",
+      watching: "Inflammatory markers (hs-CRP, zonulin) and readiness for HRT discussion at 12 weeks",
     },
     coach: {
       name: "Jamie Torres",
       role: "Care Coach",
       specialty: "Nutrition & Lifestyle Medicine",
       contact: "Direct message or call",
+      watching: "Daily protocol adherence, wearable sleep/recovery trends, dietary transition support",
     },
     appointments: [
       { type: "Coaching Call", date: "In 5 days", provider: "Jamie Torres", notes: "Review first week of gut repair protocol" },
