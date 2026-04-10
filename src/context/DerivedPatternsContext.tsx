@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useManifest } from "@/context/ManifestContext";
 import { useQueue } from "@/context/QueueContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 import { DerivedPattern } from "@/types/manifest";
 
 interface DeriveRunResult {
@@ -39,6 +40,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
   const { user } = useAuth();
   const { manifest } = useManifest();
   const { refresh: refreshQueue } = useQueue();
+  const { observations, observationsAsTimeline } = useLabUploads();
   const [patterns, setPatterns] = useState<DerivedPattern[]>([]);
   const [dismissed, setDismissed] = useState<DerivedPattern[]>([]);
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,19 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
     setRunning(true);
     setError(null);
     try {
+      // Merge uploaded lab observations into the manifest before sending
+      let mergedManifest = manifest;
+      if (observations.length > 0) {
+        const timeline = observationsAsTimeline();
+        mergedManifest = {
+          ...manifest,
+          rawData: {
+            ...(manifest.rawData || {}),
+            biomarkerTimeline: timeline,
+          },
+        };
+      }
+
       const resp = await fetch(DERIVE_URL, {
         method: "POST",
         headers: {
@@ -91,7 +106,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          manifest,
+          manifest: mergedManifest,
           userId: user.id,
         }),
       });
@@ -116,7 +131,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
     } finally {
       setRunning(false);
     }
-  }, [user, manifest, refresh, refreshQueue]);
+  }, [user, manifest, observations, observationsAsTimeline, refresh, refreshQueue]);
 
   const dismissPattern = useCallback(
     async (id: string) => {

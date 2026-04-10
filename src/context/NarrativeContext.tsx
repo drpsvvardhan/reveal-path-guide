@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useManifest } from "@/context/ManifestContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 import { PatientNarrativeVersion, NarrativeGenerationResult, GeneratedNarrativeFields } from "@/types/manifest";
 
 interface NarrativeContextValue {
@@ -29,6 +30,7 @@ const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate
 export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { manifest } = useManifest();
+  const { observations, observationsAsTimeline } = useLabUploads();
   const [activeNarrative, setActiveNarrative] = useState<GeneratedNarrativeFields | null>(null);
   const [allVersions, setAllVersions] = useState<PatientNarrativeVersion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,6 +77,19 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setGenerating(true);
     setError(null);
     try {
+      // Merge uploaded lab observations into the manifest before sending
+      let mergedManifest = manifest;
+      if (observations.length > 0) {
+        const timeline = observationsAsTimeline();
+        mergedManifest = {
+          ...manifest,
+          rawData: {
+            ...(manifest.rawData || {}),
+            biomarkerTimeline: timeline,
+          },
+        };
+      }
+
       const resp = await fetch(GENERATE_URL, {
         method: "POST",
         headers: {
@@ -82,7 +97,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          manifest,
+          manifest: mergedManifest,
           userId: user.id,
         }),
       });
@@ -106,7 +121,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setGenerating(false);
     }
-  }, [user, manifest, refresh]);
+  }, [user, manifest, observations, observationsAsTimeline, refresh]);
 
   const restoreVersion = useCallback(
     async (versionId: string) => {
