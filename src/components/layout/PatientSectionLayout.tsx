@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
+import FlowLine from "@/components/visuals/FlowLine";
 
 interface PatientSectionLayoutProps {
   eyebrow?: string;
@@ -39,6 +40,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               "radial-gradient(ellipse 60% 60% at 0% 50%, hsl(var(--secondary) / 0.04) 0%, transparent 60%)",
           }}
         />
+        <FlowLine variant="hero" className="absolute inset-0 w-full h-full text-secondary" />
         <div className="relative">
           {eyebrow && (
             <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-secondary mb-5">
