@@ -38,6 +38,65 @@ export type Database = {
         }
         Relationships: []
       }
+      derived_patterns: {
+        Row: {
+          category: string
+          dismissed_at: string | null
+          evidence: Json
+          first_detected_at: string
+          generated_question_id: string | null
+          id: string
+          last_confirmed_at: string
+          rule_id: string
+          rule_version: number
+          severity: string
+          status: string
+          summary: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          dismissed_at?: string | null
+          evidence?: Json
+          first_detected_at?: string
+          generated_question_id?: string | null
+          id?: string
+          last_confirmed_at?: string
+          rule_id: string
+          rule_version?: number
+          severity: string
+          status?: string
+          summary: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          dismissed_at?: string | null
+          evidence?: Json
+          first_detected_at?: string
+          generated_question_id?: string | null
+          id?: string
+          last_confirmed_at?: string
+          rule_id?: string
+          rule_version?: number
+          severity?: string
+          status?: string
+          summary?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "derived_patterns_generated_question_id_fkey"
+            columns: ["generated_question_id"]
+            isOneToOne: false
+            referencedRelation: "patient_question_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       food_logs: {
         Row: {
           entry: string
