@@ -262,4 +262,65 @@ export const sampleManifest: PatientRevealManifest = {
       "What happens if I can't give up wine for 30 days?",
     ],
   },
+
+  rawData: {
+    biomarkerTimeline: [
+      { name: "HbA1c", value: 5.6, unit: "%", timestamp: "2025-07-15", refLow: 4.0, refHigh: 5.6, flag: "normal", source: "Quest" },
+      { name: "HbA1c", value: 5.9, unit: "%", timestamp: "2025-11-02", refLow: 4.0, refHigh: 5.6, flag: "high", source: "Quest" },
+      { name: "HbA1c", value: 6.1, unit: "%", timestamp: "2026-02-18", refLow: 4.0, refHigh: 5.6, flag: "high", source: "Quest" },
+      { name: "LDL-C", value: 168, unit: "mg/dL", timestamp: "2026-02-18", refLow: 0, refHigh: 100, flag: "high", source: "Quest" },
+      { name: "LDL-C", value: 154, unit: "mg/dL", timestamp: "2025-11-02", refLow: 0, refHigh: 100, flag: "high", source: "Quest" },
+      { name: "CRP", value: 4.2, unit: "mg/L", timestamp: "2026-02-18", refLow: 0, refHigh: 3.0, flag: "high", source: "Quest" },
+      { name: "CRP", value: 4.5, unit: "mg/L", timestamp: "2025-11-02", refLow: 0, refHigh: 3.0, flag: "high", source: "Quest" },
+      { name: "Vitamin D", value: 22, unit: "ng/mL", timestamp: "2026-02-18", refLow: 30, refHigh: 100, flag: "low", source: "Quest" },
+      { name: "TSH", value: 2.1, unit: "mIU/L", timestamp: "2026-02-18", refLow: 0.4, refHigh: 4.0, flag: "normal", source: "Quest" },
+    ],
+
+    vitalSigns: [
+      { type: "systolic_bp", value: 138, timestamp: "2026-03-15", source: "home cuff" },
+      { type: "diastolic_bp", value: 88, timestamp: "2026-03-15", source: "home cuff" },
+      { type: "systolic_bp", value: 142, timestamp: "2026-03-22", source: "home cuff" },
+      { type: "diastolic_bp", value: 90, timestamp: "2026-03-22", source: "home cuff" },
+      { type: "systolic_bp", value: 135, timestamp: "2026-04-01", source: "home cuff" },
+      { type: "diastolic_bp", value: 86, timestamp: "2026-04-01", source: "home cuff" },
+      { type: "weight_kg", value: 82.1, timestamp: "2026-03-01", source: "manual" },
+      { type: "weight_kg", value: 82.5, timestamp: "2026-04-01", source: "manual" },
+      { type: "bmi", value: 28.4, timestamp: "2026-04-01", source: "manual" },
+    ],
+
+    sensorStreams: [
+      { date: "2026-04-01", sleep_hours: 5.4, deep_sleep_hours: 0.8, hrv_ms: 32, resting_hr: 68, steps: 4200, spo2_mean: 94, source: "whoop" },
+      { date: "2026-04-02", sleep_hours: 5.8, deep_sleep_hours: 0.9, hrv_ms: 28, resting_hr: 71, steps: 3800, spo2_mean: 93, source: "whoop" },
+      { date: "2026-04-03", sleep_hours: 6.1, deep_sleep_hours: 1.0, hrv_ms: 30, resting_hr: 69, steps: 5100, spo2_mean: 94, source: "whoop" },
+      { date: "2026-04-04", sleep_hours: 5.2, deep_sleep_hours: 0.7, hrv_ms: 25, resting_hr: 73, steps: 2900, spo2_mean: 92, source: "whoop" },
+      { date: "2026-04-05", sleep_hours: 5.9, deep_sleep_hours: 0.9, hrv_ms: 31, resting_hr: 68, steps: 4500, spo2_mean: 93, source: "whoop" },
+      { date: "2026-04-06", sleep_hours: 6.3, deep_sleep_hours: 1.1, hrv_ms: 35, resting_hr: 66, steps: 5800, spo2_mean: 94, source: "whoop" },
+      { date: "2026-04-07", sleep_hours: 5.7, deep_sleep_hours: 0.8, hrv_ms: 29, resting_hr: 70, steps: 4100, spo2_mean: 93, source: "whoop" },
+      { date: "2026-04-08", sleep_hours: 5.1, deep_sleep_hours: 0.6, hrv_ms: 23, resting_hr: 74, steps: 3200, spo2_mean: 91, source: "whoop" },
+    ],
+
+    symptomsJournal: [
+      { date: "2026-04-01", symptom: "sleep_self_report_hours", severity: 8, notes: "slept okay, around 8 hours" },
+      { date: "2026-04-03", symptom: "sleep_self_report_hours", severity: 8, notes: "8 hours, felt fine" },
+      { date: "2026-04-05", symptom: "sleep_self_report_hours", severity: 8, notes: "8 hours again" },
+      { date: "2026-04-07", symptom: "sleep_self_report_hours", severity: 8, notes: "good sleep, 8ish" },
+      { date: "2026-04-02", symptom: "fatigue", severity: 7 },
+      { date: "2026-04-04", symptom: "fatigue", severity: 8 },
+      { date: "2026-04-04", symptom: "brain_fog", severity: 6 },
+      { date: "2026-04-06", symptom: "fatigue", severity: 6 },
+      { date: "2026-04-08", symptom: "fatigue", severity: 8 },
+      { date: "2026-04-08", symptom: "brain_fog", severity: 7 },
+    ],
+
+    foodLogSummary: [
+      { date: "2026-04-01", total_calories: 2400, sugar_grams: 85, protein_grams: 90, alcohol_drinks: 1, late_meal: true },
+      { date: "2026-04-02", total_calories: 2200, sugar_grams: 110, protein_grams: 75, alcohol_drinks: 2, late_meal: true },
+      { date: "2026-04-03", total_calories: 2100, sugar_grams: 65, protein_grams: 95, alcohol_drinks: 0, late_meal: false },
+      { date: "2026-04-04", total_calories: 2500, sugar_grams: 130, protein_grams: 80, alcohol_drinks: 2, late_meal: true },
+      { date: "2026-04-05", total_calories: 2000, sugar_grams: 55, protein_grams: 100, alcohol_drinks: 0, late_meal: false },
+      { date: "2026-04-06", total_calories: 1950, sugar_grams: 50, protein_grams: 105, alcohol_drinks: 0, late_meal: false },
+      { date: "2026-04-07", total_calories: 2300, sugar_grams: 95, protein_grams: 85, alcohol_drinks: 1, late_meal: true },
+      { date: "2026-04-08", total_calories: 2600, sugar_grams: 140, protein_grams: 70, alcohol_drinks: 3, late_meal: true },
+    ],
+  },
 };
