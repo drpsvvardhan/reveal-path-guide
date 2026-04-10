@@ -40,6 +40,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
   const { user } = useAuth();
   const { manifest } = useManifest();
   const { refresh: refreshQueue } = useQueue();
+  const { observations, observationsAsTimeline } = useLabUploads();
   const [patterns, setPatterns] = useState<DerivedPattern[]>([]);
   const [dismissed, setDismissed] = useState<DerivedPattern[]>([]);
   const [loading, setLoading] = useState(false);
