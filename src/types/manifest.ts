@@ -154,6 +154,115 @@ export interface WeeklySnapshot {
   periodLabel?: string;
 }
 
+// ============================================================================
+// RAW DATA TYPES — inputs to the derivation pipeline
+// ============================================================================
+
+export interface BiomarkerObservation {
+  name: string;
+  displayName?: string;
+  value: number;
+  unit: string;
+  timestamp: string;
+  refLow?: number;
+  refHigh?: number;
+  flag?: "low" | "normal" | "high" | "critical";
+  source?: string;
+}
+
+export interface VitalSignObservation {
+  type: "systolic_bp" | "diastolic_bp" | "heart_rate" | "weight_kg" | "bmi" | "waist_cm" | "spo2";
+  value: number;
+  timestamp: string;
+  source?: string;
+}
+
+export interface SensorStreamDaily {
+  date: string;
+  sleep_hours?: number;
+  deep_sleep_hours?: number;
+  hrv_ms?: number;
+  resting_hr?: number;
+  steps?: number;
+  active_minutes?: number;
+  spo2_mean?: number;
+  source?: string;
+}
+
+export interface SymptomLogEntry {
+  date: string;
+  symptom: string;
+  severity: number;
+  notes?: string;
+}
+
+export interface FoodLogDailySummary {
+  date: string;
+  total_calories?: number;
+  sugar_grams?: number;
+  protein_grams?: number;
+  alcohol_drinks?: number;
+  late_meal?: boolean;
+  notable_foods?: string[];
+}
+
+export interface RawDataLayer {
+  biomarkerTimeline?: BiomarkerObservation[];
+  vitalSigns?: VitalSignObservation[];
+  sensorStreams?: SensorStreamDaily[];
+  symptomsJournal?: SymptomLogEntry[];
+  foodLogSummary?: FoodLogDailySummary[];
+}
+
+// ============================================================================
+// DERIVED PATTERN TYPES — outputs of the derivation pipeline
+// ============================================================================
+
+export type PatternCategory = "trend" | "threshold" | "contradiction" | "correlation" | "watchlist";
+export type PatternSeverity = "critical" | "high" | "moderate" | "informational";
+export type PatternStatus = "active" | "resolved" | "dismissed";
+
+export interface PatternEvidence {
+  source: string;
+  description: string;
+  values: any[];
+}
+
+export interface DerivedPattern {
+  id: string;
+  user_id: string;
+  rule_id: string;
+  rule_version: number;
+  category: PatternCategory;
+  severity: PatternSeverity;
+  title: string;
+  summary: string;
+  evidence: PatternEvidence;
+  generated_question_id: string | null;
+  first_detected_at: string;
+  last_confirmed_at: string;
+  status: PatternStatus;
+  dismissed_at: string | null;
+}
+
+export interface RuleDetection {
+  rule_id: string;
+  rule_version: number;
+  category: PatternCategory;
+  severity: PatternSeverity;
+  title: string;
+  summary: string;
+  evidence: PatternEvidence;
+  suggested_question?: {
+    question: string;
+    rationale: string;
+  };
+}
+
+// ============================================================================
+// MANIFEST
+// ============================================================================
+
 export interface PatientRevealManifest {
   patient: PatientInfo;
   studyOverview: StudyOverview;
@@ -172,6 +281,7 @@ export interface PatientRevealManifest {
   coach: Coach;
   todayBar?: TodayBar;
   weeklySnapshot?: WeeklySnapshot;
+  rawData?: RawDataLayer;
 }
 
 // ============================================================================
@@ -183,7 +293,7 @@ export interface QueuedQuestion {
   user_id: string;
   question: string;
   rationale: string | null;
-  source: "auto" | "manual";
+  source: "auto" | "manual" | "derived";
   status: "queued" | "archived";
   priority: number;
   source_user_message: string | null;
