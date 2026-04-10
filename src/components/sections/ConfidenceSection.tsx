@@ -3,6 +3,7 @@ import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, Search, RefreshCw } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import ConfidenceGradient from "@/components/visuals/ConfidenceGradient";
 
 const ConfidenceSection: React.FC = () => {
   const manifest = useActiveManifest();
@@ -19,6 +20,12 @@ const ConfidenceSection: React.FC = () => {
   const confidentCount = cb.confident?.length || 0;
   const investigatingCount = cb.investigating?.length || 0;
   const watchingCount = cb.retest?.length || 0;
+
+  const gradientItems: { label: string; category: "confident" | "investigating" | "watching" }[] = [
+    ...(cb.confident || []).map((label) => ({ label, category: "confident" as const })),
+    ...(cb.investigating || []).map((label) => ({ label, category: "investigating" as const })),
+    ...(cb.retest || []).map((label) => ({ label, category: "watching" as const })),
+  ];
 
   return (
     <PatientSectionLayout
@@ -37,6 +44,10 @@ const ConfidenceSection: React.FC = () => {
         />
       }
     >
+      {gradientItems.length > 0 && (
+        <ConfidenceGradient items={gradientItems} className="mb-8" />
+      )}
+
       <div className="space-y-5">
         {groups.map(({ title, items, icon: Icon, colorClass }) => {
           if (!items?.length) return null;
