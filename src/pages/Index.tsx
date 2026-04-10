@@ -1,7 +1,6 @@
 import { ManifestProvider } from "@/context/ManifestContext";
 import { DocumentProvider } from "@/context/DocumentContext";
 import { QueueProvider } from "@/context/QueueContext";
-import { ActionCompletionProvider } from "@/context/ActionCompletionContext";
 import { DerivedPatternsProvider } from "@/context/DerivedPatternsContext";
 import { NarrativeProvider } from "@/context/NarrativeContext";
 import { LabUploadsProvider } from "@/context/LabUploadsContext";
@@ -11,15 +10,13 @@ const Index = () => (
   <ManifestProvider>
     <DocumentProvider>
       <QueueProvider>
-        <ActionCompletionProvider>
+        <LabUploadsProvider>
           <DerivedPatternsProvider>
             <NarrativeProvider>
-              <LabUploadsProvider>
-                <PatientShell />
-              </LabUploadsProvider>
+              <PatientShell />
             </NarrativeProvider>
           </DerivedPatternsProvider>
-        </ActionCompletionProvider>
+        </LabUploadsProvider>
       </QueueProvider>
     </DocumentProvider>
   </ManifestProvider>
