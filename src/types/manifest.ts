@@ -353,3 +353,60 @@ export interface NarrativeGenerationResult {
   error?: string;
   validation_error?: string;
 }
+
+// ============================================================================
+// LAB UPLOAD TYPES — Phase 5
+// ============================================================================
+
+export type LabUploadStatus = "uploaded" | "processing" | "complete" | "failed";
+
+export interface LabUpload {
+  id: string;
+  user_id: string;
+  original_filename: string;
+  storage_path: string;
+  file_size_bytes: number | null;
+  source_lab: string | null;
+  collection_date: string | null;
+  ordering_provider: string | null;
+  status: LabUploadStatus;
+  processing_started_at: string | null;
+  processing_completed_at: string | null;
+  observations_extracted: number | null;
+  observations_inserted: number | null;
+  observations_duplicates: number | null;
+  error_message: string | null;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LabObservationRow {
+  id: string;
+  user_id: string;
+  upload_id: string;
+  raw_name: string;
+  canonical_name: string;
+  display_name: string | null;
+  value: number;
+  unit: string;
+  ref_low: number | null;
+  ref_high: number | null;
+  flag: "low" | "normal" | "high" | "critical" | null;
+  collection_date: string;
+  source: string | null;
+  corrected: boolean;
+  original_value: number | null;
+  corrected_at: string | null;
+  created_at: string;
+}
+
+export interface LabUploadProcessResult {
+  success: boolean;
+  observations_extracted?: number;
+  observations_inserted?: number;
+  observations_duplicates?: number;
+  source_lab?: string | null;
+  collection_date?: string | null;
+  error?: string;
+}
