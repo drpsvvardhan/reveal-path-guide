@@ -2,6 +2,7 @@ import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import FlowLine from "@/components/visuals/FlowLine";
 import ProgressRing from "@/components/ProgressRing";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
@@ -189,7 +190,8 @@ const ThesisSection: React.FC = () => {
 
       {/* Symptom bridges (merged from SymptomBridgesSection) */}
       {bridges.length > 0 && (
-        <div className="pt-10 mt-10 border-t border-border/40">
+        <div className="pt-10 mt-10 relative">
+          <FlowLine variant="divider" className="absolute top-0 left-0 w-full h-5 text-secondary/40" />
           <h2 className="text-eyebrow text-secondary mb-6">
             WHY YOU MIGHT BE FEELING THIS WAY
           </h2>
