@@ -91,6 +91,7 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
 
 const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
+  const { color: signature } = useSignatureColor();
   const { patientThesis } = manifest;
   const bridges = manifest.symptomBridges || [];
 
