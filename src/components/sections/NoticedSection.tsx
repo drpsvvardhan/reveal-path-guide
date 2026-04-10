@@ -8,7 +8,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { DerivedPattern } from "@/types/manifest";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
+import AsideDistributionBar from "@/components/layout/AsideDistributionBar";
 
 const categoryIcon: Record<string, React.FC<any>> = { trend: TrendingUp, threshold: AlertCircle, contradiction: GitCompare, correlation: Activity, watchlist: Eye };
 const categoryLabel: Record<string, string> = { trend: "Trend", threshold: "Threshold", contradiction: "Contradiction", correlation: "Correlation", watchlist: "Watchlist" };
@@ -113,12 +114,21 @@ const NoticedSection: React.FC = () => {
       intro="Trends, threshold crossings, contradictions, and behavioral correlations. These are computed, not guessed. Each pattern shows the evidence that triggered it."
       actionBar={actionBarContent}
       aside={
-        <AsideInfoPanel
-          title="Pipeline state"
+        <AsideVisualPanel
+          title="Pattern landscape"
+          subtitle={`${patterns.length} active · narrative v${activeVersion || "—"}`}
+          visual={
+            <AsideDistributionBar
+              segments={[
+                { label: "Urgent", value: bySeverity.critical.length, color: "hsl(0, 70%, 55%)" },
+                { label: "Important", value: bySeverity.high.length, color: "hsl(25, 85%, 55%)" },
+                { label: "Worth noting", value: bySeverity.moderate.length, color: "hsl(40, 80%, 55%)" },
+                { label: "Informational", value: bySeverity.informational.length, color: "hsl(220, 15%, 55%)" },
+              ]}
+            />
+          }
           items={[
-            { label: "Patterns", value: patterns.length.toString(), tone: "accent" },
-            { label: "Last run", value: lastRunTime },
-            { label: "Narrative", value: activeNarrative ? `Version ${activeVersion}` : "Not generated" },
+            { label: "Last computed", value: lastRunTime || "Not yet" },
           ]}
           footnote="Patterns update whenever you click Compute. Narrative regenerates on demand."
         />

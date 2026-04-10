@@ -7,7 +7,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { QueuedQuestion } from "@/types/manifest";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
+import AsideDistributionBar from "@/components/layout/AsideDistributionBar";
 
 const QueueSection: React.FC = () => {
   const {
@@ -62,14 +63,18 @@ const QueueSection: React.FC = () => {
       title="Ready for your next appointment"
       intro="Questions ready for your next visit. Add your own, archive ones you've decided not to ask, or share the list with your doctor before you visit."
       aside={
-        <AsideInfoPanel
-          title="Queue breakdown"
-          items={[
-            { label: "From chat", value: autoCount.toString() },
-            { label: "From patterns", value: derivedCount.toString() },
-            { label: "Manual", value: manualCount.toString() },
-            { label: "Total queued", value: questions.length.toString(), tone: "accent" },
-          ]}
+        <AsideVisualPanel
+          title="Queue composition"
+          subtitle={`${questions.length} questions ready`}
+          visual={
+            <AsideDistributionBar
+              segments={[
+                { label: "From chat", value: autoCount, color: "hsl(174, 50%, 50%)" },
+                { label: "From patterns", value: derivedCount, color: "hsl(40, 70%, 55%)" },
+                { label: "Manual", value: manualCount, color: "hsl(220, 20%, 50%)" },
+              ]}
+            />
+          }
           footnote="Most appointments have time for 2–3 questions. Curate to what feels most urgent."
         />
       }

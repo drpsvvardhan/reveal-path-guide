@@ -2,7 +2,8 @@ import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, Search, RefreshCw } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
+import AsideDistributionBar from "@/components/layout/AsideDistributionBar";
 import ConfidenceGradient from "@/components/visuals/ConfidenceGradient";
 
 const ConfidenceSection: React.FC = () => {
@@ -33,13 +34,18 @@ const ConfidenceSection: React.FC = () => {
       title="Our certainty, laid out honestly"
       intro="Not everything we observe is equally certain. Here's where we are confident, where we're still investigating, and what we're watching to be sure."
       aside={
-        <AsideInfoPanel
-          title="Certainty breakdown"
-          items={[
-            { label: "Confident", value: confidentCount.toString(), tone: "success" },
-            { label: "Investigating", value: investigatingCount.toString(), tone: "warning" },
-            { label: "Watching", value: watchingCount.toString(), tone: "accent" },
-          ]}
+        <AsideVisualPanel
+          title="Certainty landscape"
+          subtitle="Where we stand across what we know"
+          visual={
+            <AsideDistributionBar
+              segments={[
+                { label: "Confident", value: confidentCount, color: "hsl(174, 55%, 45%)" },
+                { label: "Investigating", value: investigatingCount, color: "hsl(40, 70%, 55%)" },
+                { label: "Watching", value: watchingCount, color: "hsl(220, 25%, 55%)" },
+              ]}
+            />
+          }
           footnote="Uncertainty is active attention, not doubt. A 'watching' item is something we're tracking to confirm."
         />
       }

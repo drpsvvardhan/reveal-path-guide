@@ -5,7 +5,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { motion } from "framer-motion";
 import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
+import AsideProgressRing from "@/components/layout/AsideProgressRing";
 
 const difficultyFor = (title: string): "EASY" | "MODERATE" | "INVOLVED" => {
   const t = title.toLowerCase();
@@ -163,14 +164,23 @@ const ActionSection: React.FC = () => {
       title="Today's actions, personalized for where your body is right now"
       intro="Start with the most important one. The others unlock as your baseline stabilizes."
       aside={
-        <AsideInfoPanel
-          title="Progress"
+        <AsideVisualPanel
+          title="Today's progress"
+          subtitle="Your sequence is what matters"
+          visual={
+            <AsideProgressRing
+              percent={pct}
+              label="completed"
+              sublabel={`${completedCount} of ${totalCount}`}
+              size={180}
+            />
+          }
           items={[
             { label: "Streak", value: `${streak} day${streak !== 1 ? "s" : ""}`, tone: "accent" },
-            { label: "Today", value: `${completedCount} of ${totalCount}`, tone: pct === 100 ? "success" : "default" },
-            { label: "Completion", value: `${pct}%` },
+            { label: "Today", value: `${completedCount} of ${totalCount}` },
+            { label: "Next unlock", value: "Stabilize first" },
           ]}
-          footnote="The sequence matters more than the pace. Don't rush to 'then add' items before 'start here' is steady."
+          footnote="The sequence matters more than the pace. Don't rush 'then add' items before 'start here' is steady."
         />
       }
       asideSticky

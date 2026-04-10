@@ -74,13 +74,13 @@ const JourneySection: React.FC = () => {
       aside={
         <AsideInfoPanel
           title="Today's metrics"
+          subtitle="Updated 2 hours ago"
           items={[
-            { label: "Sleep", value: "6.2 hrs", subvalue: "+0.5h vs last week", tone: "accent" },
-            { label: "Glucose", value: "Stable", subvalue: "Improving", tone: "success" },
-            { label: "Heart", value: "Good", subvalue: "Steady" },
-            { label: "Activity", value: "4,200 steps", subvalue: "Below goal", tone: "warning" },
+            { label: "Sleep", value: "6.2h", subvalue: "↓ 0.5h less", tone: "warning", progress: 62 },
+            { label: "Glucose", value: "Stable", subvalue: "↑ Improving", tone: "success", progress: 78 },
+            { label: "Heart", value: "Good", subvalue: "Steady", tone: "default", progress: 85 },
+            { label: "Activity", value: "4,200", subvalue: "Below goal of 8,000", tone: "warning", progress: 52 },
           ]}
-          footnote="Updated from your latest tracker sync · 2 hours ago"
         />
       }
       asideSticky

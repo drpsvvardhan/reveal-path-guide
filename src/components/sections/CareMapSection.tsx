@@ -3,7 +3,8 @@ import { useManifest } from "@/context/ManifestContext";
 import { Pill, CalendarCheck, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
+import AsideProgressRing from "@/components/layout/AsideProgressRing";
 
 const CareMapSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -19,13 +20,24 @@ const CareMapSection: React.FC = () => {
       title="Your current protocol and the checkpoints ahead"
       intro="Everything you're currently taking, what each one is for, and the milestones where we review how it's going."
       aside={
-        <AsideInfoPanel
-          title="Protocol summary"
+        <AsideVisualPanel
+          title="Protocol adherence"
+          subtitle="Last 7 days across all supplements"
+          visual={
+            <AsideProgressRing
+              percent={82}
+              label="on track"
+              sublabel="82 of 100"
+              size={180}
+              color="hsl(174, 55%, 45%)"
+            />
+          }
           items={[
             { label: "Active supplements", value: medCount.toString() },
-            { label: "Next checkpoint", value: "Week 2", subvalue: "Coaching call" },
+            { label: "Next checkpoint", value: "Week 2", tone: "accent" },
             { label: "Next bloodwork", value: "Week 8" },
           ]}
+          footnote="Consistent intake matters more than perfect intake. Missing a day is recoverable; missing a week needs a note."
         />
       }
     >
