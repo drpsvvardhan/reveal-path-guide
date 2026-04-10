@@ -27,6 +27,25 @@ export const useLabUploads = () => {
 
 const PROCESS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-lab-pdf`;
 
+const SUPPORTED_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
+function getFileExtension(mimeType: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+  };
+  return map[mimeType] || ".bin";
+}
+
 export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [uploads, setUploads] = useState<LabUpload[]>([]);
