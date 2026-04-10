@@ -1,5 +1,7 @@
 import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 const tiers = [
   { key: "weeks" as const, label: "Can improve in weeks", colorClass: "bg-sky-light border-secondary/20" },
@@ -15,11 +17,22 @@ const ReversibilitySection: React.FC = () => {
   if (!rev) return null;
 
   return (
-    <section className="animate-fade-in space-y-6">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary mb-2">
-        What can still change
-      </h2>
-
+    <PatientSectionLayout
+      eyebrow="WHAT CAN STILL CHANGE"
+      title="Most of this is reversible with focused attention"
+      intro="Biology is path-dependent but not fixed. These are the things that respond to different time horizons of effort."
+      aside={
+        <AsideInfoPanel
+          title="Timeline summary"
+          items={[
+            { label: "Changes in weeks", value: `${rev.weeks?.length || 0} items`, tone: "accent" },
+            { label: "Changes in months", value: `${rev.months?.length || 0} items`, tone: "accent" },
+            { label: "Slow changes", value: `${rev.slow?.length || 0} items` },
+            { label: "Work around", value: `${rev.permanent?.length || 0} items` },
+          ]}
+        />
+      }
+    >
       <div className="space-y-4">
         {tiers.map(({ key, label, colorClass }) => {
           const items = rev[key];
@@ -45,7 +58,7 @@ const ReversibilitySection: React.FC = () => {
           {rev.closingLine}
         </p>
       )}
-    </section>
+    </PatientSectionLayout>
   );
 };
 

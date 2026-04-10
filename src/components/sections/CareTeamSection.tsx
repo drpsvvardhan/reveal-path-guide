@@ -1,6 +1,8 @@
 import React from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { User, Phone, Calendar, MessageCircle, Video, Eye } from "lucide-react";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 const CareTeamSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -11,11 +13,21 @@ const CareTeamSection: React.FC = () => {
   const members = [ct.physician, ct.coach].filter(Boolean);
 
   return (
-    <section className="animate-fade-in space-y-8">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
-        Care Team
-      </h2>
-
+    <PatientSectionLayout
+      eyebrow="CARE TEAM"
+      title="The people watching with you"
+      intro="Your providers, what each of them is watching, and how to reach them."
+      aside={
+        <AsideInfoPanel
+          title="Team summary"
+          items={[
+            { label: "Primary physician", value: ct.physician?.name || "—" },
+            { label: "Care coach", value: ct.coach?.name || "—" },
+            { label: "Next call", value: "In 5 days", tone: "accent" },
+          ]}
+        />
+      }
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         {members.map((member, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
@@ -29,8 +41,6 @@ const CareTeamSection: React.FC = () => {
               </div>
             </div>
             {member.specialty && <p className="text-xs text-muted-foreground">{member.specialty}</p>}
-
-            {/* What they're watching */}
             {member.watching && (
               <div className="rounded-lg bg-lavender-light p-3">
                 <div className="flex items-center gap-1.5 mb-1">
@@ -40,12 +50,9 @@ const CareTeamSection: React.FC = () => {
                 <p className="text-xs text-foreground/80 leading-relaxed">{member.watching}</p>
               </div>
             )}
-
-            {/* Contact actions */}
             <div className="flex gap-2">
               <button className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted transition-colors">
-                <MessageCircle className="h-3.5 w-3.5 text-primary" />
-                Message
+                <MessageCircle className="h-3.5 w-3.5 text-primary" />Message
               </button>
               {member.contact?.includes("call") && (
                 <button className="flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted transition-colors">
@@ -57,7 +64,6 @@ const CareTeamSection: React.FC = () => {
         ))}
       </div>
 
-      {/* Telemedicine placeholder */}
       <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 flex items-center gap-4">
         <div className="h-10 w-10 rounded-lg bg-sky-light flex items-center justify-center shrink-0">
           <Video className="h-5 w-5 text-primary" />
@@ -68,7 +74,6 @@ const CareTeamSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Appointments */}
       {ct.appointments?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
@@ -88,7 +93,7 @@ const CareTeamSection: React.FC = () => {
           </div>
         </div>
       )}
-    </section>
+    </PatientSectionLayout>
   );
 };
 

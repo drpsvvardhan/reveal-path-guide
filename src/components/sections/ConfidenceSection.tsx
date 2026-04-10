@@ -1,6 +1,8 @@
 import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, Search, RefreshCw } from "lucide-react";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 const ConfidenceSection: React.FC = () => {
   const manifest = useActiveManifest();
@@ -14,12 +16,27 @@ const ConfidenceSection: React.FC = () => {
     { title: "Things worth retesting to be sure", items: cb.retest, icon: RefreshCw, colorClass: "text-accent" },
   ];
 
-  return (
-    <section className="animate-fade-in space-y-6">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
-        How sure are we
-      </h2>
+  const confidentCount = cb.confident?.length || 0;
+  const investigatingCount = cb.investigating?.length || 0;
+  const watchingCount = cb.retest?.length || 0;
 
+  return (
+    <PatientSectionLayout
+      eyebrow="HOW SURE ARE WE"
+      title="Our certainty, laid out honestly"
+      intro="Not everything we observe is equally certain. Here's where we are confident, where we're still investigating, and what we're watching to be sure."
+      aside={
+        <AsideInfoPanel
+          title="Certainty breakdown"
+          items={[
+            { label: "Confident", value: confidentCount.toString(), tone: "success" },
+            { label: "Investigating", value: investigatingCount.toString(), tone: "warning" },
+            { label: "Watching", value: watchingCount.toString(), tone: "accent" },
+          ]}
+          footnote="Uncertainty is active attention, not doubt. A 'watching' item is something we're tracking to confirm."
+        />
+      }
+    >
       <div className="space-y-5">
         {groups.map(({ title, items, icon: Icon, colorClass }) => {
           if (!items?.length) return null;
@@ -40,7 +57,7 @@ const ConfidenceSection: React.FC = () => {
           );
         })}
       </div>
-    </section>
+    </PatientSectionLayout>
   );
 };
 

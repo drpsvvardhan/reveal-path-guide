@@ -4,8 +4,9 @@ import { Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, Flame } from
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 import { useActionCompletions } from "@/context/ActionCompletionContext";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
-/* ── Difficulty badges ── */
 const difficultyFor = (title: string): "EASY" | "MODERATE" | "INVOLVED" => {
   const t = title.toLowerCase();
   if (t.includes("walk") || t.includes("sleep") || t.includes("wind") || t.includes("take") || t.includes("medication")) return "EASY";
@@ -31,7 +32,6 @@ const nudgeFor = (action: { whyFirst?: string; whatToNotice?: string }): string 
   return "";
 };
 
-/* ── Why detail expander ── */
 const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: string; whatToNotice?: string } }> = ({ action }) => {
   const [open, setOpen] = useState(false);
   const hasContent = action.whyFirst || action.whatItAffects || action.whatToNotice;
@@ -67,7 +67,6 @@ const WhyExpander: React.FC<{ action: { whyFirst?: string; whatItAffects?: strin
   );
 };
 
-/* ── Checkmark ── */
 const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
@@ -81,7 +80,6 @@ const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, 
   </button>
 );
 
-/* ── Action Card ── */
 const ActionCard: React.FC<{
   icon: string;
   title: string;
@@ -129,7 +127,6 @@ const ActionCard: React.FC<{
   );
 };
 
-/* ── Streak Badge ── */
 const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
   if (streak === 0) return null;
   return (
@@ -144,7 +141,6 @@ const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
   );
 };
 
-/* ── Main Section ── */
 const ActionSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { allActions, completedKeys, streak, toggleDone } = useActionCompletions();
@@ -162,13 +158,25 @@ const ActionSection: React.FC = () => {
   };
 
   return (
-    <section className="animate-fade-in space-y-8">
-      {/* Header + Streak */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="font-serif text-2xl md:text-3xl text-foreground mb-1">Today's Actions</h2>
-          <p className="text-sm text-muted-foreground font-sans">Personalized for where your body is right now.</p>
-        </div>
+    <PatientSectionLayout
+      eyebrow="WHAT TO DO"
+      title="Today's actions, personalized for where your body is right now"
+      intro="Start with the most important one. The others unlock as your baseline stabilizes."
+      aside={
+        <AsideInfoPanel
+          title="Progress"
+          items={[
+            { label: "Streak", value: `${streak} day${streak !== 1 ? "s" : ""}`, tone: "accent" },
+            { label: "Today", value: `${completedCount} of ${totalCount}`, tone: pct === 100 ? "success" : "default" },
+            { label: "Completion", value: `${pct}%` },
+          ]}
+          footnote="The sequence matters more than the pace. Don't rush to 'then add' items before 'start here' is steady."
+        />
+      }
+      asideSticky
+    >
+      {/* Streak */}
+      <div className="flex justify-end">
         <StreakBadge streak={streak} />
       </div>
 
@@ -303,7 +311,7 @@ const ActionSection: React.FC = () => {
           </div>
         </div>
       )}
-    </section>
+    </PatientSectionLayout>
   );
 };
 
