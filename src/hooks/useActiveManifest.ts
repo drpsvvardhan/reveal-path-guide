@@ -1,30 +1,52 @@
 import { useMemo } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useNarrative } from "@/context/NarrativeContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 import { PatientRevealManifest } from "@/types/manifest";
 
 /**
- * Returns the active manifest with any generated narrative merged in.
- * If a generated narrative exists, its fields override the hand-authored
- * fields in the base manifest. If not, returns the base manifest as-is.
+ * Returns the active manifest with generated narrative and uploaded lab data
+ * merged in. The merge order:
+ * 1. Start with the base manifest from ManifestContext
+ * 2. Overlay generated narrative fields if a generated version exists
+ * 3. Overlay uploaded lab observations into rawData.biomarkerTimeline if any exist
  */
 export function useActiveManifest(): PatientRevealManifest {
   const { manifest: baseManifest } = useManifest();
   const { activeNarrative } = useNarrative();
+  const { observationsAsTimeline, observations } = useLabUploads();
 
   return useMemo(() => {
-    if (!activeNarrative) return baseManifest;
+    // Step 1: start with base manifest
+    let merged: PatientRevealManifest = baseManifest;
 
-    return {
-      ...baseManifest,
-      patientThesis: activeNarrative.patientThesis || baseManifest.patientThesis,
-      layerFindings: activeNarrative.layerFindings || baseManifest.layerFindings,
-      helpingVsFeeding: activeNarrative.helpingVsFeeding || baseManifest.helpingVsFeeding,
-      symptomBridges: activeNarrative.symptomBridges || baseManifest.symptomBridges,
-      reversibility: activeNarrative.reversibility || baseManifest.reversibility,
-      sequencedActions: activeNarrative.sequencedActions || baseManifest.sequencedActions,
-      expectedProgress: activeNarrative.expectedProgress || baseManifest.expectedProgress,
-      confidenceBreakdown: activeNarrative.confidenceBreakdown || baseManifest.confidenceBreakdown,
-    };
-  }, [baseManifest, activeNarrative]);
+    // Step 2: overlay generated narrative if available
+    if (activeNarrative) {
+      merged = {
+        ...merged,
+        patientThesis: activeNarrative.patientThesis || merged.patientThesis,
+        layerFindings: activeNarrative.layerFindings || merged.layerFindings,
+        helpingVsFeeding: activeNarrative.helpingVsFeeding || merged.helpingVsFeeding,
+        symptomBridges: activeNarrative.symptomBridges || merged.symptomBridges,
+        reversibility: activeNarrative.reversibility || merged.reversibility,
+        sequencedActions: activeNarrative.sequencedActions || merged.sequencedActions,
+        expectedProgress: activeNarrative.expectedProgress || merged.expectedProgress,
+        confidenceBreakdown: activeNarrative.confidenceBreakdown || merged.confidenceBreakdown,
+      };
+    }
+
+    // Step 3: overlay uploaded lab observations into rawData.biomarkerTimeline
+    if (observations.length > 0) {
+      const timeline = observationsAsTimeline();
+      merged = {
+        ...merged,
+        rawData: {
+          ...(merged.rawData || {}),
+          biomarkerTimeline: timeline,
+        },
+      };
+    }
+
+    return merged;
+  }, [baseManifest, activeNarrative, observations, observationsAsTimeline]);
 }
