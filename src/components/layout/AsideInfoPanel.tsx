@@ -19,11 +19,11 @@ interface AsideInfoPanelProps {
 }
 
 const toneStyles: Record<string, { text: string; bg: string; bar: string }> = {
-  default: { text: "text-foreground", bg: "bg-muted/40", bar: "bg-foreground/40" },
-  accent: { text: "text-secondary", bg: "bg-secondary/10", bar: "bg-secondary" },
-  warning: { text: "text-amber-700", bg: "bg-amber-50", bar: "bg-amber-500" },
-  success: { text: "text-teal-700", bg: "bg-teal-50", bar: "bg-teal-500" },
-  critical: { text: "text-red-700", bg: "bg-red-50", bar: "bg-red-500" },
+  default: { text: "text-foreground", bg: "bg-muted/30", bar: "bg-foreground/30" },
+  accent: { text: "text-accent", bg: "bg-accent/8", bar: "bg-accent" },
+  warning: { text: "text-warning", bg: "bg-warning/8", bar: "bg-warning" },
+  success: { text: "text-success", bg: "bg-success/10", bar: "bg-success" },
+  critical: { text: "text-destructive", bg: "bg-destructive/8", bar: "bg-destructive" },
 };
 
 const AsideInfoPanel: React.FC<AsideInfoPanelProps> = ({
@@ -35,31 +35,22 @@ const AsideInfoPanel: React.FC<AsideInfoPanelProps> = ({
 }) => {
   return (
     <div
-      className="relative rounded-2xl border border-border/80 bg-card shadow-[0_2px_6px_rgba(0,0,0,0.06),0_12px_32px_-8px_rgba(0,0,0,0.12)] overflow-hidden"
-      style={
-        accentColor
-          ? { borderLeft: `3px solid ${accentColor}` }
-          : undefined
-      }
+      className="rounded-lg border border-border/60 bg-card overflow-hidden"
+      style={{
+        boxShadow: "var(--shadow-elevated)",
+        ...(accentColor ? { borderLeft: `2px solid ${accentColor}` } : {}),
+      }}
     >
-      <div
-        className="absolute top-0 left-0 right-0 h-1 opacity-70"
-        style={{
-          background:
-            "linear-gradient(90deg, hsl(var(--secondary) / 0.6) 0%, hsl(var(--secondary) / 0.15) 60%, transparent 100%)",
-        }}
-      />
-
       <div className="px-7 pt-7 pb-5">
-        <h3 className="font-serif text-2xl text-foreground leading-tight tracking-tight">
+        <h3 className="font-serif text-xl text-foreground leading-tight tracking-tight" style={{ fontWeight: 500 }}>
           {title}
         </h3>
         {subtitle && (
-          <p className="text-sm text-muted-foreground mt-1.5">{subtitle}</p>
+          <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>
         )}
       </div>
 
-      <div className="h-px bg-border/60 mx-7" />
+      <div className="h-px bg-border/50 mx-7" />
 
       <div className="px-7 py-6 space-y-6">
         {items.map((item, idx) => {
@@ -67,24 +58,24 @@ const AsideInfoPanel: React.FC<AsideInfoPanelProps> = ({
           const tone = toneStyles[item.tone || "default"];
 
           return (
-            <div key={idx} className="space-y-2">
+            <div key={idx} className="space-y-1.5">
               <div className="flex items-center gap-1.5">
                 {Icon && (
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground/70" strokeWidth={1.5} />
                 )}
-                <p className="text-xs font-sans font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                <p className="text-[11px] font-sans font-medium uppercase tracking-[0.16em] text-muted-foreground">
                   {item.label}
                 </p>
               </div>
-              <p className={`font-serif text-3xl leading-none ${tone.text}`}>
+              <p className={`font-sans text-2xl font-semibold leading-none tracking-tight ${tone.text}`}>
                 {item.value}
               </p>
               {item.subvalue && (
-                <p className="text-sm text-muted-foreground">{item.subvalue}</p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed">{item.subvalue}</p>
               )}
               {typeof item.progress === "number" && (
-                <div className="pt-1">
-                  <div className={`h-1.5 rounded-full ${tone.bg} overflow-hidden`}>
+                <div className="pt-1.5">
+                  <div className={`h-1 rounded-full ${tone.bg} overflow-hidden`}>
                     <div
                       className={`h-full rounded-full ${tone.bar} transition-all duration-500`}
                       style={{ width: `${Math.min(100, Math.max(0, item.progress))}%` }}
@@ -99,9 +90,9 @@ const AsideInfoPanel: React.FC<AsideInfoPanelProps> = ({
 
       {footnote && (
         <>
-          <div className="h-px bg-border/60 mx-7" />
+          <div className="h-px bg-border/50 mx-7" />
           <div className="px-7 py-5">
-            <p className="text-xs text-muted-foreground italic leading-relaxed">
+            <p className="text-[12px] text-muted-foreground leading-relaxed">
               {footnote}
             </p>
           </div>
