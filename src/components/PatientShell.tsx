@@ -12,7 +12,7 @@ import WeeklySnapshot from "@/components/WeeklySnapshot";
 import JourneySection from "@/components/sections/JourneySection";
 import ThesisSection from "@/components/sections/ThesisSection";
 import HelpingFeedingSection from "@/components/sections/HelpingFeedingSection";
-import SymptomBridgesSection from "@/components/sections/SymptomBridgesSection";
+
 import ReversibilitySection from "@/components/sections/ReversibilitySection";
 import ActionSection from "@/components/sections/ActionSection";
 import RecordsSection from "@/components/sections/RecordsSection";
@@ -28,7 +28,7 @@ const sections: Record<string, React.FC> = {
   journey: JourneySection,
   thesis: ThesisSection,
   "helping-feeding": HelpingFeedingSection,
-  symptoms: SymptomBridgesSection,
+  
   reversibility: ReversibilitySection,
   actions: ActionSection,
   records: RecordsSection,
@@ -132,7 +132,7 @@ const PatientShell: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
-            className="px-6 py-8 md:px-10 md:py-10 max-w-3xl"
+            className="px-6 py-8 md:px-10 lg:px-16 md:py-10"
           >
             <ActiveComponent />
           </motion.div>
