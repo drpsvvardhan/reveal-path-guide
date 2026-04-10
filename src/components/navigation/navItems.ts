@@ -15,7 +15,7 @@ export const navItems: NavItem[] = [
   { id: "journey", label: "Journey", shortLabel: "Journey", icon: Map },
   { id: "thesis", label: "What's happening in your body", shortLabel: "Body", icon: Activity },
   { id: "helping-feeding", label: "What is helping — and what is still feeding the problem", shortLabel: "Factors", icon: Scale },
-  { id: "symptoms", label: "Why you might be feeling this way", shortLabel: "Symptoms", icon: Brain },
+  
   { id: "noticed", label: "What we've noticed", shortLabel: "Noticed", icon: Sparkles },
   { id: "reversibility", label: "What can still change", shortLabel: "Change", icon: RefreshCw },
   { id: "actions", label: "What to do", shortLabel: "Actions", icon: ListChecks },

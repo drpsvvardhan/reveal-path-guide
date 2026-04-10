@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { Pill, CalendarCheck, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 const CareMapSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -9,12 +11,24 @@ const CareMapSection: React.FC = () => {
 
   if (!cm) return null;
 
-  return (
-    <section className="animate-fade-in space-y-8">
-      <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary">
-        Care Map
-      </h2>
+  const medCount = cm.medications?.length || 0;
 
+  return (
+    <PatientSectionLayout
+      eyebrow="CARE MAP"
+      title="Your current protocol and the checkpoints ahead"
+      intro="Everything you're currently taking, what each one is for, and the milestones where we review how it's going."
+      aside={
+        <AsideInfoPanel
+          title="Protocol summary"
+          items={[
+            { label: "Active supplements", value: medCount.toString() },
+            { label: "Next checkpoint", value: "Week 2", subvalue: "Coaching call" },
+            { label: "Next bloodwork", value: "Week 8" },
+          ]}
+        />
+      }
+    >
       {/* Medications */}
       {cm.medications?.length > 0 && (
         <div>
@@ -34,7 +48,7 @@ const CareMapSection: React.FC = () => {
         </div>
       )}
 
-      {/* Enhanced Checkpoints */}
+      {/* Checkpoints */}
       {cm.checkpoints?.length > 0 && (
         <div>
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
@@ -54,15 +68,14 @@ const CareMapSection: React.FC = () => {
           <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
             <Users className="h-5 w-5 text-primary" /> Who does what
           </h3>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             {cm.responsibilities.map((r, i) => (
               <div key={i} className="rounded-lg border border-border bg-card p-4">
                 <p className="font-sans font-semibold text-foreground text-sm mb-2">{r.who}</p>
                 <ul className="space-y-1">
                   {r.tasks.map((t, j) => (
                     <li key={j} className="text-xs text-muted-foreground flex gap-2 items-start">
-                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary shrink-0" />
-                      {t}
+                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary shrink-0" />{t}
                     </li>
                   ))}
                 </ul>
@@ -71,7 +84,7 @@ const CareMapSection: React.FC = () => {
           </div>
         </div>
       )}
-    </section>
+    </PatientSectionLayout>
   );
 };
 
@@ -91,9 +104,7 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
         </p>
         <p className="text-sm text-muted-foreground mt-0.5">{cp.description}</p>
         {cp.owner && (
-          <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-lavender-light text-primary rounded-full px-2 py-0.5">
-            {cp.owner}
-          </span>
+          <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-lavender-light text-primary rounded-full px-2 py-0.5">{cp.owner}</span>
         )}
         {hasDetail && (
           <Collapsible open={open} onOpenChange={setOpen}>
@@ -101,14 +112,9 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
               {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {open ? "Less" : "What & why"}
             </CollapsibleTrigger>
-
             <CollapsibleContent className="mt-2 space-y-1.5 border-t border-border pt-2">
-              {cp.checking && (
-                <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>
-              )}
-              {cp.whyItMatters && (
-                <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Why it matters:</span> {cp.whyItMatters}</p>
-              )}
+              {cp.checking && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>}
+              {cp.whyItMatters && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Why it matters:</span> {cp.whyItMatters}</p>}
             </CollapsibleContent>
           </Collapsible>
         )}

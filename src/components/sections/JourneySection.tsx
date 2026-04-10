@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { motion } from "framer-motion";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 const trendData = {
   inflammation: {
@@ -65,21 +67,29 @@ const JourneySection: React.FC = () => {
   const activeTrend = trendData[selectedTrend];
 
   return (
-    <section className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="text-3xl md:text-4xl font-serif mb-3">
-          Here's what we found
-        </h1>
-        <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
-          {studyOverview.summary}
-        </p>
-      </div>
-
+    <PatientSectionLayout
+      eyebrow="YOUR JOURNEY"
+      title="Here's what we found"
+      intro={studyOverview.summary}
+      aside={
+        <AsideInfoPanel
+          title="Today's metrics"
+          items={[
+            { label: "Sleep", value: "6.2 hrs", subvalue: "+0.5h vs last week", tone: "accent" },
+            { label: "Glucose", value: "Stable", subvalue: "Improving", tone: "success" },
+            { label: "Heart", value: "Good", subvalue: "Steady" },
+            { label: "Activity", value: "4,200 steps", subvalue: "Below goal", tone: "warning" },
+          ]}
+          footnote="Updated from your latest tracker sync · 2 hours ago"
+        />
+      }
+      asideSticky
+    >
       <div className="inline-flex items-center gap-2 rounded-full bg-lavender-light px-4 py-2 text-sm text-foreground">
         {studyOverview.statLine}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {studyOverview.layers.map((layer) => (
           <div
             key={layer.id}
@@ -111,12 +121,11 @@ const JourneySection: React.FC = () => {
         ))}
       </div>
 
-      {/* Trend lines section */}
+      {/* Trend lines */}
       <div className="space-y-4">
         <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
           Your Trends
         </h3>
-
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {(Object.keys(trendData) as TrendKey[]).map((key) => (
             <button
@@ -183,7 +192,7 @@ const JourneySection: React.FC = () => {
           {manifest.todayBar.lastUpdated}
         </p>
       )}
-    </section>
+    </PatientSectionLayout>
   );
 };
 

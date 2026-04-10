@@ -1,7 +1,10 @@
 import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import ProgressRing from "@/components/ProgressRing";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
 interface BiologyDomain {
   name: string;
@@ -51,26 +54,69 @@ const statusColors: Record<string, { text: string; bg: string }> = {
   "needs-attention": { text: "text-accent", bg: "bg-pink-light" },
 };
 
+const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) => {
+  const connectorMatch = text.match(/(.+?)(is (?:likely )?connected to|aligns with|reflects|comes from)(.+)/i);
+
+  if (connectorMatch) {
+    const [, left, connector, right] = connectorMatch;
+    return (
+      <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
+        <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+          <p className="text-base md:text-lg text-foreground font-serif italic leading-snug">
+            {left.trim()}
+          </p>
+          <div className="flex items-center justify-center text-secondary">
+            <ArrowRight className="h-4 w-4 md:rotate-0 rotate-90" />
+          </div>
+          <p className="text-base md:text-lg text-muted-foreground leading-snug">
+            {right.trim()}
+          </p>
+        </div>
+        <p className="text-[10px] text-muted-foreground/60 mt-3 uppercase tracking-wider">
+          Bridge {index + 1} · {connector.trim()}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
+      <p className="text-base md:text-lg text-foreground leading-relaxed">{text}</p>
+    </div>
+  );
+};
+
 const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { patientThesis } = manifest;
+  const bridges = manifest.symptomBridges || [];
 
   if (!patientThesis) return null;
 
-  return (
-    <section className="animate-fade-in max-w-2xl space-y-8">
-      <div>
-        <h2 className="text-sm font-sans font-medium uppercase tracking-widest text-primary mb-6">
-          What's happening in your body
-        </h2>
-        <blockquote className="text-2xl md:text-3xl font-serif leading-snug mb-6">
-          {patientThesis.title}
-        </blockquote>
-        <p className="text-base md:text-lg text-muted-foreground leading-relaxed whitespace-pre-line">
-          {patientThesis.body}
-        </p>
-      </div>
+  const asideItems = manifest.layerFindings
+    ? Object.entries(manifest.layerFindings).slice(0, 5).map(([key, value]) => ({
+        label: key.replace(/_/g, " "),
+        value: typeof value === "string" ? value.slice(0, 60) : String(value),
+      }))
+    : [
+        { label: "Domains tracked", value: "4" },
+        { label: "Improving", value: "2", tone: "success" as const },
+        { label: "Needs attention", value: "1", tone: "warning" as const },
+      ];
 
+  return (
+    <PatientSectionLayout
+      eyebrow="WHAT'S HAPPENING IN YOUR BODY"
+      title={patientThesis.title}
+      intro={patientThesis.body}
+      aside={
+        <AsideInfoPanel
+          title="Biological terrain"
+          items={asideItems}
+        />
+      }
+      asideSticky
+    >
       {/* Biology domain cards */}
       <div>
         <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-4">
@@ -100,7 +146,6 @@ const ThesisSection: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Deep progress bar */}
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Deep progress</span>
@@ -131,7 +176,21 @@ const ThesisSection: React.FC = () => {
           })}
         </div>
       </div>
-    </section>
+
+      {/* Symptom bridges (merged from SymptomBridgesSection) */}
+      {bridges.length > 0 && (
+        <div className="pt-10 mt-10 border-t border-border/40">
+          <h2 className="text-eyebrow text-secondary mb-6">
+            WHY YOU MIGHT BE FEELING THIS WAY
+          </h2>
+          <div className="space-y-5">
+            {bridges.map((bridge, idx) => (
+              <BridgeCard key={idx} text={bridge} index={idx} />
+            ))}
+          </div>
+        </div>
+      )}
+    </PatientSectionLayout>
   );
 };
 
