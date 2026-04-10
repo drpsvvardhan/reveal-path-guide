@@ -306,3 +306,50 @@ export interface QueueShareInfo {
   shareToken: string | null;
   shareUrl: string | null;
 }
+
+// ============================================================================
+// GENERATED NARRATIVE TYPES
+// ============================================================================
+
+/**
+ * The shape of a generated narrative as produced by the LLM pipeline.
+ * This is a subset of PatientRevealManifest — only the fields that are
+ * narrative prose. Structural fields (patient, careMap, careTeam, studyOverview)
+ * are not generated because they come from other sources.
+ */
+export interface GeneratedNarrativeFields {
+  patientThesis: PatientThesis;
+  layerFindings: Record<string, string>;
+  helpingVsFeeding: HelpingVsFeeding;
+  symptomBridges: string[];
+  reversibility: Reversibility;
+  sequencedActions: SequencedActions;
+  expectedProgress: ExpectedProgress;
+  confidenceBreakdown: ConfidenceBreakdown;
+}
+
+export type NarrativeStatus = "active" | "superseded" | "failed";
+
+export interface PatientNarrativeVersion {
+  id: string;
+  user_id: string;
+  version: number;
+  narrative: GeneratedNarrativeFields;
+  model_used: string;
+  generation_ms: number | null;
+  input_pattern_count: number | null;
+  input_biomarker_count: number | null;
+  status: NarrativeStatus;
+  validation_error: string | null;
+  retry_count: number;
+  created_at: string;
+}
+
+export interface NarrativeGenerationResult {
+  success: boolean;
+  version?: number;
+  generation_ms?: number;
+  retry_count?: number;
+  error?: string;
+  validation_error?: string;
+}
