@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useManifest } from "@/context/ManifestContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 import { PatientNarrativeVersion, NarrativeGenerationResult, GeneratedNarrativeFields } from "@/types/manifest";
 
 interface NarrativeContextValue {
