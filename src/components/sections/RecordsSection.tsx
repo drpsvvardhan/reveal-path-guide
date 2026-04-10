@@ -219,11 +219,11 @@ const RecordsSection: React.FC = () => {
       {!loading && uploads.length === 0 && (
         <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-8 text-center">
           <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-sm text-foreground font-medium mb-1">No lab PDFs uploaded yet</p>
+          <p className="text-sm text-foreground font-medium mb-1">No lab reports uploaded yet</p>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Click <span className="font-medium">Upload lab PDF</span> to add your first set of
-            results. The system will read the PDF, extract every biomarker, and add them to your
-            timeline.
+            Click <span className="font-medium">Upload lab report</span> to add your first set of
+            results. You can upload PDFs or photos of lab reports. The system will read the document,
+            extract every biomarker, and add them to your timeline.
           </p>
         </div>
       )}
