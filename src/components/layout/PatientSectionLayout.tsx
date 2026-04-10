@@ -28,7 +28,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="w-full max-w-6xl mx-auto"
+      className="w-full max-w-[1360px] mx-auto"
     >
       {/* HERO AREA */}
       <header className="relative pb-10 md:pb-14 lg:pb-16">
@@ -80,7 +80,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
       <div
         className={
           aside
-            ? "grid gap-8 lg:gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]"
+            ? "grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]"
             : "max-w-3xl"
         }
       >
