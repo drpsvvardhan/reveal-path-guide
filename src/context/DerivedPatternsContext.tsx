@@ -131,7 +131,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
     } finally {
       setRunning(false);
     }
-  }, [user, manifest, refresh, refreshQueue]);
+  }, [user, manifest, observations, observationsAsTimeline, refresh, refreshQueue]);
 
   const dismissPattern = useCallback(
     async (id: string) => {
