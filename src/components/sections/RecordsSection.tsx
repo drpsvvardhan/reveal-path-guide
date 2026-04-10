@@ -142,9 +142,9 @@ const RecordsSection: React.FC = () => {
           Records
         </h2>
         <p className="text-muted-foreground text-sm max-w-xl mt-1">
-          Upload lab PDFs from Quest, LabCorp, or your hospital. Each PDF gets automatically
-          read, with every biomarker extracted and added to your timeline. Upload one at a time
-          — start with your most recent labs.
+          Upload lab reports from Quest, LabCorp, or your hospital — as PDFs or photos.
+          Each file gets automatically read, with every biomarker extracted and added to
+          your timeline. Upload one at a time — start with your most recent labs.
         </p>
       </div>
 
