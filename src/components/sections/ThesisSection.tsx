@@ -99,12 +99,7 @@ const ThesisSection: React.FC = () => {
     { label: "Cardiovascular", value: "54%", subvalue: "Needs attention", tone: "warning" as const },
     { label: "Sleep", value: "45%", subvalue: "Fragmented" },
     { label: "Metabolic", value: "58%" },
-  ] as const;
-    : [
-        { label: "Domains tracked", value: "4" },
-        { label: "Improving", value: "2", tone: "success" as const },
-        { label: "Needs attention", value: "1", tone: "warning" as const },
-      ];
+  ];
 
   return (
     <PatientSectionLayout
