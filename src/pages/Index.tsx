@@ -5,6 +5,7 @@ import { ActionCompletionProvider } from "@/context/ActionCompletionContext";
 import { DerivedPatternsProvider } from "@/context/DerivedPatternsContext";
 import { NarrativeProvider } from "@/context/NarrativeContext";
 import { LabUploadsProvider } from "@/context/LabUploadsContext";
+import { SignatureColorProvider } from "@/context/SignatureColorContext";
 import PatientShell from "@/components/PatientShell";
 
 const Index = () => (
@@ -14,9 +15,11 @@ const Index = () => (
         <ActionCompletionProvider>
           <LabUploadsProvider>
             <DerivedPatternsProvider>
-              <NarrativeProvider>
-                <PatientShell />
-              </NarrativeProvider>
+              <SignatureColorProvider>
+                <NarrativeProvider>
+                  <PatientShell />
+                </NarrativeProvider>
+              </SignatureColorProvider>
             </DerivedPatternsProvider>
           </LabUploadsProvider>
         </ActionCompletionProvider>

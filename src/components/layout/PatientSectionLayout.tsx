@@ -40,10 +40,10 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               "radial-gradient(ellipse 60% 60% at 0% 50%, hsl(var(--secondary) / 0.04) 0%, transparent 60%)",
           }}
         />
-        <FlowLine variant="hero" className="absolute inset-0 w-full h-full text-secondary" />
+        <FlowLine variant="hero" className="absolute inset-0 w-full h-full text-signature" />
         <div className="relative">
           {eyebrow && (
-            <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-secondary mb-5">
+            <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-signature mb-5">
               {eyebrow}
             </p>
           )}

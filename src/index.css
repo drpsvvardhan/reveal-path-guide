@@ -6,6 +6,7 @@
 
 @layer base {
   :root {
+    --signature: 220 20% 50%;
     --background: 40 15% 93%;
     --foreground: 225 30% 16%;
 
@@ -146,5 +147,21 @@
     font-size: clamp(1rem, 1.5vw, 1.25rem);
     line-height: 1.55;
     font-weight: 300;
+  }
+
+  .text-signature {
+    color: hsl(var(--signature));
+  }
+  .bg-signature {
+    background-color: hsl(var(--signature));
+  }
+  .bg-signature-subtle {
+    background-color: hsl(var(--signature) / 0.08);
+  }
+  .border-signature {
+    border-color: hsl(var(--signature));
+  }
+  .border-signature-subtle {
+    border-color: hsl(var(--signature) / 0.3);
   }
 }
