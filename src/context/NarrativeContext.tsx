@@ -77,6 +77,19 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setGenerating(true);
     setError(null);
     try {
+      // Merge uploaded lab observations into the manifest before sending
+      let mergedManifest = manifest;
+      if (observations.length > 0) {
+        const timeline = observationsAsTimeline();
+        mergedManifest = {
+          ...manifest,
+          rawData: {
+            ...(manifest.rawData || {}),
+            biomarkerTimeline: timeline,
+          },
+        };
+      }
+
       const resp = await fetch(GENERATE_URL, {
         method: "POST",
         headers: {
@@ -84,7 +97,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          manifest,
+          manifest: mergedManifest,
           userId: user.id,
         }),
       });
