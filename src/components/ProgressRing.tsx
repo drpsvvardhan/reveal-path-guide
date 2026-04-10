@@ -13,9 +13,9 @@ interface ProgressRingProps {
 const ProgressRing: React.FC<ProgressRingProps> = ({
   value,
   size = 100,
-  strokeWidth = 6,
-  color = "hsl(260, 40%, 55%)",
-  bgColor = "hsl(40, 10%, 88%)",
+  strokeWidth = 3,
+  color = "hsl(280, 14%, 22%)",
+  bgColor = "hsl(30, 12%, 83%)",
   children,
 }) => {
   const radius = (size - strokeWidth) / 2;
@@ -25,14 +25,14 @@ const ProgressRing: React.FC<ProgressRingProps> = ({
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={bgColor} strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={bgColor} strokeWidth={strokeWidth} opacity={0.5} />
         <motion.circle
           cx={size / 2} cy={size / 2} r={radius} fill="none"
           stroke={color} strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
+          transition={{ duration: 1, ease: "easeOut" }}
           strokeLinecap="round"
         />
       </svg>
