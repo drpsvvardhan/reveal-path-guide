@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useManifest } from "@/context/ManifestContext";
 import { useQueue } from "@/context/QueueContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 import { DerivedPattern } from "@/types/manifest";
 
 interface DeriveRunResult {
