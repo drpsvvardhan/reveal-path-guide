@@ -202,10 +202,46 @@ function normalizeAnalyteName(rawName: string): string {
 }
 
 // ============================================================================
+// SUPPORTED FILE TYPES
+// ============================================================================
+
+const SUPPORTED_MIME_TYPES: Record<string, { mediaType: string; contentType: "document" | "image" }> = {
+  "application/pdf": { mediaType: "application/pdf", contentType: "document" },
+  "image/jpeg": { mediaType: "image/jpeg", contentType: "image" },
+  "image/png": { mediaType: "image/png", contentType: "image" },
+  "image/webp": { mediaType: "image/webp", contentType: "image" },
+  "image/heic": { mediaType: "image/jpeg", contentType: "image" }, // HEIC converted on upload
+};
+
+function getFileExtension(mimeType: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/heic": ".jpg",
+  };
+  return map[mimeType] || ".bin";
+}
+
+function detectMimeFromPath(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    pdf: "application/pdf",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    heic: "image/heic",
+  };
+  return map[ext || ""] || "application/pdf";
+}
+
+// ============================================================================
 // THE EXTRACTION SYSTEM PROMPT
 // ============================================================================
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a structured data extractor for medical lab reports. You will receive a lab PDF and must extract every biomarker observation as structured JSON.
+const EXTRACTION_SYSTEM_PROMPT = `You are a structured data extractor for medical lab reports. You will receive a lab report (as a PDF or photo/image) and must extract every biomarker observation as structured JSON.
 
 Your output must be a single valid JSON object. No preamble. No markdown code fences. No explanation. Just the JSON, starting with { and ending with }.
 
@@ -221,7 +257,7 @@ OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
   },
   "observations": [
     {
-      "raw_name": "string — the test name exactly as it appears on the PDF (do not normalize)",
+      "raw_name": "string — the test name exactly as it appears on the report (do not normalize)",
       "value": "number — the numeric result (no units, no symbols, just the number)",
       "unit": "string — the unit of measurement exactly as it appears (mg/dL, %, ng/mL, mIU/L, etc.)",
       "ref_low": "number or null — the lower bound of the reference range",
@@ -237,7 +273,7 @@ EXTRACTION RULES
 
 RULE 1 — EXTRACT EVERY BIOMARKER. Include every test result on every page. Do not skip results. Do not summarize. Each row in the report becomes one observation in the array.
 
-RULE 2 — RAW NAME EXACTLY AS SHOWN. The raw_name field is the test name exactly as it appears on the PDF. Do not normalize, do not abbreviate, do not expand. If the report says "Alanine Aminotransferase (ALT)", that's the raw_name. If it says "ALT" alone, that's the raw_name. The system will normalize names afterward.
+RULE 2 — RAW NAME EXACTLY AS SHOWN. The raw_name field is the test name exactly as it appears on the report. Do not normalize, do not abbreviate, do not expand. If the report says "Alanine Aminotransferase (ALT)", that's the raw_name. If it says "ALT" alone, that's the raw_name. The system will normalize names afterward.
 
 RULE 3 — VALUE IS A NUMBER. The value field must be a JSON number (not a string). If the result is "<3.0" or ">100", extract the numeric portion only (3.0 or 100). If the result is non-numeric (like "Negative", "Positive", "Detected"), skip that observation entirely — only numeric biomarkers go in the output.
 
@@ -264,16 +300,57 @@ RULE 8 — SKIP COMMENTS AND CALCULATIONS NOTES. Lab reports often include narra
 
 RULE 9 — OUTPUT MUST BE VALID JSON. Your entire response is a single JSON object. No preamble like "Here are the results:". No markdown code fences like \`\`\`json. No closing comments. Just the JSON.
 
-If you encounter an empty PDF, an unreadable scan, or a document that is not a lab report, return:
+RULE 10 — IMAGES AND PHOTOS. If you receive a photo or image of a lab report (instead of a PDF), apply all the same rules. Read the text from the image carefully. If the image is blurry, tilted, or partially cut off, extract what you can see clearly and skip anything illegible.
+
+If you encounter an empty document, an unreadable scan, or a document that is not a lab report, return:
 { "meta": { "source_lab": null, "collection_date": null, "ordering_provider": null }, "observations": [] }`;
 
 // ============================================================================
-// CLAUDE VISION CALL
+// CHUNKED BASE64 ENCODING
 // ============================================================================
 
-async function callClaudeWithPdf(base64Pdf: string): Promise<string> {
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const CHUNK_SIZE = 8192;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
+// ============================================================================
+// CLAUDE VISION CALL — supports PDF and images
+// ============================================================================
+
+async function callClaudeWithDocument(base64Data: string, mimeType: string): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
+
+  const typeInfo = SUPPORTED_MIME_TYPES[mimeType] || SUPPORTED_MIME_TYPES["application/pdf"];
+
+  // Build the content block based on whether it's a document (PDF) or image
+  let sourceBlock: any;
+  if (typeInfo.contentType === "document") {
+    sourceBlock = {
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: typeInfo.mediaType,
+        data: base64Data,
+      },
+    };
+  } else {
+    sourceBlock = {
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: typeInfo.mediaType,
+        data: base64Data,
+      },
+    };
+  }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -284,23 +361,16 @@ async function callClaudeWithPdf(base64Pdf: string): Promise<string> {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      max_tokens: 16384,
       system: EXTRACTION_SYSTEM_PROMPT,
       messages: [
         {
           role: "user",
           content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Pdf,
-              },
-            },
+            sourceBlock,
             {
               type: "text",
-              text: "Extract all biomarker observations from this lab report PDF. Return only the JSON object as specified in your instructions.",
+              text: "Extract all biomarker observations from this lab report. Return only the JSON object as specified in your instructions.",
             },
           ],
         },
@@ -395,110 +465,61 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
 }
 
 // ============================================================================
-// REQUEST HANDLER
+// BACKGROUND PROCESSING
 // ============================================================================
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+async function processUpload(uploadId: string) {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  // Fetch the upload row
+  const { data: upload, error: uploadError } = await supabase
+    .from("patient_lab_uploads")
+    .select("*")
+    .eq("id", uploadId)
+    .single();
+
+  if (uploadError || !upload) {
+    console.error("Upload not found:", uploadId);
+    return;
+  }
+
+  // Mark as processing
+  await supabase
+    .from("patient_lab_uploads")
+    .update({
+      status: "processing",
+      processing_started_at: new Date().toISOString(),
+    })
+    .eq("id", uploadId);
 
   try {
-    const body = await req.json();
-    const { uploadId } = body;
-
-    if (!uploadId) {
-      return new Response(JSON.stringify({ error: "No uploadId provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
-
-    // Fetch the upload row
-    const { data: upload, error: uploadError } = await supabase
-      .from("patient_lab_uploads")
-      .select("*")
-      .eq("id", uploadId)
-      .single();
-
-    if (uploadError || !upload) {
-      return new Response(JSON.stringify({ error: "Upload not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Mark as processing
-    await supabase
-      .from("patient_lab_uploads")
-      .update({
-        status: "processing",
-        processing_started_at: new Date().toISOString(),
-      })
-      .eq("id", uploadId);
-
-    // Download the PDF from Supabase Storage
+    // Download the file from Supabase Storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("lab-uploads")
       .download(upload.storage_path);
 
     if (downloadError || !fileData) {
-      await supabase
-        .from("patient_lab_uploads")
-        .update({
-          status: "failed",
-          error_message: `Failed to download PDF from storage: ${downloadError?.message}`,
-          processing_completed_at: new Date().toISOString(),
-        })
-        .eq("id", uploadId);
-
-      return new Response(JSON.stringify({ error: "Failed to download PDF" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      throw new Error(`Failed to download file from storage: ${downloadError?.message}`);
     }
 
-    // Convert to base64
+    // Convert to base64 using chunked approach
     const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64Pdf = btoa(binary);
+    const base64Data = arrayBufferToBase64(arrayBuffer);
+
+    // Detect MIME type from file path
+    const mimeType = detectMimeFromPath(upload.storage_path);
 
     // Call Claude vision
-    let extracted: ExtractionResult | null = null;
-    let extractionError: string | null = null;
-    try {
-      const rawOutput = await callClaudeWithPdf(base64Pdf);
-      const parsed = extractJsonFromText(rawOutput);
-      extracted = validateAndCleanExtraction(parsed);
-      if (!extracted) {
-        extractionError = "Extracted data did not match expected schema";
-      }
-    } catch (e) {
-      extractionError = e instanceof Error ? e.message : String(e);
-    }
+    const rawOutput = await callClaudeWithDocument(base64Data, mimeType);
+    const parsed = extractJsonFromText(rawOutput);
+    const extracted = validateAndCleanExtraction(parsed);
 
-    if (!extracted || extractionError) {
-      await supabase
-        .from("patient_lab_uploads")
-        .update({
-          status: "failed",
-          error_message: extractionError || "Extraction failed",
-          processing_completed_at: new Date().toISOString(),
-        })
-        .eq("id", uploadId);
-
-      return new Response(JSON.stringify({ error: extractionError || "Extraction failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!extracted) {
+      throw new Error("Extracted data did not match expected schema");
     }
 
     // Determine collection_date
@@ -561,16 +582,67 @@ serve(async (req) => {
       })
       .eq("id", uploadId);
 
+    console.log(`Upload ${uploadId} complete: ${extracted.observations.length} extracted, ${inserted} inserted, ${duplicates} duplicates`);
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    console.error(`Upload ${uploadId} failed:`, errorMessage);
+
+    await supabase
+      .from("patient_lab_uploads")
+      .update({
+        status: "failed",
+        error_message: errorMessage,
+        processing_completed_at: new Date().toISOString(),
+      })
+      .eq("id", uploadId);
+  }
+}
+
+// ============================================================================
+// REQUEST HANDLER — returns 202 immediately, processes in background
+// ============================================================================
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const body = await req.json();
+    const { uploadId } = body;
+
+    if (!uploadId) {
+      return new Response(JSON.stringify({ error: "No uploadId provided" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    // Verify the upload exists
+    const { data: upload, error: uploadError } = await supabase
+      .from("patient_lab_uploads")
+      .select("id, status")
+      .eq("id", uploadId)
+      .single();
+
+    if (uploadError || !upload) {
+      return new Response(JSON.stringify({ error: "Upload not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Process in background using EdgeRuntime.waitUntil
+    // @ts-ignore — EdgeRuntime is available in Supabase edge functions
+    EdgeRuntime.waitUntil(processUpload(uploadId));
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        observations_extracted: extracted.observations.length,
-        observations_inserted: inserted,
-        observations_duplicates: duplicates,
-        source_lab: extracted.meta.source_lab,
-        collection_date: collectionDate,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ message: "Processing started", uploadId }),
+      { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("process-lab-pdf error:", e);

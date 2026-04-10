@@ -142,9 +142,9 @@ const RecordsSection: React.FC = () => {
           Records
         </h2>
         <p className="text-muted-foreground text-sm max-w-xl mt-1">
-          Upload lab PDFs from Quest, LabCorp, or your hospital. Each PDF gets automatically
-          read, with every biomarker extracted and added to your timeline. Upload one at a time
-          — start with your most recent labs.
+          Upload lab reports from Quest, LabCorp, or your hospital — as PDFs or photos.
+          Each file gets automatically read, with every biomarker extracted and added to
+          your timeline. Upload one at a time — start with your most recent labs.
         </p>
       </div>
 
@@ -163,23 +163,23 @@ const RecordsSection: React.FC = () => {
           ) : processing ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Reading PDF...
+              Reading report...
             </>
           ) : (
             <>
               <Upload className="h-3.5 w-3.5" />
-              Upload lab PDF
+              Upload lab report
             </>
           )}
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
           onChange={handleFileSelect}
           className="hidden"
         />
-        <span className="text-xs text-muted-foreground">PDF only, 10 MB max</span>
+        <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
       </div>
 
       {/* Last result feedback */}
@@ -219,11 +219,11 @@ const RecordsSection: React.FC = () => {
       {!loading && uploads.length === 0 && (
         <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-8 text-center">
           <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-sm text-foreground font-medium mb-1">No lab PDFs uploaded yet</p>
+          <p className="text-sm text-foreground font-medium mb-1">No lab reports uploaded yet</p>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Click <span className="font-medium">Upload lab PDF</span> to add your first set of
-            results. The system will read the PDF, extract every biomarker, and add them to your
-            timeline.
+            Click <span className="font-medium">Upload lab report</span> to add your first set of
+            results. You can upload PDFs or photos of lab reports. The system will read the document,
+            extract every biomarker, and add them to your timeline.
           </p>
         </div>
       )}

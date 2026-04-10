@@ -27,6 +27,25 @@ export const useLabUploads = () => {
 
 const PROCESS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-lab-pdf`;
 
+const SUPPORTED_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
+function getFileExtension(mimeType: string): string {
+  const map: Record<string, string> = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+  };
+  return map[mimeType] || ".bin";
+}
+
 export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [uploads, setUploads] = useState<LabUpload[]>([]);
@@ -78,11 +97,11 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const uploadAndProcess = useCallback(
     async (file: File): Promise<LabUploadProcessResult> => {
       if (!user) return { success: false, error: "Not authenticated" };
-      if (file.type !== "application/pdf") {
-        return { success: false, error: "Only PDF files are supported" };
+      if (!SUPPORTED_TYPES.includes(file.type)) {
+        return { success: false, error: "Unsupported file type. Upload a PDF, JPEG, PNG, or WebP." };
       }
-      if (file.size > 10 * 1024 * 1024) {
-        return { success: false, error: "File too large (10 MB max)" };
+      if (file.size > MAX_FILE_SIZE) {
+        return { success: false, error: "File too large (20 MB max)" };
       }
 
       setUploading(true);
@@ -106,12 +125,13 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           throw new Error(insertError?.message || "Failed to create upload row");
         }
 
-        // Step 2: Upload file to storage at {user_id}/{upload_id}.pdf
-        const storagePath = `${user.id}/${uploadRow.id}.pdf`;
+        // Step 2: Upload file to storage at {user_id}/{upload_id}{ext}
+        const ext = getFileExtension(file.type);
+        const storagePath = `${user.id}/${uploadRow.id}${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
           .upload(storagePath, file, {
-            contentType: "application/pdf",
+            contentType: file.type,
             upsert: false,
           });
 
@@ -129,7 +149,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setUploading(false);
         setProcessing(true);
 
-        // Step 4: Trigger the edge function to process
+        // Step 4: Trigger the edge function (returns 202 immediately)
         const resp = await fetch(PROCESS_URL, {
           method: "POST",
           headers: {
@@ -139,22 +159,48 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           body: JSON.stringify({ uploadId: uploadRow.id }),
         });
 
-        const result = await resp.json();
-
-        if (!resp.ok) {
+        if (!resp.ok && resp.status !== 202) {
+          const result = await resp.json().catch(() => ({}));
           throw new Error(result.error || `Processing failed (${resp.status})`);
         }
 
-        await refresh();
+        // Step 5: Poll for completion (background processing)
+        const maxPollAttempts = 60; // 60 * 3s = 3 minutes max
+        let pollAttempts = 0;
 
-        return {
-          success: true,
-          observations_extracted: result.observations_extracted,
-          observations_inserted: result.observations_inserted,
-          observations_duplicates: result.observations_duplicates,
-          source_lab: result.source_lab,
-          collection_date: result.collection_date,
-        };
+        while (pollAttempts < maxPollAttempts) {
+          await new Promise((r) => setTimeout(r, 3000)); // wait 3 seconds
+          pollAttempts++;
+
+          const { data: updated } = await supabase
+            .from("patient_lab_uploads")
+            .select("status, observations_extracted, observations_inserted, observations_duplicates, source_lab, collection_date, error_message")
+            .eq("id", uploadRow.id)
+            .single();
+
+          if (!updated) continue;
+
+          if (updated.status === "complete") {
+            await refresh();
+            return {
+              success: true,
+              observations_extracted: updated.observations_extracted ?? 0,
+              observations_inserted: updated.observations_inserted ?? 0,
+              observations_duplicates: updated.observations_duplicates ?? 0,
+              source_lab: updated.source_lab,
+              collection_date: updated.collection_date,
+            };
+          }
+
+          if (updated.status === "failed") {
+            await refresh();
+            return { success: false, error: updated.error_message || "Extraction failed" };
+          }
+        }
+
+        // Timed out
+        await refresh();
+        return { success: false, error: "Processing is taking longer than expected. Check back shortly." };
       } catch (e: any) {
         console.error("Upload and process failed:", e);
         setError(e.message || "Upload failed");
