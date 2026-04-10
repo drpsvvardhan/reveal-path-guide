@@ -1,12 +1,9 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
-import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, HelpCircle, Flame } from "lucide-react";
+import { Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, Flame } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
-
-type ActionStatus = "none" | "done";
+import { useActionCompletions } from "@/context/ActionCompletionContext";
 
 /* ── Difficulty badges ── */
 const difficultyFor = (title: string): "EASY" | "MODERATE" | "INVOLVED" => {
@@ -92,8 +89,7 @@ const ActionCard: React.FC<{
   action: any;
   done: boolean;
   onToggle: () => void;
-  loading?: boolean;
-}> = ({ icon, title, description, action, done, onToggle, loading }) => {
+}> = ({ icon, title, description, action, done, onToggle }) => {
   const difficulty = difficultyFor(title);
   const nudge = nudgeFor(action);
 
@@ -133,35 +129,6 @@ const ActionCard: React.FC<{
   );
 };
 
-const actionIcons = ["🏃", "🌙", "💊", "🥗", "🧬", "🧘", "💤", "🩺"];
-
-/* ── Streak helpers ── */
-const todayStr = () => new Date().toISOString().slice(0, 10);
-
-const computeStreak = (dates: string[], totalActions: number): number => {
-  if (totalActions === 0) return 0;
-  // Count completions per date
-  const countByDate: Record<string, number> = {};
-  dates.forEach((d) => { countByDate[d] = (countByDate[d] || 0) + 1; });
-  
-  // Walk backwards from today
-  let streak = 0;
-  const d = new Date();
-  while (true) {
-    const ds = d.toISOString().slice(0, 10);
-    if ((countByDate[ds] || 0) >= totalActions) {
-      streak++;
-      d.setDate(d.getDate() - 1);
-    } else if (ds === todayStr()) {
-      // today incomplete is ok, still check yesterday
-      d.setDate(d.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return streak;
-};
-
 /* ── Streak Badge ── */
 const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
   if (streak === 0) return null;
@@ -180,110 +147,9 @@ const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
 /* ── Main Section ── */
 const ActionSection: React.FC = () => {
   const { manifest } = useManifest();
-  const { user } = useAuth();
+  const { allActions, completedKeys, streak, toggleDone } = useActionCompletions();
   const { sequencedActions, doctorQuestions, monitoringPlan, expectedProgress } = manifest;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-  const [completedKeys, setCompletedKeys] = useState<Set<string>>(new Set());
-  const [streak, setStreak] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-
-  const allActions = useMemo(() => {
-    const items: { key: string; title: string; description: string; action: any; icon: string }[] = [];
-    if (sequencedActions?.startHere) {
-      items.push({
-        key: "start",
-        title: sequencedActions.startHere.title,
-        description: sequencedActions.startHere.description,
-        action: sequencedActions.startHere,
-        icon: "🛡️",
-      });
-    }
-    sequencedActions?.thenAdd?.forEach((a, i) => {
-      items.push({
-        key: `then-${i}`,
-        title: a.title,
-        description: a.description,
-        action: a,
-        icon: actionIcons[i % actionIcons.length],
-      });
-    });
-    return items;
-  }, [sequencedActions]);
-
-  const userId = user?.id;
-
-  // Load today's completions + streak data
-  useEffect(() => {
-    if (!userId) return;
-    const load = async () => {
-      // Today's completions
-      const today = todayStr();
-      const { data: todayData } = await supabase
-        .from("action_completions")
-        .select("action_key")
-        .eq("user_id", userId)
-        .eq("completed_date", today);
-      
-      if (todayData) {
-        setCompletedKeys(new Set(todayData.map((r) => r.action_key)));
-      }
-
-      // Last 60 days for streak calc
-      const sixtyAgo = new Date();
-      sixtyAgo.setDate(sixtyAgo.getDate() - 60);
-      const { data: streakData } = await supabase
-        .from("action_completions")
-        .select("completed_date")
-        .eq("user_id", userId)
-        .gte("completed_date", sixtyAgo.toISOString().slice(0, 10));
-
-      if (streakData) {
-        const dates = streakData.map((r) => r.completed_date);
-        setStreak(computeStreak(dates, allActions.length));
-      }
-      setLoaded(true);
-    };
-    load();
-  }, [userId, allActions.length]);
-
-  const toggleDone = useCallback(async (key: string) => {
-    if (!userId) return;
-    const today = todayStr();
-    const isDone = completedKeys.has(key);
-
-    // Optimistic update
-    setCompletedKeys((prev) => {
-      const next = new Set(prev);
-      if (isDone) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-    if (isDone) {
-      await supabase
-        .from("action_completions")
-        .delete()
-        .eq("user_id", userId)
-        .eq("action_key", key)
-        .eq("completed_date", today);
-    } else {
-      await supabase
-        .from("action_completions")
-        .insert({ user_id: userId, action_key: key, completed_date: today });
-    }
-
-    // Recalculate streak
-    const sixtyAgo = new Date();
-    sixtyAgo.setDate(sixtyAgo.getDate() - 60);
-    const { data: streakData } = await supabase
-      .from("action_completions")
-      .select("completed_date")
-      .eq("user_id", userId)
-      .gte("completed_date", sixtyAgo.toISOString().slice(0, 10));
-    if (streakData) {
-      setStreak(computeStreak(streakData.map((r) => r.completed_date), allActions.length));
-    }
-  }, [userId, completedKeys, allActions.length]);
 
   const completedCount = allActions.filter((a) => completedKeys.has(a.key)).length;
   const totalCount = allActions.length;
@@ -360,7 +226,7 @@ const ActionSection: React.FC = () => {
           <h3 className="font-serif text-lg flex items-center gap-2 text-muted-foreground">
             <Lock className="h-4 w-4" /> Not yet
           </h3>
-          {sequencedActions.notYet.map((a, i) => (
+          {sequencedActions.notYet.map((a: any, i: number) => (
             <div key={i} className="rounded-xl border border-border bg-muted/40 p-5 opacity-60">
               <p className="font-serif text-base text-foreground mb-1">{a.title}</p>
               <p className="text-sm text-muted-foreground mb-3">{a.description}</p>
@@ -378,7 +244,7 @@ const ActionSection: React.FC = () => {
       {doctorQuestions?.length > 0 && (
         <div className="space-y-3 pt-4">
           <h3 className="font-serif text-xl text-foreground">Questions for your doctor</h3>
-          {doctorQuestions.map((q, i) => (
+          {doctorQuestions.map((q: any, i: number) => (
             <div key={i} className="rounded-xl border border-border bg-card p-5 relative group">
               <p className="font-serif text-foreground text-base italic pr-8">"{q.question}"</p>
               <p className="text-xs text-muted-foreground mt-2">{q.rationale}</p>
@@ -399,7 +265,7 @@ const ActionSection: React.FC = () => {
         <div className="space-y-3 pt-4">
           <h3 className="font-serif text-xl text-foreground">What we'll monitor</h3>
           <div className="grid gap-3 sm:grid-cols-2">
-            {monitoringPlan.map((m, i) => (
+            {monitoringPlan.map((m: any, i: number) => (
               <div key={i} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex justify-between items-start mb-1">
                   <p className="font-sans font-medium text-foreground text-sm">{m.name}</p>
