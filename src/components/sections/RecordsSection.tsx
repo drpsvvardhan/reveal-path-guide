@@ -163,23 +163,23 @@ const RecordsSection: React.FC = () => {
           ) : processing ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Reading PDF...
+              Reading report...
             </>
           ) : (
             <>
               <Upload className="h-3.5 w-3.5" />
-              Upload lab PDF
+              Upload lab report
             </>
           )}
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/jpeg,image/png,image/webp"
           onChange={handleFileSelect}
           className="hidden"
         />
-        <span className="text-xs text-muted-foreground">PDF only, 10 MB max</span>
+        <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
       </div>
 
       {/* Last result feedback */}
