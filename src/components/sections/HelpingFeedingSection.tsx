@@ -1,9 +1,9 @@
 import React from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 
 const HelpingFeedingSection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const data = manifest.helpingVsFeeding;
 
   if (!data) return null;
