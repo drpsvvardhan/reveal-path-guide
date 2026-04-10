@@ -20,18 +20,19 @@ const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, trend, tren
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-4"
+      transition={{ duration: 0.2 }}
+      className="bg-card border border-border/50 rounded-md p-5 hover:border-border transition-colors duration-150"
     >
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-wider">{title}</span>
-        {icon && <div className="text-muted-foreground">{icon}</div>}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[12px] font-sans font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
+        {icon && <div className="text-muted-foreground/60">{icon}</div>}
       </div>
-      <div className="flex items-baseline gap-2">
-        <span className="text-xl font-sans font-bold text-foreground">{value}</span>
+      <div className="flex items-baseline gap-2.5">
+        <span className="text-3xl font-sans font-semibold text-foreground tracking-tight">{value}</span>
         {trendLabel && trend && (
-          <span className={`text-xs font-medium ${trendColors[trend]}`}>
+          <span className={`text-[12px] font-medium ${trendColors[trend]}`}>
             {trendIcon} {trendLabel}
           </span>
         )}
