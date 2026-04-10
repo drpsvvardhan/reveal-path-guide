@@ -7,6 +7,7 @@ import ProgressRing from "@/components/ProgressRing";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
+import { useSignatureColor } from "@/context/SignatureColorContext";
 
 interface BiologyDomain {
   name: string;
@@ -120,11 +121,19 @@ const ThesisSection: React.FC = () => {
       intro={patientThesis.body}
       heroVisual={<TerrainRadar axes={terrainAxes} size={320} />}
       aside={
-        <AsideInfoPanel
-          title="Biological terrain"
-          items={asideItems}
-          footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
-        />
+        <div className="space-y-4">
+          <AsideInfoPanel
+            title="Your signature"
+            items={[
+              { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
+            ]}
+          />
+          <AsideInfoPanel
+            title="Biological terrain"
+            items={asideItems}
+            footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
+          />
+        </div>
       }
       asideSticky
     >
