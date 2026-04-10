@@ -110,6 +110,7 @@ const ThesisSection: React.FC = () => {
         <AsideInfoPanel
           title="Biological terrain"
           items={asideItems}
+          footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
         />
       }
       asideSticky
