@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LabUpload, LabObservationRow } from "@/types/manifest";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import BiomarkerTimeline from "@/components/visuals/BiomarkerTimeline";
 
 const StatusBadge: React.FC<{ status: LabUpload["status"] }> = ({ status }) => {
   const styles: Record<string, { bg: string; text: string; label: string; Icon: React.FC<any> }> = {
@@ -84,6 +85,19 @@ const RecordsSection: React.FC = () => {
   const formatDate = (dateStr: string | null) => { if (!dateStr) return "—"; return new Date(dateStr).toLocaleDateString(); };
 
   const distinctTestCount = new Set(observations.map((o) => o.canonical_name)).size;
+  const timelineData = observations.map((o) => ({
+    name: o.canonical_name,
+    displayName: o.display_name || undefined,
+    value: o.value,
+    unit: o.unit,
+    timestamp: o.collection_date,
+    refLow: o.ref_low || undefined,
+    refHigh: o.ref_high || undefined,
+    flag: o.flag || undefined,
+    source: o.source || undefined,
+  })) as import("@/types/manifest").BiomarkerObservation[];
+
+  const hasTimelineData = timelineData.length > 0;
 
   return (
     <PatientSectionLayout
@@ -91,14 +105,18 @@ const RecordsSection: React.FC = () => {
       title="Your lab history, extracted and organized"
       intro="Every PDF you upload gets read and turned into structured observations. Your timeline rebuilds itself as you add more."
       aside={
-        <AsideInfoPanel
-          title="Records summary"
-          items={[
-            { label: "Uploads", value: uploads.length.toString() },
-            { label: "Biomarkers", value: observations.length.toString(), tone: "accent" },
-            { label: "Distinct tests", value: distinctTestCount.toString() },
-          ]}
-        />
+        hasTimelineData ? (
+          <BiomarkerTimeline observations={timelineData} />
+        ) : (
+          <AsideInfoPanel
+            title="Records summary"
+            items={[
+              { label: "Uploads", value: uploads.length.toString() },
+              { label: "Biomarkers", value: observations.length.toString(), tone: "accent" },
+              { label: "Distinct tests", value: distinctTestCount.toString() },
+            ]}
+          />
+        )
       }
       asideSticky
     >

@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import ProgressRing from "@/components/ProgressRing";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import TerrainRadar from "@/components/visuals/TerrainRadar";
 
 interface BiologyDomain {
   name: string;
@@ -91,6 +92,16 @@ const ThesisSection: React.FC = () => {
   const { patientThesis } = manifest;
   const bridges = manifest.symptomBridges || [];
 
+  const terrainAxes = [
+    { label: "Metabolic", score: 58 },
+    { label: "Inflammation", score: 72 },
+    { label: "Cardiovascular", score: 54 },
+    { label: "Sleep", score: 45 },
+    { label: "Gut", score: 68 },
+    { label: "Stress", score: 62 },
+    { label: "Energy", score: 51 },
+  ];
+
   if (!patientThesis) return null;
 
   const asideItems = [
@@ -106,6 +117,7 @@ const ThesisSection: React.FC = () => {
       eyebrow="WHAT'S HAPPENING IN YOUR BODY"
       title={patientThesis.title}
       intro={patientThesis.body}
+      heroVisual={<TerrainRadar axes={terrainAxes} size={320} />}
       aside={
         <AsideInfoPanel
           title="Biological terrain"
