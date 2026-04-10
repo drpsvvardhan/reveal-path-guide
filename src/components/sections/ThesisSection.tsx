@@ -93,11 +93,13 @@ const ThesisSection: React.FC = () => {
 
   if (!patientThesis) return null;
 
-  const asideItems = manifest.layerFindings
-    ? Object.entries(manifest.layerFindings).slice(0, 5).map(([key, value]) => ({
-        label: key.replace(/_/g, " "),
-        value: typeof value === "string" ? value.slice(0, 60) : String(value),
-      }))
+  const asideItems = [
+    { label: "Inflammation", value: "72%", subvalue: "Improving", tone: "success" as const },
+    { label: "Blood sugar", value: "65%", subvalue: "Getting better", tone: "accent" as const },
+    { label: "Cardiovascular", value: "54%", subvalue: "Needs attention", tone: "warning" as const },
+    { label: "Sleep", value: "45%", subvalue: "Fragmented" },
+    { label: "Metabolic", value: "58%" },
+  ] as const;
     : [
         { label: "Domains tracked", value: "4" },
         { label: "Improving", value: "2", tone: "success" as const },
