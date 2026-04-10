@@ -16,27 +16,20 @@ const trendColors = {
 };
 
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, trend, trendLabel }) => {
-  const trendIcon = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="bg-card border border-border/50 rounded-md p-5 hover:border-border transition-colors duration-150"
+      className="bg-card border border-border/40 rounded-md p-6 hover:border-border transition-colors duration-150"
     >
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[12px] font-sans font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
-        {icon && <div className="text-muted-foreground/60">{icon}</div>}
-      </div>
-      <div className="flex items-baseline gap-2.5">
-        <span className="text-3xl font-sans font-semibold text-foreground tracking-tight">{value}</span>
-        {trendLabel && trend && (
-          <span className={`text-[12px] font-medium ${trendColors[trend]}`}>
-            {trendIcon} {trendLabel}
-          </span>
-        )}
-      </div>
+      <span className="text-[11px] font-sans font-medium text-muted-foreground uppercase tracking-[0.16em] block mb-3">{title}</span>
+      <span className="text-4xl font-sans font-semibold text-foreground tracking-tight block">{value}</span>
+      {trendLabel && trend && (
+        <span className={`text-[12px] font-sans mt-2 block ${trendColors[trend]}`}>
+          {trendLabel}
+        </span>
+      )}
     </motion.div>
   );
 };
