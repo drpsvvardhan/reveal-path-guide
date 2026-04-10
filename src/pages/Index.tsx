@@ -4,6 +4,7 @@ import { QueueProvider } from "@/context/QueueContext";
 import { ActionCompletionProvider } from "@/context/ActionCompletionContext";
 import { DerivedPatternsProvider } from "@/context/DerivedPatternsContext";
 import { NarrativeProvider } from "@/context/NarrativeContext";
+import { LabUploadsProvider } from "@/context/LabUploadsContext";
 import PatientShell from "@/components/PatientShell";
 
 const Index = () => (
@@ -13,7 +14,9 @@ const Index = () => (
         <ActionCompletionProvider>
           <DerivedPatternsProvider>
             <NarrativeProvider>
-              <PatientShell />
+              <LabUploadsProvider>
+                <PatientShell />
+              </LabUploadsProvider>
             </NarrativeProvider>
           </DerivedPatternsProvider>
         </ActionCompletionProvider>
@@ -22,4 +25,5 @@ const Index = () => (
   </ManifestProvider>
 );
 
+export default Index;
 export default Index;
