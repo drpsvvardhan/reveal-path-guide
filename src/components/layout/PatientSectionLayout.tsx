@@ -25,41 +25,41 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
 }) => {
   return (
     <motion.section
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.25 }}
       className="w-full max-w-[1360px] mx-auto"
     >
       {/* HERO AREA */}
-      <header className="relative pb-10 md:pb-14 lg:pb-16">
+      <header className="relative pb-8 md:pb-12 lg:pb-14">
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 60% 60% at 0% 50%, hsl(var(--secondary) / 0.04) 0%, transparent 60%)",
+              "radial-gradient(ellipse 50% 50% at 0% 50%, hsl(var(--muted) / 0.15) 0%, transparent 60%)",
           }}
         />
         <FlowLine variant="hero" className="absolute inset-0 w-full h-full text-signature" />
         <div className="relative">
           {eyebrow && (
-            <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-signature mb-5">
+            <p className="text-eyebrow text-muted-foreground mb-4">
               {eyebrow}
             </p>
           )}
-          <div className={heroVisual ? "grid lg:grid-cols-[minmax(0,1fr)_auto] gap-10 lg:gap-16 items-center" : ""}>
+          <div className={heroVisual ? "grid lg:grid-cols-[minmax(0,1fr)_auto] gap-8 lg:gap-14 items-center" : ""}>
             <div className="max-w-2xl">
               <h1
-                className="font-serif text-foreground leading-[1.08] tracking-[-0.02em]"
+                className="font-serif text-foreground leading-[1.12] tracking-[-0.015em]"
                 style={{
-                  fontSize: "clamp(2rem, 4.5vw, 3.75rem)",
-                  fontWeight: 400,
+                  fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
+                  fontWeight: 500,
                 }}
               >
                 {title}
               </h1>
               {intro && (
-                <p className="mt-6 md:mt-8 text-lg md:text-xl text-muted-foreground leading-[1.55] max-w-xl font-sans font-light">
+                <p className="mt-5 md:mt-6 text-base md:text-lg text-muted-foreground leading-relaxed max-w-xl font-sans font-light">
                   {intro}
                 </p>
               )}
@@ -74,17 +74,17 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
       </header>
 
       {/* ACTION BAR */}
-      {actionBar && <div className="pb-6 border-b border-border/40 mb-8">{actionBar}</div>}
+      {actionBar && <div className="pb-5 border-b border-border/40 mb-7">{actionBar}</div>}
 
       {/* CONTENT GRID */}
       <div
         className={
           aside
-            ? "grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]"
+            ? "grid gap-7 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]"
             : "max-w-3xl"
         }
       >
-        <main className="min-w-0 space-y-6">{children}</main>
+        <main className="min-w-0 space-y-5">{children}</main>
 
         {aside && (
           <aside
