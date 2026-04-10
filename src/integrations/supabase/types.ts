@@ -121,6 +121,137 @@ export type Database = {
         }
         Relationships: []
       }
+      patient_lab_observations: {
+        Row: {
+          canonical_name: string
+          collection_date: string
+          corrected: boolean
+          corrected_at: string | null
+          created_at: string
+          display_name: string | null
+          flag: string | null
+          id: string
+          original_value: number | null
+          raw_name: string
+          ref_high: number | null
+          ref_low: number | null
+          source: string | null
+          unit: string
+          upload_id: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          canonical_name: string
+          collection_date: string
+          corrected?: boolean
+          corrected_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          flag?: string | null
+          id?: string
+          original_value?: number | null
+          raw_name: string
+          ref_high?: number | null
+          ref_low?: number | null
+          source?: string | null
+          unit: string
+          upload_id: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          canonical_name?: string
+          collection_date?: string
+          corrected?: boolean
+          corrected_at?: string | null
+          created_at?: string
+          display_name?: string | null
+          flag?: string | null
+          id?: string
+          original_value?: number | null
+          raw_name?: string
+          ref_high?: number | null
+          ref_low?: number | null
+          source?: string | null
+          unit?: string
+          upload_id?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_lab_observations_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      patient_lab_uploads: {
+        Row: {
+          collection_date: string | null
+          created_at: string
+          error_message: string | null
+          file_size_bytes: number | null
+          id: string
+          observations_duplicates: number | null
+          observations_extracted: number | null
+          observations_inserted: number | null
+          ordering_provider: string | null
+          original_filename: string
+          processing_completed_at: string | null
+          processing_started_at: string | null
+          retry_count: number
+          source_lab: string | null
+          status: string
+          storage_path: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          collection_date?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          observations_duplicates?: number | null
+          observations_extracted?: number | null
+          observations_inserted?: number | null
+          ordering_provider?: string | null
+          original_filename: string
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          retry_count?: number
+          source_lab?: string | null
+          status?: string
+          storage_path: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          collection_date?: string | null
+          created_at?: string
+          error_message?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          observations_duplicates?: number | null
+          observations_extracted?: number | null
+          observations_inserted?: number | null
+          ordering_provider?: string | null
+          original_filename?: string
+          processing_completed_at?: string | null
+          processing_started_at?: string | null
+          retry_count?: number
+          source_lab?: string | null
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       patient_narratives: {
         Row: {
           created_at: string
