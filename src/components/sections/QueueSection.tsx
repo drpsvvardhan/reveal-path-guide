@@ -18,6 +18,7 @@ import {
   GripVertical,
   Link as LinkIcon,
   RefreshCw,
+  Eye,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QueuedQuestion } from "@/types/manifest";
@@ -307,6 +308,15 @@ const QueueSection: React.FC = () => {
                           >
                             <Sparkles className="h-2.5 w-2.5" />
                             from chat
+                          </span>
+                        )}
+                        {q.source === "derived" && (
+                          <span
+                            className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[9px] text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded"
+                            title="Noticed automatically by the pattern detector"
+                          >
+                            <Eye className="h-2.5 w-2.5" />
+                            from patterns
                           </span>
                         )}
                       </div>
