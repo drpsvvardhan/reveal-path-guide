@@ -121,6 +121,51 @@ export type Database = {
         }
         Relationships: []
       }
+      patient_narratives: {
+        Row: {
+          created_at: string
+          generation_ms: number | null
+          id: string
+          input_biomarker_count: number | null
+          input_pattern_count: number | null
+          model_used: string
+          narrative: Json
+          retry_count: number
+          status: string
+          user_id: string
+          validation_error: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          generation_ms?: number | null
+          id?: string
+          input_biomarker_count?: number | null
+          input_pattern_count?: number | null
+          model_used: string
+          narrative: Json
+          retry_count?: number
+          status?: string
+          user_id: string
+          validation_error?: string | null
+          version: number
+        }
+        Update: {
+          created_at?: string
+          generation_ms?: number | null
+          id?: string
+          input_biomarker_count?: number | null
+          input_pattern_count?: number | null
+          model_used?: string
+          narrative?: Json
+          retry_count?: number
+          status?: string
+          user_id?: string
+          validation_error?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       patient_question_queue: {
         Row: {
           archived_at: string | null
@@ -216,7 +261,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      next_narrative_version: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never
