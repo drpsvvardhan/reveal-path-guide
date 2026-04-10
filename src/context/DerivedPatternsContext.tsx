@@ -86,6 +86,19 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
     setRunning(true);
     setError(null);
     try {
+      // Merge uploaded lab observations into the manifest before sending
+      let mergedManifest = manifest;
+      if (observations.length > 0) {
+        const timeline = observationsAsTimeline();
+        mergedManifest = {
+          ...manifest,
+          rawData: {
+            ...(manifest.rawData || {}),
+            biomarkerTimeline: timeline,
+          },
+        };
+      }
+
       const resp = await fetch(DERIVE_URL, {
         method: "POST",
         headers: {
@@ -93,7 +106,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          manifest,
+          manifest: mergedManifest,
           userId: user.id,
         }),
       });
