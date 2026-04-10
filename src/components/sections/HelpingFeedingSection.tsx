@@ -28,30 +28,35 @@ const HelpingFeedingSection: React.FC = () => {
       }
       asideSticky
     >
-      {/* Helping */}
-      <div className="space-y-3">
-        <h3 className="font-serif text-xl text-foreground flex items-center gap-2">
-          <CheckCircle className="h-5 w-5 text-success" /> Working for you
-        </h3>
-        {data.helping.map((item, i) => (
-          <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-4">
-            <p className="font-sans font-medium text-foreground text-sm mb-1">{item.label}</p>
-            <p className="text-sm text-muted-foreground">{item.mechanism}</p>
+      <div className="grid gap-6 md:grid-cols-2">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-medium text-foreground mb-4">
+            <CheckCircle className="h-5 w-5 text-success" />
+            Working for you
+          </h3>
+          <div className="space-y-3">
+            {data.helping.map((item, i) => (
+              <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-3">
+                <p className="font-sans font-medium text-foreground text-sm mb-0.5">{item.label}</p>
+                <p className="text-xs text-muted-foreground">{item.mechanism}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* Feeding */}
-      <div className="space-y-3">
-        <h3 className="font-serif text-xl text-foreground flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-coral" /> Working against you
-        </h3>
-        {data.feeding.map((item, i) => (
-          <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-4">
-            <p className="font-sans font-medium text-foreground text-sm mb-1">{item.label}</p>
-            <p className="text-sm text-muted-foreground">{item.mechanism}</p>
+        </div>
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-medium text-foreground mb-4">
+            <AlertTriangle className="h-5 w-5 text-coral" />
+            Working against you
+          </h3>
+          <div className="space-y-3">
+            {data.feeding.map((item, i) => (
+              <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-3">
+                <p className="font-sans font-medium text-foreground text-sm mb-0.5">{item.label}</p>
+                <p className="text-xs text-muted-foreground">{item.mechanism}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </PatientSectionLayout>
   );
