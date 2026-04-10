@@ -30,6 +30,7 @@ const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate
 export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { manifest } = useManifest();
+  const { observations, observationsAsTimeline } = useLabUploads();
   const [activeNarrative, setActiveNarrative] = useState<GeneratedNarrativeFields | null>(null);
   const [allVersions, setAllVersions] = useState<PatientNarrativeVersion[]>([]);
   const [loading, setLoading] = useState(false);
