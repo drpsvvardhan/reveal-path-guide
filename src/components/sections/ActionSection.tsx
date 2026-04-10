@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { Lock, Copy, ClipboardCheck, ChevronDown, ChevronUp, Check, Flame } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
@@ -146,7 +146,7 @@ const StreakBadge: React.FC<{ streak: number }> = ({ streak }) => {
 
 /* ── Main Section ── */
 const ActionSection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const { allActions, completedKeys, streak, toggleDone } = useActionCompletions();
   const { sequencedActions, doctorQuestions, monitoringPlan, expectedProgress } = manifest;
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);

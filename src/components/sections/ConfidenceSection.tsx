@@ -1,9 +1,9 @@
 import React from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, Search, RefreshCw } from "lucide-react";
 
 const ConfidenceSection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const cb = manifest.confidenceBreakdown;
 
   if (!cb) return null;

@@ -1,8 +1,8 @@
 import React from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 
 const SymptomBridgesSection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const bridges = manifest.symptomBridges;
 
   if (!bridges?.length) return null;

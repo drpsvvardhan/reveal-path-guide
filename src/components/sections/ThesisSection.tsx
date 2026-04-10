@@ -1,5 +1,5 @@
 import React from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
 import ProgressRing from "@/components/ProgressRing";
 
@@ -52,7 +52,7 @@ const statusColors: Record<string, { text: string; bg: string }> = {
 };
 
 const ThesisSection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const { patientThesis } = manifest;
 
   if (!patientThesis) return null;

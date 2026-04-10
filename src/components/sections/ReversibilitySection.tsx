@@ -1,5 +1,5 @@
 import React from "react";
-import { useManifest } from "@/context/ManifestContext";
+import { useActiveManifest } from "@/hooks/useActiveManifest";
 
 const tiers = [
   { key: "weeks" as const, label: "Can improve in weeks", colorClass: "bg-sky-light border-secondary/20" },
@@ -9,7 +9,7 @@ const tiers = [
 ];
 
 const ReversibilitySection: React.FC = () => {
-  const { manifest } = useManifest();
+  const manifest = useActiveManifest();
   const rev = manifest.reversibility;
 
   if (!rev) return null;
