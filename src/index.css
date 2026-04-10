@@ -148,4 +148,20 @@
     line-height: 1.55;
     font-weight: 300;
   }
+
+  .text-signature {
+    color: hsl(var(--signature));
+  }
+  .bg-signature {
+    background-color: hsl(var(--signature));
+  }
+  .bg-signature-subtle {
+    background-color: hsl(var(--signature) / 0.08);
+  }
+  .border-signature {
+    border-color: hsl(var(--signature));
+  }
+  .border-signature-subtle {
+    border-color: hsl(var(--signature) / 0.3);
+  }
 }
