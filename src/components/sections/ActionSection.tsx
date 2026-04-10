@@ -175,10 +175,7 @@ const ActionSection: React.FC = () => {
       }
       asideSticky
     >
-      {/* Streak */}
-      <div className="flex justify-end">
-        <StreakBadge streak={streak} />
-      </div>
+      {/* Progress bar */}
 
       {/* Progress bar */}
       <div className="rounded-xl border border-border bg-card p-4">
