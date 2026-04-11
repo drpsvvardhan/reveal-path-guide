@@ -76,7 +76,7 @@ const IntakeResultsSection: React.FC = () => {
         <AsideVisualPanel
           title="Overall terrain score"
           subtitle={`${Object.values(domainScores).length} domains scored`}
-          visual={<AsideProgressRing value={avgScore} max={100} label="Avg Score" />}
+          visual={<AsideProgressRing percent={avgScore} label={`${avgScore}`} sublabel="Avg Score" />}
           footnote={`Assessment v${currentAssessment.version} · ${currentAssessment.total_questions_answered} questions answered`}
         />
       }
