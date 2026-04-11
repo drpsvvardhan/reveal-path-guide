@@ -34,7 +34,7 @@ const ProfileStep: React.FC = () => {
   return (
     <OnboardingLayout
       stepNumber={2}
-      totalSteps={4}
+      totalSteps={5}
       eyebrow="ABOUT YOU"
       title="Let's start with the basics"
       intro="Your name, age, and sex at birth. These three facts let us interpret lab values correctly — reference ranges for women differ from men, and some markers shift with age."
