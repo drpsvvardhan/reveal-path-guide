@@ -2,6 +2,8 @@ import React from "react";
 import { motion } from "framer-motion";
 import { CIE_DOMAINS, CIE_GATES, CIE_DOMAIN_MAP } from "@/lib/cieSeedData";
 import { useIntake } from "@/context/IntakeContext";
+import { useTerrainRender } from "@/context/TerrainRenderContext";
+import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import { ArrowRight } from "lucide-react";
 
 const LIGHT_COLORS: Record<string, string> = {
@@ -24,6 +26,7 @@ interface IntakeResultsScreenProps {
 
 const IntakeResultsScreen: React.FC<IntakeResultsScreenProps> = ({ onContinue }) => {
   const { domainScores, gateScores } = useIntake();
+  const { activeRender } = useTerrainRender();
 
   const getTrafficLight = (score: number) => {
     if (score >= 80) return "GREEN";
@@ -35,20 +38,27 @@ const IntakeResultsScreen: React.FC<IntakeResultsScreenProps> = ({ onContinue })
   return (
     <div className="min-h-screen bg-background px-4 py-8 md:py-12">
       <div className="max-w-4xl mx-auto space-y-10">
-        {/* Hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-3"
-        >
-          <h1 className="font-serif text-3xl md:text-4xl text-foreground">
-            Your biological terrain
-          </h1>
-          <p className="text-muted-foreground text-sm md:text-base max-w-lg mx-auto leading-relaxed">
-            Based on your responses, we've mapped 25 biological domains across 9 clinical gates.
-            This is your starting point — a snapshot of where your body stands today.
-          </p>
-        </motion.div>
+        {/* Patient Portrait — rendered above gate grid when available */}
+        {activeRender?.patient_portrait ? (
+          <TerrainPortraitHero
+            portrait={activeRender.patient_portrait as any}
+            generatedAt={activeRender.generated_at || undefined}
+          />
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center space-y-3"
+          >
+            <h1 className="font-serif text-3xl md:text-4xl text-foreground">
+              Your biological terrain
+            </h1>
+            <p className="text-muted-foreground text-sm md:text-base max-w-lg mx-auto leading-relaxed">
+              Based on your responses, we've mapped 25 biological domains across 9 clinical gates.
+              This is your starting point — a snapshot of where your body stands today.
+            </p>
+          </motion.div>
+        )}
 
         {/* 9 Gate cards — 3x3 grid */}
         <motion.div
