@@ -38,6 +38,186 @@ export type Database = {
         }
         Relationships: []
       }
+      cie_assessments: {
+        Row: {
+          created_at: string
+          full_completed_at: string | null
+          id: string
+          layer1_completed_at: string | null
+          layer2_completed_at: string | null
+          status: string
+          total_questions_answered: number
+          triggered_domains: string[]
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          full_completed_at?: string | null
+          id?: string
+          layer1_completed_at?: string | null
+          layer2_completed_at?: string | null
+          status?: string
+          total_questions_answered?: number
+          triggered_domains?: string[]
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          full_completed_at?: string | null
+          id?: string
+          layer1_completed_at?: string | null
+          layer2_completed_at?: string | null
+          status?: string
+          total_questions_answered?: number
+          triggered_domains?: string[]
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      cie_domain_scores: {
+        Row: {
+          assessment_id: string
+          axis: string
+          created_at: string
+          domain_id: string
+          final_score: number
+          id: string
+          layer1_score: number
+          layer2_score: number | null
+          triggered_layer2: boolean
+          user_id: string
+        }
+        Insert: {
+          assessment_id: string
+          axis: string
+          created_at?: string
+          domain_id: string
+          final_score?: number
+          id?: string
+          layer1_score?: number
+          layer2_score?: number | null
+          triggered_layer2?: boolean
+          user_id: string
+        }
+        Update: {
+          assessment_id?: string
+          axis?: string
+          created_at?: string
+          domain_id?: string
+          final_score?: number
+          id?: string
+          layer1_score?: number
+          layer2_score?: number | null
+          triggered_layer2?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie_domain_scores_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cie_gate_scores: {
+        Row: {
+          assessment_id: string
+          contributing_domains: string[]
+          created_at: string
+          gate_id: string
+          gate_name: string
+          id: string
+          score: number
+          traffic_light: string
+          user_id: string
+        }
+        Insert: {
+          assessment_id: string
+          contributing_domains?: string[]
+          created_at?: string
+          gate_id: string
+          gate_name: string
+          id?: string
+          score?: number
+          traffic_light?: string
+          user_id: string
+        }
+        Update: {
+          assessment_id?: string
+          contributing_domains?: string[]
+          created_at?: string
+          gate_id?: string
+          gate_name?: string
+          id?: string
+          score?: number
+          traffic_light?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie_gate_scores_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cie_responses: {
+        Row: {
+          assessment_id: string
+          created_at: string
+          domain_id: string
+          id: string
+          layer: number
+          question_id: string
+          question_type: string
+          raw_response: string
+          score: number
+          user_id: string
+        }
+        Insert: {
+          assessment_id: string
+          created_at?: string
+          domain_id: string
+          id?: string
+          layer: number
+          question_id: string
+          question_type: string
+          raw_response: string
+          score?: number
+          user_id: string
+        }
+        Update: {
+          assessment_id?: string
+          created_at?: string
+          domain_id?: string
+          id?: string
+          layer?: number
+          question_id?: string
+          question_type?: string
+          raw_response?: string
+          score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie_responses_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       derived_patterns: {
         Row: {
           category: string
@@ -419,6 +599,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      next_cie_version: { Args: { p_user_id: string }; Returns: number }
       next_narrative_version: { Args: { p_user_id: string }; Returns: number }
     }
     Enums: {
