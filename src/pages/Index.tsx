@@ -9,6 +9,7 @@ import { SignatureColorProvider } from "@/context/SignatureColorContext";
 import { OnboardingProvider } from "@/context/OnboardingContext";
 import { IntakeProvider } from "@/context/IntakeContext";
 import { CIEAssessmentProvider } from "@/context/CIEAssessmentContext";
+import { TerrainRenderProvider } from "@/context/TerrainRenderContext";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
 import PatientShell from "@/components/PatientShell";
 
@@ -16,25 +17,27 @@ const Index = () => (
   <ManifestProvider>
     <IntakeProvider>
       <CIEAssessmentProvider>
-        <DocumentProvider>
-          <QueueProvider>
-            <ActionCompletionProvider>
-              <LabUploadsProvider>
-                <DerivedPatternsProvider>
-                  <SignatureColorProvider>
-                    <NarrativeProvider>
-                      <OnboardingProvider>
-                        <OnboardingGate>
-                          <PatientShell />
-                        </OnboardingGate>
-                      </OnboardingProvider>
-                    </NarrativeProvider>
-                  </SignatureColorProvider>
-                </DerivedPatternsProvider>
-              </LabUploadsProvider>
-            </ActionCompletionProvider>
-          </QueueProvider>
-        </DocumentProvider>
+        <TerrainRenderProvider>
+          <DocumentProvider>
+            <QueueProvider>
+              <ActionCompletionProvider>
+                <LabUploadsProvider>
+                  <DerivedPatternsProvider>
+                    <SignatureColorProvider>
+                      <NarrativeProvider>
+                        <OnboardingProvider>
+                          <OnboardingGate>
+                            <PatientShell />
+                          </OnboardingGate>
+                        </OnboardingProvider>
+                      </NarrativeProvider>
+                    </SignatureColorProvider>
+                  </DerivedPatternsProvider>
+                </LabUploadsProvider>
+              </ActionCompletionProvider>
+            </QueueProvider>
+          </DocumentProvider>
+        </TerrainRenderProvider>
       </CIEAssessmentProvider>
     </IntakeProvider>
   </ManifestProvider>

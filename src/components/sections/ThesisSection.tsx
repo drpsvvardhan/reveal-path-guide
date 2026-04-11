@@ -7,6 +7,7 @@ import ProgressRing from "@/components/ProgressRing";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
+import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import { useSignatureColor } from "@/context/SignatureColorContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -213,6 +214,9 @@ const ThesisSection: React.FC = () => {
       }
       asideSticky
     >
+      {/* Terrain Portrait Hero — top of main column */}
+      <TerrainPortraitHero />
+
       {/* Biology domain cards */}
       <div>
         <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-4">
