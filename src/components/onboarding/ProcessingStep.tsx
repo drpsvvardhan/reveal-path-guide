@@ -17,7 +17,7 @@ const ProcessingStep: React.FC = () => {
   const { currentAssessmentId } = useIntake();
   const { refresh: refreshCIE } = useCIEAssessment();
   const { user } = useAuth();
-  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "done" | "failed">("idle");
+  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "rendering" | "done" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
