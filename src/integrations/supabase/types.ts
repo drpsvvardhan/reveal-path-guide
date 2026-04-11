@@ -341,24 +341,51 @@ export type Database = {
       }
       profiles: {
         Row: {
+          age: number | null
           created_at: string
           display_name: string | null
+          first_name: string | null
+          first_time_banner_dismissed_at: string | null
           id: string
+          onboarding_completed_at: string | null
+          onboarding_started_at: string | null
+          onboarding_step: string | null
+          sex: string | null
           share_token: string | null
+          signature_color: string | null
+          study_summary: string | null
           user_id: string
         }
         Insert: {
+          age?: number | null
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
+          first_time_banner_dismissed_at?: string | null
           id?: string
+          onboarding_completed_at?: string | null
+          onboarding_started_at?: string | null
+          onboarding_step?: string | null
+          sex?: string | null
           share_token?: string | null
+          signature_color?: string | null
+          study_summary?: string | null
           user_id: string
         }
         Update: {
+          age?: number | null
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
+          first_time_banner_dismissed_at?: string | null
           id?: string
+          onboarding_completed_at?: string | null
+          onboarding_started_at?: string | null
+          onboarding_step?: string | null
+          sex?: string | null
           share_token?: string | null
+          signature_color?: string | null
+          study_summary?: string | null
           user_id?: string
         }
         Relationships: []
