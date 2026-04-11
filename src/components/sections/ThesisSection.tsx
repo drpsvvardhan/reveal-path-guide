@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
@@ -8,6 +8,29 @@ import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
 import { useSignatureColor } from "@/context/SignatureColorContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+
+// Gate-to-radar mapping: 7 most clinically meaningful gates
+const RADAR_GATES = [
+  { gateId: "BRI", label: "Brain" },
+  { gateId: "BCS", label: "Barrier" },
+  { gateId: "FPIS", label: "Fuel" },
+  { gateId: "TIS", label: "Tissue" },
+  { gateId: "CLI", label: "Longevity" },
+  { gateId: "HPI", label: "Potential" },
+  { gateId: "GRIP", label: "Risk" },
+];
+
+const FALLBACK_AXES = [
+  { label: "Brain", score: 58 },
+  { label: "Barrier", score: 72 },
+  { label: "Fuel", score: 54 },
+  { label: "Tissue", score: 45 },
+  { label: "Longevity", score: 68 },
+  { label: "Potential", score: 62 },
+  { label: "Risk", score: 51 },
+];
 
 interface BiologyDomain {
   name: string;
@@ -92,28 +115,80 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
 const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { color: signature } = useSignatureColor();
+  const { user } = useAuth();
   const { patientThesis } = manifest;
   const bridges = manifest.symptomBridges || [];
 
-  const terrainAxes = [
-    { label: "Metabolic", score: 58 },
-    { label: "Inflammation", score: 72 },
-    { label: "Cardiovascular", score: 54 },
-    { label: "Sleep", score: 45 },
-    { label: "Gut", score: 68 },
-    { label: "Stress", score: 62 },
-    { label: "Energy", score: 51 },
-  ];
+  const [terrainAxes, setTerrainAxes] = useState(FALLBACK_AXES);
+  const [asideItems, setAsideItems] = useState([
+    { label: "Brain", value: "58%", subvalue: "Baseline" },
+    { label: "Barrier", value: "72%", subvalue: "Stable" },
+    { label: "Fuel", value: "54%", subvalue: "Needs attention", tone: "warning" as const },
+    { label: "Tissue", value: "45%", subvalue: "Low", tone: "warning" as const },
+    { label: "Longevity", value: "68%" },
+  ]);
+
+  // Load CIE gate scores if available
+  useEffect(() => {
+    if (!user) return;
+
+    (async () => {
+      const { data: assessment } = await supabase
+        .from("cie_assessments")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!assessment) return;
+
+      const { data: gateScores } = await supabase
+        .from("cie_gate_scores")
+        .select("gate_id, score, traffic_light")
+        .eq("assessment_id", assessment.id);
+
+      if (!gateScores || gateScores.length === 0) return;
+
+      const gateMap: Record<string, { score: number; traffic_light: string }> = {};
+      for (const gs of gateScores) {
+        gateMap[gs.gate_id] = { score: Number(gs.score), traffic_light: gs.traffic_light };
+      }
+
+      // Build radar axes from gate scores
+      const axes = RADAR_GATES.map((rg) => ({
+        label: rg.label,
+        score: gateMap[rg.gateId] ? Math.round(gateMap[rg.gateId].score) : 50,
+      }));
+
+      setTerrainAxes(axes);
+
+      // Build aside items from top gates
+      const toneMap: Record<string, "success" | "accent" | "warning" | undefined> = {
+        GREEN: "success",
+        YELLOW: undefined,
+        ORANGE: "warning",
+        RED: "accent",
+      };
+
+      const aside = RADAR_GATES.slice(0, 5).map((rg) => {
+        const gs = gateMap[rg.gateId];
+        const score = gs ? Math.round(gs.score) : 50;
+        const tl = gs?.traffic_light || "YELLOW";
+        return {
+          label: rg.label,
+          value: `${score}%`,
+          subvalue: tl === "GREEN" ? "Healthy" : tl === "YELLOW" ? "Monitor" : tl === "ORANGE" ? "Needs attention" : "Critical",
+          tone: toneMap[tl],
+        };
+      });
+
+      setAsideItems(aside);
+    })();
+  }, [user]);
 
   if (!patientThesis) return null;
-
-  const asideItems = [
-    { label: "Inflammation", value: "72%", subvalue: "Improving", tone: "success" as const },
-    { label: "Blood sugar", value: "65%", subvalue: "Getting better", tone: "accent" as const },
-    { label: "Cardiovascular", value: "54%", subvalue: "Needs attention", tone: "warning" as const },
-    { label: "Sleep", value: "45%", subvalue: "Fragmented" },
-    { label: "Metabolic", value: "58%" },
-  ];
 
   return (
     <PatientSectionLayout
@@ -198,7 +273,7 @@ const ThesisSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Symptom bridges (merged from SymptomBridgesSection) */}
+      {/* Symptom bridges */}
       {bridges.length > 0 && (
         <div className="pt-10 mt-10 relative">
           <FlowLine variant="divider" className="absolute top-0 left-0 w-full h-5 text-secondary/40" />

@@ -350,6 +350,15 @@ function composeUserMessage(manifest: any, patterns: any[]): string {
     }
   }
 
+  // CIE gate scores (injected separately for narrative weaving)
+  if (gateScores && gateScores.length > 0) {
+    sections.push("\nINTAKE GATE SCORES:");
+    for (const g of gateScores) {
+      sections.push(`- ${g.gate_id} (${g.gate_name}): ${Math.round(g.score)}/100 [${g.traffic_light}] — domains: ${(g.contributing_domains || []).join(", ")}`);
+    }
+    sections.push("(Weave gate-derived findings into the thesis and terrain analysis when these scores are present.)");
+  }
+
   // Current medications
   sections.push("\nCURRENT_MEDICATIONS:");
   const meds = manifest.careMap?.medications || [];
