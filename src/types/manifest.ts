@@ -410,3 +410,41 @@ export interface LabUploadProcessResult {
   collection_date?: string | null;
   error?: string;
 }
+
+// ============================================================================
+// ONBOARDING TYPES — Phase 7
+// ============================================================================
+
+export type OnboardingStep = "welcome" | "profile" | "upload" | "processing" | "complete" | "done";
+
+export interface PatientProfile {
+  user_id: string;
+  first_name: string | null;
+  age: number | null;
+  sex: "female" | "male" | "other" | "prefer_not_to_say" | null;
+  signature_color: string | null;
+  study_summary: string | null;
+  onboarding_step: OnboardingStep;
+  onboarding_started_at: string | null;
+  onboarding_completed_at: string | null;
+  first_time_banner_dismissed_at: string | null;
+  share_token: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OnboardingFormState {
+  first_name: string;
+  age: string;
+  sex: PatientProfile["sex"];
+}
+
+export interface OnboardingProcessingState {
+  pdf_uploaded: boolean;
+  observations_extracted: number;
+  derivation_complete: boolean;
+  patterns_detected: number;
+  narrative_complete: boolean;
+  current_status: string;
+  error: string | null;
+}
