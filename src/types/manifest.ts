@@ -415,7 +415,7 @@ export interface LabUploadProcessResult {
 // ONBOARDING TYPES — Phase 7
 // ============================================================================
 
-export type OnboardingStep = "welcome" | "profile" | "upload" | "processing" | "complete" | "done";
+export type OnboardingStep = "welcome" | "profile" | "intake" | "upload" | "processing" | "complete" | "done";
 
 export interface PatientProfile {
   user_id: string;

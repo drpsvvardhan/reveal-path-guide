@@ -101,7 +101,7 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           first_name: formState.first_name.trim(),
           age: ageNum,
           sex: formState.sex,
-          onboarding_step: "upload",
+          onboarding_step: "intake",
         })
         .eq("user_id", user.id);
       if (error) throw error;
