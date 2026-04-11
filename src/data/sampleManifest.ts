@@ -324,3 +324,57 @@ export const sampleManifest: PatientRevealManifest = {
     ],
   },
 };
+
+/**
+ * Build a minimal manifest stub for users in mid-onboarding or newly onboarded state.
+ * Fills in only the patient identity block and leaves other fields empty.
+ * This is used by ManifestContext when a real user has no full manifest yet.
+ */
+export function buildStubManifest(patient: {
+  firstName: string;
+  age: number;
+  sex: string;
+}): PatientRevealManifest {
+  return {
+    patient: {
+      id: "self",
+      firstName: patient.firstName || "there",
+      age: patient.age || 0,
+      sex: patient.sex || "other",
+    },
+    studyOverview: {
+      summary: "Your personal health intelligence layer",
+      statLine: "Upload labs to build your twin",
+      layers: [],
+    },
+    patientThesis: {
+      title: "Your twin is building itself",
+      body: "As you upload labs and your data populates, this space will fill with your story — what your biology is doing, what can change, and what to focus on first.",
+    },
+    layerFindings: {},
+    helpingVsFeeding: { helping: [], feeding: [] },
+    symptomBridges: [],
+    reversibility: { weeks: [], months: [], slow: [], permanent: [] },
+    sequencedActions: {
+      startHere: { title: "Upload your first lab", description: "That's the trigger that starts everything else." },
+      thenAdd: [],
+      notYet: [],
+    },
+    doctorQuestions: [],
+    monitoringPlan: [],
+    expectedProgress: {
+      weeks2: "—",
+      months3: "—",
+      months6: "—",
+      months12: "—",
+    },
+    confidenceBreakdown: { confident: [], investigating: [], retest: [] },
+    careMap: { medications: [], checkpoints: [], responsibilities: [] },
+    careTeam: {
+      physician: { name: "", role: "" },
+      coach: { name: "", role: "" },
+      appointments: [],
+    },
+    coach: { starterQuestions: [] },
+  };
+}
