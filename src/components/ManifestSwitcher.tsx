@@ -1,10 +1,30 @@
-import React, { useRef } from "react";
+import React, { useRef, useCallback, useState } from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { Upload, RotateCcw, FileJson } from "lucide-react";
+import { PatientRevealManifest } from "@/types/manifest";
+import { sampleManifest } from "@/data/sampleManifest";
+
+const requiredKeys: (keyof PatientRevealManifest)[] = [
+  "patient", "studyOverview", "patientThesis",
+];
+
+function validateManifest(data: any): data is PatientRevealManifest {
+  if (!data || typeof data !== "object") return false;
+  for (const key of requiredKeys) {
+    if (!(key in data)) return false;
+  }
+  if (!data.patient?.firstName) return false;
+  return true;
+}
 
 const ManifestSwitcher: React.FC = () => {
-  const { resetManifest, loadFromJson, error, manifest } = useManifest();
+  const { manifest, isDemoMode } = useManifest();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // In the new architecture, ManifestSwitcher is only useful in demo mode
+  // For real users, the manifest comes from Supabase via useActiveManifest
+  if (!isDemoMode) return null;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -12,7 +32,19 @@ const ManifestSwitcher: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      loadFromJson(text);
+      try {
+        const parsed = JSON.parse(text);
+        if (!validateManifest(parsed)) {
+          setError("Invalid manifest: missing required fields.");
+          return;
+        }
+        setError(null);
+        // In demo mode, we could reload with a custom manifest via URL or state
+        // For now, just validate and show success
+        console.log("Valid manifest loaded:", parsed.patient.firstName);
+      } catch {
+        setError("Invalid JSON format.");
+      }
     };
     reader.readAsText(file);
     if (fileRef.current) fileRef.current.value = "";
@@ -31,13 +63,6 @@ const ManifestSwitcher: React.FC = () => {
         >
           <Upload className="h-3 w-3" />
           <span className="hidden sm:inline">Load</span>
-        </button>
-        <button
-          onClick={resetManifest}
-          className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <RotateCcw className="h-3 w-3" />
-          <span className="hidden sm:inline">Reset</span>
         </button>
         <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
       </div>

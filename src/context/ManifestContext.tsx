@@ -1,13 +1,16 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { PatientRevealManifest } from "@/types/manifest";
-import { sampleManifest } from "@/data/sampleManifest";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+import { PatientRevealManifest, PatientProfile } from "@/types/manifest";
+import { sampleManifest, buildStubManifest } from "@/data/sampleManifest";
 
 interface ManifestContextValue {
   manifest: PatientRevealManifest;
-  setManifest: (m: PatientRevealManifest) => void;
-  resetManifest: () => void;
+  profile: PatientProfile | null;
+  isDemoMode: boolean;
+  isLoading: boolean;
   error: string | null;
-  loadFromJson: (json: string) => boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const ManifestContext = createContext<ManifestContextValue | null>(null);
@@ -18,46 +21,103 @@ export const useManifest = () => {
   return ctx;
 };
 
-const requiredKeys: (keyof PatientRevealManifest)[] = [
-  "patient", "studyOverview", "patientThesis",
-];
-
-function validateManifest(data: any): data is PatientRevealManifest {
-  if (!data || typeof data !== "object") return false;
-  for (const key of requiredKeys) {
-    if (!(key in data)) return false;
-  }
-  if (!data.patient?.firstName) return false;
-  return true;
+/**
+ * Check if demo mode is active via URL parameter.
+ * Adding ?demo=1 to the URL puts the app in demo mode which loads the sample manifest.
+ */
+function checkDemoMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("demo") === "1" || params.get("demo") === "true";
 }
 
 export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [manifest, setManifest] = useState<PatientRevealManifest>(sampleManifest);
+  const { user, loading: authLoading } = useAuth();
+  const [profile, setProfile] = useState<PatientProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode] = useState<boolean>(checkDemoMode());
 
-  const resetManifest = useCallback(() => {
-    setManifest(sampleManifest);
-    setError(null);
-  }, []);
-
-  const loadFromJson = useCallback((json: string): boolean => {
-    try {
-      const parsed = JSON.parse(json);
-      if (!validateManifest(parsed)) {
-        setError("Invalid manifest: missing required fields (patient, studyOverview, patientThesis).");
-        return false;
-      }
-      setManifest(parsed);
-      setError(null);
-      return true;
-    } catch {
-      setError("Invalid JSON format. Please check the file and try again.");
-      return false;
+  const refreshProfile = useCallback(async () => {
+    if (!user || isDemoMode) {
+      setIsLoading(false);
+      return;
     }
-  }, []);
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data, error: dbError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (dbError) throw dbError;
+
+      if (!data) {
+        // Profile doesn't exist yet — trigger should have created it, but fallback
+        const { data: inserted, error: insertError } = await supabase
+          .from("profiles")
+          .insert({ user_id: user.id, onboarding_step: "welcome" })
+          .select("*")
+          .single();
+
+        if (insertError) throw insertError;
+        setProfile(inserted as unknown as PatientProfile);
+      } else {
+        setProfile(data as unknown as PatientProfile);
+      }
+    } catch (e: any) {
+      console.error("Profile load failed:", e);
+      setError(e.message || "Failed to load profile");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, isDemoMode]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    refreshProfile();
+  }, [authLoading, refreshProfile]);
+
+  // Determine which manifest to return based on mode and state
+  const manifest: PatientRevealManifest = React.useMemo(() => {
+    if (isDemoMode || !user) {
+      return sampleManifest;
+    }
+
+    if (!profile) {
+      return sampleManifest;
+    }
+
+    if (profile.onboarding_step === "done") {
+      return buildStubManifest({
+        firstName: profile.first_name || "there",
+        age: profile.age || 0,
+        sex: profile.sex || "other",
+      });
+    }
+
+    // Mid-onboarding — return a minimal stub with just what's been entered
+    return buildStubManifest({
+      firstName: profile.first_name || "",
+      age: profile.age || 0,
+      sex: profile.sex || "other",
+    });
+  }, [isDemoMode, user, profile]);
 
   return (
-    <ManifestContext.Provider value={{ manifest, setManifest, resetManifest, error, loadFromJson }}>
+    <ManifestContext.Provider
+      value={{
+        manifest,
+        profile,
+        isDemoMode,
+        isLoading,
+        error,
+        refreshProfile,
+      }}
+    >
       {children}
     </ManifestContext.Provider>
   );
