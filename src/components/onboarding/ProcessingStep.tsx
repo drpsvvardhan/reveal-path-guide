@@ -67,9 +67,25 @@ const ProcessingStep: React.FC = () => {
           throw new Error(narrativeResult?.validation_error || "Narrative generation failed");
         }
 
-        markProcessingMilestone({ narrative_complete: true, current_status: "Your twin is ready" });
+        markProcessingMilestone({ narrative_complete: true, current_status: "Rendering your terrain portrait" });
 
-        await new Promise((r) => setTimeout(r, 1200));
+        await new Promise((r) => setTimeout(r, 600));
+
+        // Step 3: Generate terrain render
+        setStep("rendering");
+        markProcessingMilestone({ current_status: "Rendering your terrain portrait" });
+        try {
+          await supabase.functions.invoke("generate-terrain-render", {
+            body: { user_id: user.id, assessment_id: currentAssessmentId },
+          });
+          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain portrait complete" });
+        } catch (terrainErr) {
+          console.warn("Terrain render warning:", terrainErr);
+          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain render skipped" });
+        }
+
+        await new Promise((r) => setTimeout(r, 800));
+        markProcessingMilestone({ current_status: "Your twin is ready" });
         setStep("done");
         await advanceToStep("complete");
       } catch (e: any) {
