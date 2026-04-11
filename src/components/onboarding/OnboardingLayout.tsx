@@ -7,6 +7,7 @@ interface OnboardingLayoutProps {
   eyebrow: string;
   title: string;
   intro?: string;
+  hideHeader?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
@@ -17,6 +18,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   eyebrow,
   title,
   intro,
+  hideHeader,
   children,
   footer,
 }) => {
@@ -61,25 +63,27 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
             className="w-full max-w-2xl"
           >
             {/* Hero area */}
-            <div className="mb-10">
-              <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-secondary mb-4">
-                {eyebrow}
-              </p>
-              <h1
-                className="font-serif text-foreground leading-[1.08] tracking-[-0.02em]"
-                style={{
-                  fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
-                  fontWeight: 400,
-                }}
-              >
-                {title}
-              </h1>
-              {intro && (
-                <p className="mt-6 text-lg text-muted-foreground leading-[1.55] font-sans font-light max-w-xl">
-                  {intro}
+            {!hideHeader && (
+              <div className="mb-10">
+                <p className="text-[11px] font-sans font-medium uppercase tracking-[0.22em] text-secondary mb-4">
+                  {eyebrow}
                 </p>
-              )}
-            </div>
+                <h1
+                  className="font-serif text-foreground leading-[1.08] tracking-[-0.02em]"
+                  style={{
+                    fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
+                    fontWeight: 400,
+                  }}
+                >
+                  {title}
+                </h1>
+                {intro && (
+                  <p className="mt-6 text-lg text-muted-foreground leading-[1.55] font-sans font-light max-w-xl">
+                    {intro}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Step content */}
             <div>{children}</div>

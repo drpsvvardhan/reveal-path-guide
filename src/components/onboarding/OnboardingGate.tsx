@@ -7,22 +7,17 @@ import ProfileStep from "./ProfileStep";
 import UploadStep from "./UploadStep";
 import ProcessingStep from "./ProcessingStep";
 import CompleteStep from "./CompleteStep";
+import IntakeStep from "@/components/intake/IntakeStep";
 
 interface OnboardingGateProps {
   children: React.ReactNode;
 }
 
-/**
- * Wraps the main app. If the user is authenticated but hasn't completed onboarding,
- * shows the onboarding wizard instead of the app. If they're in demo mode or have
- * completed onboarding, shows the app normally.
- */
 const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const { profile, isDemoMode, isLoading } = useManifest();
   const { currentStep } = useOnboarding();
 
-  // Still loading
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -31,28 +26,17 @@ const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
     );
   }
 
-  // Demo mode or unauthenticated → show the app directly (sample manifest)
-  if (isDemoMode || !user) {
-    return <>{children}</>;
-  }
+  if (isDemoMode || !user) return <>{children}</>;
+  if (!profile) return <>{children}</>;
+  if (profile.onboarding_step === "done") return <>{children}</>;
 
-  // Authenticated but no profile → show the app as a safe fallback
-  if (!profile) {
-    return <>{children}</>;
-  }
-
-  // Onboarding complete → show the app
-  if (profile.onboarding_step === "done") {
-    return <>{children}</>;
-  }
-
-  // Otherwise, show the appropriate onboarding step
-  // TODO: Replace with actual step components once created
   switch (currentStep) {
     case "welcome":
       return <WelcomeStep />;
     case "profile":
       return <ProfileStep />;
+    case "intake":
+      return <IntakeStep />;
     case "upload":
       return <UploadStep />;
     case "processing":
