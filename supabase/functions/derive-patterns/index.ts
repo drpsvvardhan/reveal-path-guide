@@ -11,7 +11,7 @@ const corsHeaders = {
 // TYPE SHIMS (mirror the frontend types)
 // ============================================================================
 
-type PatternCategory = "trend" | "threshold" | "contradiction" | "correlation" | "watchlist";
+type PatternCategory = "trend" | "threshold" | "contradiction" | "correlation" | "watchlist" | "domain";
 type PatternSeverity = "critical" | "high" | "moderate" | "informational";
 
 interface BiomarkerObservation {
@@ -111,8 +111,6 @@ function mean(nums: number[]): number {
 
 // ============================================================================
 // RULE 1 — Biomarker trend detection
-// Fires when a biomarker shows three or more consecutive measurements moving
-// in the same direction (up or down) by a meaningful amount.
 // ============================================================================
 
 function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
@@ -120,7 +118,6 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
   const timeline = raw.biomarkerTimeline || [];
   if (timeline.length < 3) return results;
 
-  // Group by biomarker name
   const byName: Record<string, BiomarkerObservation[]> = {};
   for (const obs of timeline) {
     const key = obs.name;
@@ -130,17 +127,15 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
 
   for (const [name, observations] of Object.entries(byName)) {
     if (observations.length < 3) continue;
-    const sorted = sortByDate(observations, true); // oldest first
-    const recent = sorted.slice(-3); // last three measurements
+    const sorted = sortByDate(observations, true);
+    const recent = sorted.slice(-3);
 
-    // Check if monotonically increasing or decreasing
     const values = recent.map((o) => o.value);
     const isRising = values[0] < values[1] && values[1] < values[2];
     const isFalling = values[0] > values[1] && values[1] > values[2];
 
     if (!isRising && !isFalling) continue;
 
-    // Check that the change is meaningful — more than 5% from first to last
     const pctChange = Math.abs((values[2] - values[0]) / values[0]);
     if (pctChange < 0.05) continue;
 
@@ -151,7 +146,6 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
     const lastDate = recent[2].timestamp.slice(0, 10);
     const unit = recent[0].unit;
 
-    // Determine severity based on whether values are crossing reference range
     const refHigh = recent[2].refHigh;
     const refLow = recent[2].refLow;
     let severity: PatternSeverity = "moderate";
@@ -190,22 +184,19 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
 
 // ============================================================================
 // RULE 2 — Biomarker threshold flag
-// Fires when the most recent measurement of a key biomarker is outside its
-// reference range and the crossing is meaningful.
 // ============================================================================
 
 function ruleBiomarkerThreshold(raw: RawDataLayer): RuleDetection[] {
   const results: RuleDetection[] = [];
   const timeline = raw.biomarkerTimeline || [];
 
-  // Key biomarkers we flag — extend this list later as more rules come online
   const keyMarkers = ["LDL-C", "HbA1c", "CRP", "Vitamin D", "TSH", "ALT", "eGFR"];
 
   for (const markerName of keyMarkers) {
     const observations = filterByName(timeline, markerName);
     if (observations.length === 0) continue;
 
-    const mostRecent = sortByDate(observations, false)[0]; // newest first
+    const mostRecent = sortByDate(observations, false)[0];
     const { value, unit, refLow, refHigh, flag, timestamp } = mostRecent;
 
     if (flag !== "high" && flag !== "low" && flag !== "critical") continue;
@@ -257,7 +248,6 @@ function ruleBiomarkerThreshold(raw: RawDataLayer): RuleDetection[] {
 
 // ============================================================================
 // RULE 3 — Self-report vs sensor contradiction
-// Fires when self-reported sleep hours differ meaningfully from wearable data.
 // ============================================================================
 
 function ruleSleepContradiction(raw: RawDataLayer): RuleDetection[] {
@@ -265,15 +255,13 @@ function ruleSleepContradiction(raw: RawDataLayer): RuleDetection[] {
   const sensors = raw.sensorStreams || [];
   const journal = raw.symptomsJournal || [];
 
-  // Get self-reported sleep hours
   const selfReports = journal.filter((e) => e.symptom === "sleep_self_report_hours");
   if (selfReports.length < 3) return results;
 
-  // For each self-report, find matching sensor data within ±1 day
   const comparisons: Array<{ date: string; selfHours: number; sensorHours: number; gap: number }> = [];
 
   for (const report of selfReports) {
-    const selfHours = report.severity; // we store hours in the severity field for this symptom
+    const selfHours = report.severity;
     const match = sensors.find((s) => s.date === report.date && s.sleep_hours != null);
     if (match && match.sleep_hours != null) {
       comparisons.push({
@@ -288,7 +276,7 @@ function ruleSleepContradiction(raw: RawDataLayer): RuleDetection[] {
   if (comparisons.length < 3) return results;
 
   const avgGap = mean(comparisons.map((c) => c.gap));
-  if (avgGap < 1.5) return results; // less than 1.5 hours average gap isn't noteworthy
+  if (avgGap < 1.5) return results;
 
   const avgSelf = mean(comparisons.map((c) => c.selfHours));
   const avgSensor = mean(comparisons.map((c) => c.sensorHours));
@@ -323,8 +311,6 @@ function ruleSleepContradiction(raw: RawDataLayer): RuleDetection[] {
 
 // ============================================================================
 // RULE 4 — Behavioral correlation
-// Fires when a behavior (late meals, alcohol, high sugar) correlates with a
-// next-day physiological marker (HRV drop, resting HR increase).
 // ============================================================================
 
 function ruleLateFoodHrvCorrelation(raw: RawDataLayer): RuleDetection[] {
@@ -334,7 +320,6 @@ function ruleLateFoodHrvCorrelation(raw: RawDataLayer): RuleDetection[] {
 
   if (food.length < 5 || sensors.length < 5) return results;
 
-  // For each food log day, find the sensor data for the NEXT day
   const paired: Array<{ date: string; lateMeal: boolean; nextDayHrv: number | null }> = [];
 
   for (const day of food) {
@@ -362,7 +347,7 @@ function ruleLateFoodHrvCorrelation(raw: RawDataLayer): RuleDetection[] {
   const avgHrvAfterNormal = mean(noLateMealDays.map((p) => p.nextDayHrv!));
 
   const hrvDrop = avgHrvAfterNormal - avgHrvAfterLate;
-  if (hrvDrop < 3) return results; // less than 3ms isn't meaningful
+  if (hrvDrop < 3) return results;
 
   const severity: PatternSeverity = hrvDrop > 8 ? "high" : "moderate";
 
@@ -384,7 +369,7 @@ function ruleLateFoodHrvCorrelation(raw: RawDataLayer): RuleDetection[] {
         gap_ms: Math.round(hrvDrop),
       }],
     },
-    suggested_question: undefined, // correlation patterns don't always warrant a doctor question
+    suggested_question: undefined,
   });
 
   return results;
@@ -392,7 +377,6 @@ function ruleLateFoodHrvCorrelation(raw: RawDataLayer): RuleDetection[] {
 
 // ============================================================================
 // RULE 5 — Composite cardiovascular watchlist
-// Fires when multiple cardiovascular risk factors appear together.
 // ============================================================================
 
 function ruleCardiovascularWatchlist(raw: RawDataLayer): RuleDetection[] {
@@ -403,7 +387,6 @@ function ruleCardiovascularWatchlist(raw: RawDataLayer): RuleDetection[] {
   const factors: string[] = [];
   const evidenceValues: any[] = [];
 
-  // Factor 1: elevated BP
   const recentSystolic = sortByDate(vitals.filter((v) => v.type === "systolic_bp"), false);
   if (recentSystolic.length >= 2) {
     const avgSystolic = mean(recentSystolic.slice(0, 3).map((v) => v.value));
@@ -413,14 +396,12 @@ function ruleCardiovascularWatchlist(raw: RawDataLayer): RuleDetection[] {
     }
   }
 
-  // Factor 2: elevated LDL-C
   const ldl = sortByDate(filterByName(timeline, "LDL-C"), false)[0];
   if (ldl && ldl.value > 130) {
     factors.push(`LDL-C ${ldl.value} ${ldl.unit}`);
     evidenceValues.push({ metric: "ldl_c", value: ldl.value, unit: ldl.unit, threshold: 130 });
   }
 
-  // Factor 3: rising HbA1c
   const hba1c = sortByDate(filterByName(timeline, "HbA1c"), true);
   if (hba1c.length >= 2) {
     const latest = hba1c[hba1c.length - 1];
@@ -430,14 +411,13 @@ function ruleCardiovascularWatchlist(raw: RawDataLayer): RuleDetection[] {
     }
   }
 
-  // Factor 4: BMI
   const recentBmi = sortByDate(vitals.filter((v) => v.type === "bmi"), false)[0];
   if (recentBmi && recentBmi.value >= 27) {
     factors.push(`BMI ${recentBmi.value}`);
     evidenceValues.push({ metric: "bmi", value: recentBmi.value, threshold: 27 });
   }
 
-  if (factors.length < 3) return results; // need at least three factors to fire
+  if (factors.length < 3) return results;
 
   const severity: PatternSeverity = factors.length >= 4 ? "high" : "moderate";
 
@@ -458,6 +438,107 @@ function ruleCardiovascularWatchlist(raw: RawDataLayer): RuleDetection[] {
       rationale: `Asking about prioritization and timeline gives you a concrete plan instead of a diffuse list of things to worry about.`,
     },
   });
+
+  return results;
+}
+
+// ============================================================================
+// RULE 6 — CIE Gate & Domain patterns
+// Fires from completed CIE intake gate and domain scores.
+// ============================================================================
+
+async function ruleCieGatePatterns(supabase: any, userId: string): Promise<RuleDetection[]> {
+  const results: RuleDetection[] = [];
+
+  // Find most recent completed assessment
+  const { data: assessment } = await supabase
+    .from("cie_assessments")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "complete")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!assessment) return results;
+
+  // Fetch gate scores
+  const { data: gateScores } = await supabase
+    .from("cie_gate_scores")
+    .select("gate_id, gate_name, score, traffic_light, contributing_domains")
+    .eq("assessment_id", assessment.id);
+
+  if (gateScores) {
+    for (const gate of gateScores) {
+      if (gate.traffic_light === "GREEN") continue;
+
+      let severity: PatternSeverity;
+      if (gate.traffic_light === "RED") severity = "critical";
+      else if (gate.traffic_light === "ORANGE") severity = "high";
+      else severity = "moderate"; // YELLOW
+
+      const domains = (gate.contributing_domains || []).join(", ");
+
+      results.push({
+        rule_id: `cie_gate_${gate.traffic_light.toLowerCase()}_${gate.gate_id.toLowerCase()}`,
+        rule_version: 1,
+        category: "domain",
+        severity,
+        title: `${gate.gate_name} needs ${gate.traffic_light === "RED" ? "urgent " : ""}attention`,
+        summary: `${gate.gate_name} scored ${Math.round(gate.score)}/100 in your intake. This gate combines signals from ${domains}. ${gate.traffic_light === "RED" ? "The combination suggests focused intervention is warranted." : gate.traffic_light === "ORANGE" ? "This area deserves focused attention in your care plan." : "This area is worth monitoring and may benefit from targeted support."}`,
+        evidence: {
+          source: "cie_intake",
+          description: `${gate.gate_id} gate score from clinical intake`,
+          values: [{
+            gate_id: gate.gate_id,
+            score: gate.score,
+            contributing_domains: gate.contributing_domains,
+            traffic_light: gate.traffic_light,
+          }],
+        },
+        suggested_question: severity === "critical" || severity === "high"
+          ? {
+              question: `My ${gate.gate_name} score came back in the ${gate.traffic_light.toLowerCase()} zone — what specifically should we focus on first, and how do we track improvement?`,
+              rationale: `This gate integrates multiple biological domains and a low score indicates systemic concern worth prioritizing.`,
+            }
+          : undefined,
+      });
+    }
+  }
+
+  // Fetch domain scores below 40
+  const { data: domainScores } = await supabase
+    .from("cie_domain_scores")
+    .select("domain_id, axis, final_score, triggered_layer2")
+    .eq("assessment_id", assessment.id)
+    .lt("final_score", 40);
+
+  if (domainScores) {
+    for (const ds of domainScores) {
+      results.push({
+        rule_id: `cie_domain_red_${ds.domain_id.toLowerCase()}`,
+        rule_version: 1,
+        category: "domain",
+        severity: "critical",
+        title: `${ds.domain_id} domain scored critically low`,
+        summary: `Your ${ds.domain_id} domain (${ds.axis}) scored ${Math.round(ds.final_score)}/100, indicating significant concern in this area.${ds.triggered_layer2 ? " A deep-dive assessment was completed for additional precision." : ""}`,
+        evidence: {
+          source: "cie_intake",
+          description: `${ds.domain_id} domain score from clinical intake`,
+          values: [{
+            domain_id: ds.domain_id,
+            axis: ds.axis,
+            final_score: ds.final_score,
+            triggered_layer2: ds.triggered_layer2,
+          }],
+        },
+        suggested_question: {
+          question: `My ${ds.domain_id} domain score (${ds.axis}) is in the red zone — what does that mean clinically and what should we do about it?`,
+          rationale: `Individual domain scores below 40 indicate a focused area of concern that may benefit from targeted intervention.`,
+        },
+      });
+    }
+  }
 
   return results;
 }
@@ -501,7 +582,6 @@ async function persistDetections(
   let questionsQueued = 0;
 
   for (const det of detections) {
-    // Check if an active pattern already exists for this rule
     const { data: existing } = await supabase
       .from("derived_patterns")
       .select("id, first_detected_at")
@@ -513,7 +593,6 @@ async function persistDetections(
     const now = new Date().toISOString();
 
     if (existing) {
-      // Update existing pattern — refresh last_confirmed_at and content
       await supabase
         .from("derived_patterns")
         .update({
@@ -528,11 +607,8 @@ async function persistDetections(
         .eq("id", existing.id);
       updated++;
     } else {
-      // Insert new pattern
-      // If the rule suggests a question, create the queue entry first so we can link it
       let generatedQuestionId: string | null = null;
       if (det.suggested_question) {
-        // Check if an identical question is already queued (avoid duplicates)
         const { data: existingQ } = await supabase
           .from("patient_question_queue")
           .select("id")
@@ -542,7 +618,6 @@ async function persistDetections(
           .maybeSingle();
 
         if (!existingQ) {
-          // Get max priority
           const { data: maxPriRow } = await supabase
             .from("patient_question_queue")
             .select("priority")
@@ -626,6 +701,14 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
+
+    // Run CIE gate/domain rules (async, needs DB access)
+    try {
+      const cieDetections = await ruleCieGatePatterns(supabase, userId);
+      detections.push(...cieDetections);
+    } catch (e) {
+      console.error("CIE gate rules failed:", e);
+    }
 
     const stats = await persistDetections(supabase, userId, detections);
 

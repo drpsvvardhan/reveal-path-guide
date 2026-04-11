@@ -260,7 +260,7 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
 // INPUT COMPOSITION
 // ============================================================================
 
-function composeUserMessage(manifest: any, patterns: any[]): string {
+function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]): string {
   const sections: string[] = [];
 
   // Patient context
@@ -348,6 +348,15 @@ function composeUserMessage(manifest: any, patterns: any[]): string {
         sections.push(`  Evidence: ${p.evidence.description}`);
       }
     }
+  }
+
+  // CIE gate scores (injected separately for narrative weaving)
+  if (gateScores && gateScores.length > 0) {
+    sections.push("\nINTAKE GATE SCORES:");
+    for (const g of gateScores) {
+      sections.push(`- ${g.gate_id} (${g.gate_name}): ${Math.round(g.score)}/100 [${g.traffic_light}] — domains: ${(g.contributing_domains || []).join(", ")}`);
+    }
+    sections.push("(Weave gate-derived findings into the thesis and terrain analysis when these scores are present.)");
   }
 
   // Current medications
@@ -447,10 +456,11 @@ function extractJsonFromText(text: string): any {
 async function generateWithRetry(
   manifest: any,
   patterns: any[],
-  maxRetries: number = 2
+  maxRetries: number = 2,
+  gateScores?: any[]
 ): Promise<{ narrative: any; retryCount: number; model: string; generationMs: number; error?: string }> {
   const startTime = Date.now();
-  const userMessage = composeUserMessage(manifest, patterns);
+  const userMessage = composeUserMessage(manifest, patterns, gateScores);
   let previousError: string | undefined = undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -587,8 +597,27 @@ serve(async (req) => {
     const patternList = patterns || [];
     const biomarkerCount = manifest.rawData?.biomarkerTimeline?.length || 0;
 
+    // Fetch CIE gate scores for the most recent completed assessment
+    let gateScoresList: any[] = [];
+    const { data: cieAssessment } = await supabase
+      .from("cie_assessments")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("status", "complete")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (cieAssessment) {
+      const { data: gs } = await supabase
+        .from("cie_gate_scores")
+        .select("gate_id, gate_name, score, traffic_light, contributing_domains")
+        .eq("assessment_id", cieAssessment.id);
+      if (gs) gateScoresList = gs;
+    }
+
     // Run generation with retry
-    const result = await generateWithRetry(manifest, patternList, 2);
+    const result = await generateWithRetry(manifest, patternList, 2, gateScoresList);
 
     // Persist the result (success or failure)
     const persisted = await persistNarrative(supabase, userId, result, patternList.length, biomarkerCount);
