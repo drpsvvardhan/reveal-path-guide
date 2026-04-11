@@ -82,7 +82,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (fetchErr) throw fetchErr;
 
-      setActiveRender(data as TerrainRender | null);
+      setActiveRender(data as unknown as TerrainRender | null);
     } catch (e: any) {
       console.error("Failed to fetch terrain render:", e);
       setError(e.message || "Failed to load terrain render");
