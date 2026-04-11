@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Map, Activity, Scale, Brain, RefreshCw,
-  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users, FolderOpen, MessageSquare, Sparkles
+  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users, FolderOpen, MessageSquare, Sparkles, Layers
 } from "lucide-react";
 
 export interface NavItem {
@@ -17,6 +17,7 @@ export const navItems: NavItem[] = [
   { id: "helping-feeding", label: "What is helping — and what is still feeding the problem", shortLabel: "Factors", icon: Scale },
   
   { id: "noticed", label: "What we've noticed", shortLabel: "Noticed", icon: Sparkles },
+  { id: "terrain", label: "Your terrain", shortLabel: "Terrain", icon: Layers },
   { id: "reversibility", label: "What can still change", shortLabel: "Change", icon: RefreshCw },
   { id: "actions", label: "What to do", shortLabel: "Actions", icon: ListChecks },
   { id: "records", label: "Medical Records", shortLabel: "Records", icon: FolderOpen },

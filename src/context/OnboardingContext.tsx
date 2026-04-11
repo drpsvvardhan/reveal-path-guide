@@ -38,6 +38,7 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [processingState, setProcessingState] = useState<OnboardingProcessingState>({
     pdf_uploaded: false,
     observations_extracted: 0,
+    intake_scored: false,
     derivation_complete: false,
     patterns_detected: 0,
     narrative_complete: false,

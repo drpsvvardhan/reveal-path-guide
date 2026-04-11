@@ -442,6 +442,7 @@ export interface OnboardingFormState {
 export interface OnboardingProcessingState {
   pdf_uploaded: boolean;
   observations_extracted: number;
+  intake_scored: boolean;
   derivation_complete: boolean;
   patterns_detected: number;
   narrative_complete: boolean;

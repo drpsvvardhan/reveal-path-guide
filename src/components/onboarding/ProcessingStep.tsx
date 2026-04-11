@@ -3,6 +3,10 @@ import OnboardingLayout from "./OnboardingLayout";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
 import { useNarrative } from "@/context/NarrativeContext";
+import { useIntake } from "@/context/IntakeContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { CheckCircle2, Loader2, Circle } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -10,25 +14,41 @@ const ProcessingStep: React.FC = () => {
   const { advanceToStep, markProcessingMilestone, processingState } = useOnboarding();
   const { runDerivation } = useDerivedPatterns();
   const { generateNarrative } = useNarrative();
-  const [step, setStep] = useState<"idle" | "deriving" | "generating" | "done" | "failed">("idle");
+  const { currentAssessmentId } = useIntake();
+  const { refresh: refreshCIE } = useCIEAssessment();
+  const { user } = useAuth();
+  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "done" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
-  // Kick off the pipeline when this step mounts
   useEffect(() => {
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
     (async () => {
       try {
+        // Step 0: Score the CIE assessment if one exists
+        if (currentAssessmentId && user) {
+          setStep("scoring");
+          markProcessingMilestone({ current_status: "Scoring your intake assessment" });
+
+          const { data, error } = await supabase.functions.invoke("cie-score-assessment", {
+            body: { assessment_id: currentAssessmentId, user_id: user.id, phase: "complete" },
+          });
+
+          if (error) console.warn("CIE scoring warning:", error);
+
+          markProcessingMilestone({ intake_scored: true, current_status: "Intake scored" });
+          await refreshCIE();
+          await new Promise((r) => setTimeout(r, 600));
+        }
+
         // Step 1: Run derivation
         setStep("deriving");
         markProcessingMilestone({ current_status: "Detecting patterns in your data" });
         const deriveResult = await runDerivation();
 
-        if (!deriveResult) {
-          throw new Error("Pattern detection failed");
-        }
+        if (!deriveResult) throw new Error("Pattern detection failed");
 
         markProcessingMilestone({
           derivation_complete: true,
@@ -36,7 +56,6 @@ const ProcessingStep: React.FC = () => {
           current_status: `Found ${deriveResult.detections_found} patterns`,
         });
 
-        // Small pause so the user can see the progress
         await new Promise((r) => setTimeout(r, 800));
 
         // Step 2: Generate narrative
@@ -48,14 +67,9 @@ const ProcessingStep: React.FC = () => {
           throw new Error(narrativeResult?.validation_error || "Narrative generation failed");
         }
 
-        markProcessingMilestone({
-          narrative_complete: true,
-          current_status: "Your twin is ready",
-        });
+        markProcessingMilestone({ narrative_complete: true, current_status: "Your twin is ready" });
 
-        // Small pause so the user can see the success state
         await new Promise((r) => setTimeout(r, 1200));
-
         setStep("done");
         await advanceToStep("complete");
       } catch (e: any) {
@@ -73,32 +87,49 @@ const ProcessingStep: React.FC = () => {
     setErrorMessage(null);
   };
 
+  const isAfterScoring = step === "deriving" || step === "generating" || step === "done";
+  const isAfterDeriving = step === "generating" || step === "done";
+
   return (
     <OnboardingLayout
       stepNumber={4}
-      totalSteps={4}
+      totalSteps={5}
       eyebrow="BUILDING YOUR TWIN"
       title="We're reading your biology now"
       intro="This usually takes under a minute. You don't need to do anything — we'll let you know when your twin is ready."
     >
       <div className="space-y-4 mt-2">
+        {currentAssessmentId && (
+          <ProcessingMilestone
+            label="Intake scored"
+            sublabel={
+              step === "scoring"
+                ? "Computing domain and gate scores from your answers"
+                : isAfterScoring
+                ? "9 gates and 25 domains scored"
+                : "Waiting"
+            }
+            state={
+              step === "scoring" ? "running" :
+              isAfterScoring ? "complete" :
+              step === "failed" && !processingState.intake_scored ? "failed" : "pending"
+            }
+          />
+        )}
+
         <ProcessingMilestone
           label="Patterns detected"
           sublabel={
             step === "deriving"
               ? "Running the rule engine against your data"
-              : step === "generating" || step === "done"
+              : isAfterDeriving
               ? `${processingState.patterns_detected} patterns found`
               : "Waiting"
           }
           state={
-            step === "deriving"
-              ? "running"
-              : step === "generating" || step === "done"
-              ? "complete"
-              : step === "failed" && !processingState.derivation_complete
-              ? "failed"
-              : "pending"
+            step === "deriving" ? "running" :
+            isAfterDeriving ? "complete" :
+            step === "failed" && !processingState.derivation_complete ? "failed" : "pending"
           }
         />
 
@@ -114,31 +145,21 @@ const ProcessingStep: React.FC = () => {
               : "Waiting"
           }
           state={
-            step === "generating"
-              ? "running"
-              : step === "done"
-              ? "complete"
-              : step === "failed" && processingState.derivation_complete
-              ? "failed"
-              : "pending"
+            step === "generating" ? "running" :
+            step === "done" ? "complete" :
+            step === "failed" && processingState.derivation_complete ? "failed" : "pending"
           }
         />
 
         <ProcessingMilestone
           label="Ready for you"
-          sublabel={
-            step === "done"
-              ? "Delivering you to your Journey view"
-              : "Almost there"
-          }
+          sublabel={step === "done" ? "Delivering you to your Journey view" : "Almost there"}
           state={step === "done" ? "complete" : "pending"}
         />
 
         {step === "failed" && errorMessage && (
           <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-5 mt-6">
-            <p className="text-sm text-destructive mb-3">
-              Something went wrong: {errorMessage}
-            </p>
+            <p className="text-sm text-destructive mb-3">Something went wrong: {errorMessage}</p>
             <button
               onClick={handleRetry}
               className="rounded-lg bg-destructive text-destructive-foreground px-4 py-2 text-xs font-medium hover:bg-destructive/90 transition-colors"
@@ -157,32 +178,10 @@ const ProcessingMilestone: React.FC<{
   sublabel: string;
   state: "pending" | "running" | "complete" | "failed";
 }> = ({ label, sublabel, state }) => {
-  const Icon =
-    state === "running" ? Loader2 : state === "complete" ? CheckCircle2 : Circle;
-  const iconColor =
-    state === "running"
-      ? "text-secondary"
-      : state === "complete"
-      ? "text-success"
-      : state === "failed"
-      ? "text-destructive"
-      : "text-muted-foreground/40";
-  const borderColor =
-    state === "running"
-      ? "border-secondary/40"
-      : state === "complete"
-      ? "border-success/40"
-      : state === "failed"
-      ? "border-destructive/40"
-      : "border-border";
-  const bgColor =
-    state === "running"
-      ? "bg-secondary/5"
-      : state === "complete"
-      ? "bg-success/5"
-      : state === "failed"
-      ? "bg-destructive/5"
-      : "bg-card";
+  const Icon = state === "running" ? Loader2 : state === "complete" ? CheckCircle2 : Circle;
+  const iconColor = state === "running" ? "text-secondary" : state === "complete" ? "text-success" : state === "failed" ? "text-destructive" : "text-muted-foreground/40";
+  const borderColor = state === "running" ? "border-secondary/40" : state === "complete" ? "border-success/40" : state === "failed" ? "border-destructive/40" : "border-border";
+  const bgColor = state === "running" ? "bg-secondary/5" : state === "complete" ? "bg-success/5" : state === "failed" ? "bg-destructive/5" : "bg-card";
 
   return (
     <motion.div
