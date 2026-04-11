@@ -103,8 +103,10 @@ const ProcessingStep: React.FC = () => {
     setErrorMessage(null);
   };
 
-  const isAfterScoring = step === "deriving" || step === "generating" || step === "done";
-  const isAfterDeriving = step === "generating" || step === "done";
+  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "done";
+  const isAfterDeriving = step === "generating" || step === "rendering" || step === "done";
+  const isAfterGenerating = step === "rendering" || step === "done";
+  const isAfterRendering = step === "done";
 
   return (
     <OnboardingLayout
@@ -154,7 +156,7 @@ const ProcessingStep: React.FC = () => {
           sublabel={
             step === "generating"
               ? "Translating findings into plain language"
-              : step === "done"
+              : isAfterGenerating
               ? "Your thesis, helping/feeding, and reversibility are ready"
               : step === "failed" && processingState.derivation_complete
               ? "Generation failed"
@@ -162,8 +164,24 @@ const ProcessingStep: React.FC = () => {
           }
           state={
             step === "generating" ? "running" :
-            step === "done" ? "complete" :
+            isAfterGenerating ? "complete" :
             step === "failed" && processingState.derivation_complete ? "failed" : "pending"
+          }
+        />
+
+        <ProcessingMilestone
+          label="Terrain portrait"
+          sublabel={
+            step === "rendering"
+              ? "Composing your patient portrait and clinician summary"
+              : isAfterRendering
+              ? "Your terrain is rendered"
+              : "Waiting"
+          }
+          state={
+            step === "rendering" ? "running" :
+            isAfterRendering ? "complete" :
+            step === "failed" && processingState.narrative_complete ? "failed" : "pending"
           }
         />
 
