@@ -1,5 +1,6 @@
 import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { CheckCircle, Search, RefreshCw } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
@@ -8,9 +9,13 @@ import ConfidenceGradient from "@/components/visuals/ConfidenceGradient";
 
 const ConfidenceSection: React.FC = () => {
   const manifest = useActiveManifest();
+  const { gateScores } = useCIEAssessment();
   const cb = manifest.confidenceBreakdown;
 
   if (!cb) return null;
+
+  // When CIE data exists, build gradient items from actual gate scores
+  const hasCIE = Object.keys(gateScores).length > 0;
 
   const groups = [
     { title: "Things we're confident about", items: cb.confident, icon: CheckCircle, colorClass: "text-success" },
@@ -22,11 +27,18 @@ const ConfidenceSection: React.FC = () => {
   const investigatingCount = cb.investigating?.length || 0;
   const watchingCount = cb.retest?.length || 0;
 
-  const gradientItems: { label: string; category: "confident" | "investigating" | "watching" }[] = [
-    ...(cb.confident || []).map((label) => ({ label, category: "confident" as const })),
-    ...(cb.investigating || []).map((label) => ({ label, category: "investigating" as const })),
-    ...(cb.retest || []).map((label) => ({ label, category: "watching" as const })),
-  ];
+  const gradientItems: { label: string; category: "confident" | "investigating" | "watching" }[] = hasCIE
+    ? Object.values(gateScores).map((gs) => ({
+        label: `${gs.gate_name} (${Math.round(gs.score)})`,
+        category: gs.traffic_light === "GREEN" ? "confident" as const
+          : gs.traffic_light === "RED" ? "watching" as const
+          : "investigating" as const,
+      }))
+    : [
+        ...(cb.confident || []).map((label) => ({ label, category: "confident" as const })),
+        ...(cb.investigating || []).map((label) => ({ label, category: "investigating" as const })),
+        ...(cb.retest || []).map((label) => ({ label, category: "watching" as const })),
+      ];
 
   return (
     <PatientSectionLayout
