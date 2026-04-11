@@ -42,6 +42,7 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     derivation_complete: false,
     patterns_detected: 0,
     narrative_complete: false,
+    terrain_render_complete: false,
     current_status: "Waiting for your first lab upload",
     error: null,
   });

@@ -17,7 +17,7 @@ const ProcessingStep: React.FC = () => {
   const { currentAssessmentId } = useIntake();
   const { refresh: refreshCIE } = useCIEAssessment();
   const { user } = useAuth();
-  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "done" | "failed">("idle");
+  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "rendering" | "done" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
@@ -67,9 +67,25 @@ const ProcessingStep: React.FC = () => {
           throw new Error(narrativeResult?.validation_error || "Narrative generation failed");
         }
 
-        markProcessingMilestone({ narrative_complete: true, current_status: "Your twin is ready" });
+        markProcessingMilestone({ narrative_complete: true, current_status: "Rendering your terrain portrait" });
 
-        await new Promise((r) => setTimeout(r, 1200));
+        await new Promise((r) => setTimeout(r, 600));
+
+        // Step 3: Generate terrain render
+        setStep("rendering");
+        markProcessingMilestone({ current_status: "Rendering your terrain portrait" });
+        try {
+          await supabase.functions.invoke("generate-terrain-render", {
+            body: { user_id: user.id, assessment_id: currentAssessmentId },
+          });
+          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain portrait complete" });
+        } catch (terrainErr) {
+          console.warn("Terrain render warning:", terrainErr);
+          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain render skipped" });
+        }
+
+        await new Promise((r) => setTimeout(r, 800));
+        markProcessingMilestone({ current_status: "Your twin is ready" });
         setStep("done");
         await advanceToStep("complete");
       } catch (e: any) {
@@ -87,8 +103,10 @@ const ProcessingStep: React.FC = () => {
     setErrorMessage(null);
   };
 
-  const isAfterScoring = step === "deriving" || step === "generating" || step === "done";
-  const isAfterDeriving = step === "generating" || step === "done";
+  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "done";
+  const isAfterDeriving = step === "generating" || step === "rendering" || step === "done";
+  const isAfterGenerating = step === "rendering" || step === "done";
+  const isAfterRendering = step === "done";
 
   return (
     <OnboardingLayout
@@ -138,7 +156,7 @@ const ProcessingStep: React.FC = () => {
           sublabel={
             step === "generating"
               ? "Translating findings into plain language"
-              : step === "done"
+              : isAfterGenerating
               ? "Your thesis, helping/feeding, and reversibility are ready"
               : step === "failed" && processingState.derivation_complete
               ? "Generation failed"
@@ -146,8 +164,24 @@ const ProcessingStep: React.FC = () => {
           }
           state={
             step === "generating" ? "running" :
-            step === "done" ? "complete" :
+            isAfterGenerating ? "complete" :
             step === "failed" && processingState.derivation_complete ? "failed" : "pending"
+          }
+        />
+
+        <ProcessingMilestone
+          label="Terrain portrait"
+          sublabel={
+            step === "rendering"
+              ? "Composing your patient portrait and clinician summary"
+              : isAfterRendering
+              ? "Your terrain is rendered"
+              : "Waiting"
+          }
+          state={
+            step === "rendering" ? "running" :
+            isAfterRendering ? "complete" :
+            step === "failed" && processingState.narrative_complete ? "failed" : "pending"
           }
         />
 

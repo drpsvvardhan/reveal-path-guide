@@ -534,6 +534,7 @@ export type Database = {
           share_token: string | null
           signature_color: string | null
           study_summary: string | null
+          terrain_share_token: string | null
           user_id: string
         }
         Insert: {
@@ -550,6 +551,7 @@ export type Database = {
           share_token?: string | null
           signature_color?: string | null
           study_summary?: string | null
+          terrain_share_token?: string | null
           user_id: string
         }
         Update: {
@@ -566,9 +568,63 @@ export type Database = {
           share_token?: string | null
           signature_color?: string | null
           study_summary?: string | null
+          terrain_share_token?: string | null
           user_id?: string
         }
         Relationships: []
+      }
+      terrain_renders: {
+        Row: {
+          assessment_id: string | null
+          clinician_summary: Json | null
+          created_at: string
+          error_message: string | null
+          generated_at: string | null
+          generation_input_hash: string | null
+          id: string
+          patient_portrait: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          assessment_id?: string | null
+          clinician_summary?: Json | null
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          generation_input_hash?: string | null
+          id?: string
+          patient_portrait?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          assessment_id?: string | null
+          clinician_summary?: Json | null
+          created_at?: string
+          error_message?: string | null
+          generated_at?: string | null
+          generation_input_hash?: string | null
+          id?: string
+          patient_portrait?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terrain_renders_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       voice_notes: {
         Row: {
@@ -601,6 +657,10 @@ export type Database = {
     Functions: {
       next_cie_version: { Args: { p_user_id: string }; Returns: number }
       next_narrative_version: { Args: { p_user_id: string }; Returns: number }
+      next_terrain_render_version: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
