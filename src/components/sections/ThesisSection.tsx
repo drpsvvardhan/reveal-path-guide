@@ -120,11 +120,11 @@ const ThesisSection: React.FC = () => {
   const bridges = manifest.symptomBridges || [];
 
   const [terrainAxes, setTerrainAxes] = useState(FALLBACK_AXES);
-  const [asideItems, setAsideItems] = useState([
+  const [asideItems, setAsideItems] = useState<Array<{ label: string; value: string; subvalue?: string; tone?: "success" | "accent" | "warning" }>>([
     { label: "Brain", value: "58%", subvalue: "Baseline" },
     { label: "Barrier", value: "72%", subvalue: "Stable" },
-    { label: "Fuel", value: "54%", subvalue: "Needs attention", tone: "warning" as const },
-    { label: "Tissue", value: "45%", subvalue: "Low", tone: "warning" as const },
+    { label: "Fuel", value: "54%", subvalue: "Needs attention", tone: "warning" },
+    { label: "Tissue", value: "45%", subvalue: "Low", tone: "warning" },
     { label: "Longevity", value: "68%" },
   ]);
 
