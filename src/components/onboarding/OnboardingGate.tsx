@@ -2,6 +2,11 @@ import React from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { useOnboarding } from "@/context/OnboardingContext";
+import WelcomeStep from "./WelcomeStep";
+import ProfileStep from "./ProfileStep";
+import UploadStep from "./UploadStep";
+import ProcessingStep from "./ProcessingStep";
+import CompleteStep from "./CompleteStep";
 
 interface OnboardingGateProps {
   children: React.ReactNode;
@@ -11,8 +16,6 @@ interface OnboardingGateProps {
  * Wraps the main app. If the user is authenticated but hasn't completed onboarding,
  * shows the onboarding wizard instead of the app. If they're in demo mode or have
  * completed onboarding, shows the app normally.
- *
- * Step components are not yet created — all steps temporarily pass through to children.
  */
 const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
@@ -47,11 +50,15 @@ const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   // TODO: Replace with actual step components once created
   switch (currentStep) {
     case "welcome":
+      return <WelcomeStep />;
     case "profile":
+      return <ProfileStep />;
     case "upload":
+      return <UploadStep />;
     case "processing":
+      return <ProcessingStep />;
     case "complete":
-      return <>{children}</>;
+      return <CompleteStep />;
     default:
       return <>{children}</>;
   }

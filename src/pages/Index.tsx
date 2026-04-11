@@ -12,25 +12,25 @@ import PatientShell from "@/components/PatientShell";
 
 const Index = () => (
   <ManifestProvider>
-    <OnboardingProvider>
-      <OnboardingGate>
-        <DocumentProvider>
-          <QueueProvider>
-            <ActionCompletionProvider>
-              <LabUploadsProvider>
-                <DerivedPatternsProvider>
-                  <SignatureColorProvider>
-                    <NarrativeProvider>
+    <DocumentProvider>
+      <QueueProvider>
+        <ActionCompletionProvider>
+          <LabUploadsProvider>
+            <DerivedPatternsProvider>
+              <SignatureColorProvider>
+                <NarrativeProvider>
+                  <OnboardingProvider>
+                    <OnboardingGate>
                       <PatientShell />
-                    </NarrativeProvider>
-                  </SignatureColorProvider>
-                </DerivedPatternsProvider>
-              </LabUploadsProvider>
-            </ActionCompletionProvider>
-          </QueueProvider>
-        </DocumentProvider>
-      </OnboardingGate>
-    </OnboardingProvider>
+                    </OnboardingGate>
+                  </OnboardingProvider>
+                </NarrativeProvider>
+              </SignatureColorProvider>
+            </DerivedPatternsProvider>
+          </LabUploadsProvider>
+        </ActionCompletionProvider>
+      </QueueProvider>
+    </DocumentProvider>
   </ManifestProvider>
 );
 
