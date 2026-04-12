@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import TappableProse from "@/components/terrain/TappableProse";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { CheckCircle, AlertTriangle, ChevronDown } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
@@ -55,8 +56,8 @@ const HelpingFeedingSection: React.FC = () => {
             ) : (
               helping.map((item, i) => (
                 <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-3">
-                  <p className="font-sans font-medium text-foreground text-sm mb-0.5">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.mechanism}</p>
+                  <TappableProse text={item.label} className="font-sans font-medium text-foreground text-sm mb-0.5" />
+                  <TappableProse text={item.mechanism} className="text-xs text-muted-foreground" />
                 </div>
               ))
             )}
@@ -70,8 +71,8 @@ const HelpingFeedingSection: React.FC = () => {
           <div className="space-y-3">
             {feedingToShow.map((item, i) => (
               <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-3">
-                <p className="font-sans font-medium text-foreground text-sm mb-0.5">{item.label}</p>
-                <p className="text-xs text-muted-foreground">{item.mechanism}</p>
+                <TappableProse text={item.label} className="font-sans font-medium text-foreground text-sm mb-0.5" />
+                <TappableProse text={item.mechanism} className="text-xs text-muted-foreground" />
               </div>
             ))}
             {hasMoreFeeding && !showAllFeeding && (
