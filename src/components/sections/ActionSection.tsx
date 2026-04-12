@@ -143,11 +143,15 @@ const ActionSection: React.FC = () => {
   const { completedKeys, streak, toggleDone } = useActionCompletions();
   const [plan, setPlan] = useState<ActionPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const hasTriedGenRef = React.useRef(false);
 
   const userId = effectiveUserId || user?.id;
 
   useEffect(() => {
     if (!userId) return;
+    hasTriedGenRef.current = false;
+
     const fetchPlan = async () => {
       setLoading(true);
       const { data } = await supabase
@@ -165,7 +169,41 @@ const ActionSection: React.FC = () => {
           sequence_explanation: data.sequence_explanation || "",
           retest_schedule: (data.retest_schedule as any) || [],
         });
+        setLoading(false);
+        return;
       }
+
+      // No plan exists — try generating on-demand if user has data
+      if (!hasTriedGenRef.current) {
+        hasTriedGenRef.current = true;
+        // Check if user has CIE data or labs
+        const [{ count: gateCount }, { count: obsCount }] = await Promise.all([
+          supabase.from("cie_gate_scores").select("id", { count: "exact", head: true }).eq("user_id", userId),
+          supabase.from("patient_lab_observations").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        ]);
+
+        if ((gateCount && gateCount > 0) || (obsCount && obsCount > 0)) {
+          setGenerating(true);
+          setLoading(false);
+          try {
+            const { data: genResult } = await supabase.functions.invoke("generate-action-plan", {
+              body: { user_id: userId },
+            });
+            if (genResult?.today_actions) {
+              setPlan({
+                today_actions: genResult.today_actions,
+                sequence_explanation: genResult.sequence_explanation || "",
+                retest_schedule: genResult.retest_schedule || [],
+              });
+            }
+          } catch (e) {
+            console.warn("On-demand action plan generation failed:", e);
+          }
+          setGenerating(false);
+          return;
+        }
+      }
+
       setLoading(false);
     };
     fetchPlan();
