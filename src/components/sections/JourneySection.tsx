@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { useTerrainRender } from "@/context/TerrainRenderContext";
@@ -6,12 +6,25 @@ import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useNarrative } from "@/context/NarrativeContext";
 import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
+import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
+import { supabase } from "@/integrations/supabase/client";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import GateChips from "@/components/sections/journey/GateChips";
 import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
 import BaselineCards from "@/components/sections/journey/BaselineCards";
 
 const toDateKey = (d: string) => d.slice(0, 10);
+
+interface ActionPlanAction {
+  id: string;
+  what: string;
+  why: string;
+  how: string;
+  coordinates: string[];
+  gates: string[];
+  category: string;
+}
 
 const JourneySection: React.FC = () => {
   const { activeRender, isLoading: renderLoading } = useTerrainRender();
