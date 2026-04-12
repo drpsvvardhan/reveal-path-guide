@@ -91,6 +91,7 @@ function extractCitedPatterns(text: string): ReasoningContext["citedPatterns"] {
 
 const AskSection: React.FC = () => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const manifest = useActiveManifest();
   const { documents } = useDocuments();
   const { refresh: refreshQueue } = useQueue();
