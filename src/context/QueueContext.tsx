@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { QueuedQuestion, QueueShareInfo } from "@/types/manifest";
 
 interface QueueContextValue {
@@ -30,6 +31,7 @@ export const useQueue = () => {
 
 export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [questions, setQuestions] = useState<QueuedQuestion[]>([]);
   const [archived, setArchived] = useState<QueuedQuestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +42,8 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setQuestions([]);
       setArchived([]);
       return;
@@ -51,7 +54,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const { data, error: dbError } = await supabase
         .from("patient_question_queue")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .order("priority", { ascending: true });
 
       if (dbError) throw dbError;
@@ -65,7 +68,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     refresh();
