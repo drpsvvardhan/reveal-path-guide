@@ -4,7 +4,110 @@ import { useNarrative } from "@/context/NarrativeContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { CIE_DOMAINS, CIE_GATES } from "@/lib/cieSeedData";
-import { PatientRevealManifest } from "@/types/manifest";
+import { PatientRevealManifest, HelpingFeedingItem, LabObservationRow } from "@/types/manifest";
+
+// State-vector coordinate labels for CIE axes
+const AXIS_COORDINATE_MAP: Record<string, string> = {
+  A: "Energy (E)", B: "Vascular (V)", C: "Neuroendocrine (R)",
+  D: "Inflammation (I)", E: "Regulation (R)", F: "Scar memory (Σ)",
+  G: "Regulation (R)", H: "Regulation (R)", I: "Vascular (V)", J: "Regulation (R)",
+};
+
+// Key biomarkers to highlight when in healthy range
+const HEALTHY_RANGE_MARKERS: Record<string, { display: string; coordinate: string }> = {
+  hdl_cholesterol: { display: "HDL cholesterol", coordinate: "Vascular (V)" },
+  hdl: { display: "HDL cholesterol", coordinate: "Vascular (V)" },
+  fasting_glucose: { display: "Fasting glucose", coordinate: "Energy (E)" },
+  glucose: { display: "Fasting glucose", coordinate: "Energy (E)" },
+  hs_crp: { display: "hs-CRP", coordinate: "Inflammation (I)" },
+  hba1c: { display: "HbA1c", coordinate: "Energy (E)" },
+  hemoglobin_a1c: { display: "HbA1c", coordinate: "Energy (E)" },
+  vitamin_d: { display: "Vitamin D", coordinate: "Regulation (R)" },
+  "25_oh_vitamin_d": { display: "Vitamin D", coordinate: "Regulation (R)" },
+  apob: { display: "ApoB", coordinate: "Vascular (V)" },
+  apolipoprotein_b: { display: "ApoB", coordinate: "Vascular (V)" },
+  phase_angle_whole_body: { display: "Phase angle", coordinate: "Inflammation (I) / Scar memory (Σ)" },
+  ecw_tbw_ratio: { display: "ECW/TBW ratio", coordinate: "Inflammation (I)" },
+  basal_metabolic_rate: { display: "Basal metabolic rate", coordinate: "Energy (E)" },
+  visceral_fat_area: { display: "Visceral fat area", coordinate: "Energy (E)" },
+};
+
+/**
+ * Deterministically compute helping factors from CIE high-scoring domains
+ * and healthy-range lab observations.
+ */
+function computeDeterministicHelping(
+  domainScores: Record<string, { final_score: number }>,
+  observations: LabObservationRow[]
+): HelpingFeedingItem[] {
+  const items: HelpingFeedingItem[] = [];
+
+  // 1. CIE domains scored 80+ — top 3 highest-scoring axes
+  if (Object.keys(domainScores).length > 0) {
+    const axisAverages: { axis: string; axisName: string; avg: number }[] = [];
+    const AXES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+    for (const axisId of AXES) {
+      const axisDomains = CIE_DOMAINS.filter((d) => d.axis === axisId);
+      const scores = axisDomains
+        .map((d) => domainScores[d.id]?.final_score)
+        .filter((s): s is number => s !== undefined);
+      if (scores.length === 0) continue;
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      if (avg >= 80) {
+        axisAverages.push({ axis: axisId, axisName: axisDomains[0]?.axisName || axisId, avg });
+      }
+    }
+    axisAverages.sort((a, b) => b.avg - a.avg);
+    for (const entry of axisAverages.slice(0, 3)) {
+      const coord = AXIS_COORDINATE_MAP[entry.axis] || entry.axis;
+      items.push({
+        label: `${entry.axisName} axis (${Math.round(entry.avg)}/100)`,
+        mechanism: `Your ${entry.axisName.toLowerCase()} function is performing well — this supports your ${coord} coordinate and provides a stable foundation.`,
+      });
+    }
+  }
+
+  // 2. Lab biomarkers in healthy range — top 3
+  if (observations.length > 0) {
+    const healthyLabs: HelpingFeedingItem[] = [];
+    const seen = new Set<string>();
+    for (const obs of observations) {
+      const key = obs.canonical_name.toLowerCase().replace(/[\s\-\/]+/g, "_");
+      const marker = HEALTHY_RANGE_MARKERS[key] || HEALTHY_RANGE_MARKERS[obs.canonical_name];
+      if (!marker || seen.has(marker.display)) continue;
+      // Check if in healthy range
+      const isNormal = obs.flag === "normal" || obs.flag === null;
+      const inRange = obs.ref_low != null && obs.ref_high != null
+        ? obs.value >= obs.ref_low && obs.value <= obs.ref_high
+        : isNormal;
+      if (inRange) {
+        seen.add(marker.display);
+        healthyLabs.push({
+          label: `${marker.display}: ${obs.value} ${obs.unit}`,
+          mechanism: `Your ${marker.display} is in the optimal range, which supports your ${marker.coordinate}.`,
+        });
+      }
+    }
+    items.push(...healthyLabs.slice(0, 3));
+  }
+
+  return items;
+}
+
+/**
+ * Cap and rank feeding factors by severity keywords.
+ */
+function capFeeding(feeding: HelpingFeedingItem[], maxItems: number = 5): HelpingFeedingItem[] {
+  // Simple severity ranking by keyword presence
+  const severityOrder = (item: HelpingFeedingItem) => {
+    const text = (item.label + item.mechanism).toLowerCase();
+    if (text.includes("critical") || text.includes("significant")) return 0;
+    if (text.includes("high") || text.includes("elevated")) return 1;
+    if (text.includes("moderate")) return 2;
+    return 3;
+  };
+  return [...feeding].sort((a, b) => severityOrder(a) - severityOrder(b)).slice(0, maxItems);
+}
 
 /**
  * Returns the active manifest with generated narrative, uploaded lab data,
