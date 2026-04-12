@@ -38,11 +38,13 @@ const TodayBar: React.FC = () => {
               className="font-serif text-foreground leading-snug tracking-tight"
               style={{ fontSize: "clamp(1.25rem, 2.5vw, 1.625rem)", fontWeight: 500 }}
             >
-              Gut barrier repair is underway
+              {today.focus}
             </h2>
-            <p className="text-[14px] text-muted-foreground mt-2.5 leading-relaxed max-w-md">
-              You are in a 30-day restoration phase. Stay consistent.
-            </p>
+            {today.statusNote && (
+              <p className="text-[14px] text-muted-foreground mt-2.5 leading-relaxed max-w-md">
+                {today.statusNote}
+              </p>
+            )}
           </div>
         </div>
 
