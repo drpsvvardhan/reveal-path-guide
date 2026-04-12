@@ -57,7 +57,7 @@ const JourneySection: React.FC = () => {
     const cards: { sectionId: string; title: string; preview: string }[] = [];
 
     // Thesis
-    const thesisBody = activeNarrative?.thesis?.body;
+    const thesisBody = activeNarrative?.patientThesis?.body;
     cards.push({
       sectionId: "thesis",
       title: "What's happening in your body",
@@ -65,8 +65,8 @@ const JourneySection: React.FC = () => {
     });
 
     // Helping & feeding
-    const helpCount = activeNarrative?.helpingFeeding?.helping?.length ?? 0;
-    const feedCount = activeNarrative?.helpingFeeding?.feeding?.length ?? 0;
+    const helpCount = activeNarrative?.helpingVsFeeding?.helping?.length ?? 0;
+    const feedCount = activeNarrative?.helpingVsFeeding?.feeding?.length ?? 0;
     cards.push({
       sectionId: "helping-feeding",
       title: "What's helping — and what's feeding it",
