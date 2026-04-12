@@ -90,7 +90,6 @@ const InterventionCard: React.FC<{
           <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
             <TappableProse text={action.what} />
           </h4>
-          </h4>
 
           {/* Why */}
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
