@@ -1,248 +1,218 @@
-import React, { useState, useMemo } from "react";
-import { useManifest } from "@/context/ManifestContext";
-import { useLabUploads } from "@/context/LabUploadsContext";
+import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { formatDistanceToNow } from "date-fns";
+import { useTerrainRender } from "@/context/TerrainRenderContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
+import { useNarrative } from "@/context/NarrativeContext";
+import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import GateChips from "@/components/sections/journey/GateChips";
+import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
+import BaselineCards from "@/components/sections/journey/BaselineCards";
 
 const toDateKey = (d: string) => d.slice(0, 10);
 
-function CustomTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-card border border-border/50 rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-semibold text-foreground">{payload[0].value}</p>
-    </div>
-  );
-}
-
-interface TrendItem {
-  label: string;
-  unit: string;
-  color: string;
-  data: { week: string; value: number }[];
-  insight: string;
-}
-
-const COLORS = [
-  "hsl(340, 55%, 62%)",
-  "hsl(200, 55%, 55%)",
-  "hsl(260, 40%, 55%)",
-  "hsl(155, 40%, 42%)",
-  "hsl(30, 55%, 55%)",
-];
-
 const JourneySection: React.FC = () => {
-  const { manifest, isDemoMode } = useManifest();
-  const { observations } = useLabUploads();
-  const { studyOverview } = manifest;
+  const { activeRender, isLoading: renderLoading } = useTerrainRender();
+  const { currentAssessment, gateScores, domainScores } = useCIEAssessment();
+  const { observations, uploads } = useLabUploads();
+  const { activeNarrative } = useNarrative();
+  const { patterns } = useDerivedPatterns();
 
-  // Build trend data from real lab observations, grouped by canonical_name
-  const trends = useMemo((): TrendItem[] => {
-    if (observations.length === 0) return [];
+  const hasTerrainRender = !!activeRender?.patient_portrait;
+  const hasAssessment = !!currentAssessment;
+  const hasUploads = uploads.length > 0;
 
-    const grouped: Record<string, { name: string; displayName: string; unit: string; points: { date: string; value: number }[] }> = {};
+  // Extract portrait data
+  const portrait = activeRender?.patient_portrait as {
+    what_you_already_know?: string;
+    working_harder_than_you_realize?: string;
+    where_to_start?: string;
+    the_one_action?: string;
+  } | null;
 
+  // Hero headline: first sentence from what_you_already_know
+  const heroTitle = useMemo(() => {
+    if (!portrait?.what_you_already_know) return null;
+    const text = portrait.what_you_already_know;
+    const firstSentence = text.match(/^[^.!?]+[.!?]/)?.[0] ?? text.slice(0, 120);
+    return firstSentence.replace(/\.$/, "");
+  }, [portrait]);
+
+  // Hero intro: first sentence from working_harder
+  const heroIntro = useMemo(() => {
+    if (!portrait?.working_harder_than_you_realize) return null;
+    const text = portrait.working_harder_than_you_realize;
+    return text.match(/^[^.!?]+[.!?]/)?.[0] ?? text.slice(0, 160);
+  }, [portrait]);
+
+  // Gate chips
+  const gateChipData = useMemo(() => {
+    return Object.values(gateScores).sort((a, b) => a.score - b.score);
+  }, [gateScores]);
+
+  // Drill-down cards
+  const drillCards = useMemo(() => {
+    const cards: { sectionId: string; title: string; preview: string }[] = [];
+
+    // Thesis
+    const thesisBody = activeNarrative?.thesis?.body;
+    cards.push({
+      sectionId: "thesis",
+      title: "What's happening in your body",
+      preview: thesisBody ? thesisBody.slice(0, 120) + "…" : "Your biological terrain analysis",
+    });
+
+    // Helping & feeding
+    const helpCount = activeNarrative?.helpingFeeding?.helping?.length ?? 0;
+    const feedCount = activeNarrative?.helpingFeeding?.feeding?.length ?? 0;
+    cards.push({
+      sectionId: "helping-feeding",
+      title: "What's helping — and what's feeding it",
+      preview: helpCount || feedCount
+        ? `${helpCount} factor${helpCount !== 1 ? "s" : ""} helping, ${feedCount} factor${feedCount !== 1 ? "s" : ""} feeding`
+        : "Identify what supports and what burdens your terrain",
+    });
+
+    // Noticed
+    const highSeverity = patterns.length > 0
+      ? patterns.reduce((max, p) => {
+          const order = { critical: 0, high: 1, moderate: 2, low: 3 };
+          return (order[p.severity as keyof typeof order] ?? 3) < (order[max as keyof typeof order] ?? 3) ? p.severity : max;
+        }, patterns[0].severity)
+      : null;
+    cards.push({
+      sectionId: "noticed",
+      title: "What we've noticed",
+      preview: patterns.length > 0
+        ? `${patterns.length} pattern${patterns.length !== 1 ? "s" : ""} detected, highest severity: ${highSeverity}`
+        : "Pattern detection from your data layers",
+    });
+
+    // Terrain
+    const domainCount = Object.keys(domainScores).length;
+    cards.push({
+      sectionId: "terrain",
+      title: "Your terrain",
+      preview: domainCount > 0
+        ? `Scored across ${domainCount} domains from your intake`
+        : "Complete your intake to see your terrain map",
+    });
+
+    // Ask
+    cards.push({
+      sectionId: "ask",
+      title: "Ask anything",
+      preview: observations.length > 0
+        ? `${observations.length} biomarker${observations.length !== 1 ? "s" : ""} in scope for your companion`
+        : "Your AI companion grounded in your data",
+    });
+
+    return cards;
+  }, [activeNarrative, patterns, domainScores, observations]);
+
+  // Baseline observations (for when no trends exist)
+  const hasTrends = useMemo(() => {
+    const grouped: Record<string, Set<string>> = {};
     for (const obs of observations) {
-      const key = obs.canonical_name;
-      if (!grouped[key]) {
-        grouped[key] = {
-          name: obs.canonical_name,
-          displayName: obs.display_name || obs.canonical_name,
-          unit: obs.unit,
-          points: [],
-        };
-      }
-      grouped[key].points.push({ date: obs.collection_date, value: Number(obs.value) });
+      if (!grouped[obs.canonical_name]) grouped[obs.canonical_name] = new Set();
+      grouped[obs.canonical_name].add(toDateKey(obs.collection_date));
     }
-
-    // Only show biomarkers with ≥2 distinct calendar dates (real longitudinal trends)
-    return Object.values(grouped)
-      .filter((g) => {
-        const distinctDates = new Set(g.points.map((p) => toDateKey(p.date)));
-        return distinctDates.size >= 2;
-      })
-      .sort((a, b) => b.points.length - a.points.length)
-      .slice(0, 8)
-      .map((g, i) => ({
-        label: g.displayName,
-        unit: g.unit,
-        color: COLORS[i % COLORS.length],
-        data: g.points
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .map((p) => ({ week: toDateKey(p.date), value: p.value })),
-        insight: `${g.displayName}: ${g.points.length} observation${g.points.length > 1 ? "s" : ""} recorded`,
-      }));
+    return Object.values(grouped).some((dates) => dates.size >= 2);
   }, [observations]);
 
-  // Build aside items from real observations — show latest value for key biomarkers
-  const asideItems = useMemo(() => {
-    if (observations.length === 0) return [];
-
-    // Pick the most recent observation per canonical_name, show top 4
-    const latest: Record<string, { name: string; value: number; unit: string; flag: string | null }> = {};
-    for (const obs of observations) {
-      const existing = latest[obs.canonical_name];
-      if (!existing || obs.collection_date > (existing as any).date) {
-        latest[obs.canonical_name] = {
-          name: obs.display_name || obs.canonical_name,
-          value: Number(obs.value),
-          unit: obs.unit,
-          flag: obs.flag,
-        };
-      }
+  // Relative time since portrait
+  const portraitAge = useMemo(() => {
+    if (!activeRender?.generated_at) return null;
+    try {
+      return formatDistanceToNow(new Date(activeRender.generated_at), { addSuffix: true });
+    } catch {
+      return null;
     }
+  }, [activeRender]);
 
-    return Object.values(latest).slice(0, 5).map((item) => ({
-      label: item.name,
-      value: `${item.value} ${item.unit}`,
-      subvalue: item.flag === "H" ? "High" : item.flag === "L" ? "Low" : "Normal",
-      tone: (item.flag === "H" || item.flag === "L" ? "warning" : "success") as "warning" | "success",
-    }));
-  }, [observations]);
+  // Loading state
+  if (renderLoading) {
+    return (
+      <PatientSectionLayout eyebrow="YOUR TERRAIN" title="Loading…">
+        <div className="h-48 flex items-center justify-center">
+          <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </PatientSectionLayout>
+    );
+  }
 
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const activeTrend = trends[selectedIdx] || null;
+  // ─── EMPTY STATE: no terrain render yet ───
+  if (!hasTerrainRender) {
+    const missingSteps: string[] = [];
+    if (!hasAssessment) missingSteps.push("complete your intake");
+    if (!hasUploads) missingSteps.push("upload a lab report");
 
+    return (
+      <PatientSectionLayout
+        eyebrow="YOUR TERRAIN"
+        title="Your terrain hasn't been built yet"
+        intro={
+          missingSteps.length > 0
+            ? `To see yourself reflected here, ${missingSteps.join(" and ")}.`
+            : "Your terrain portrait is being generated. Check back shortly."
+        }
+      >
+        {!hasAssessment && (
+          <div className="rounded-xl border border-border bg-card p-6 text-center">
+            <p className="font-serif text-lg text-foreground mb-2">Start your clinical intake</p>
+            <p className="text-sm text-muted-foreground">
+              75 questions that map your biological terrain across 25 domains. This is how we learn to see you.
+            </p>
+          </div>
+        )}
+        {hasAssessment && hasUploads && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Your data is here. Your terrain portrait should appear soon — the rendering engine may still be processing.
+            </p>
+          </div>
+        )}
+      </PatientSectionLayout>
+    );
+  }
+
+  // ─── LIVING TERRAIN DASHBOARD ───
   return (
     <PatientSectionLayout
-      eyebrow="YOUR JOURNEY"
-      title="Here's what we found"
-      intro={studyOverview.summary}
-      aside={
-        asideItems.length > 0 ? (
-          <AsideInfoPanel
-            title="Latest results"
-            subtitle="From your uploaded labs"
-            items={asideItems}
-          />
-        ) : undefined
-      }
-      asideSticky
+      eyebrow="YOUR TERRAIN"
+      title={heroTitle ?? "Your biological terrain"}
+      intro={heroIntro ?? undefined}
     >
-      {studyOverview.statLine && (
-        <div className="inline-flex items-center gap-2 rounded-full bg-lavender-light px-4 py-2 text-sm text-foreground">
-          {studyOverview.statLine}
-        </div>
-      )}
-
-      {studyOverview.layers.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {studyOverview.layers.map((layer) => (
-            <div
-              key={layer.id}
-              className={`rounded-xl border p-5 transition-all ${
-                layer.status === "complete"
-                  ? "border-secondary/30 bg-sky-light"
-                  : layer.status === "in-progress"
-                  ? "border-amber/30 bg-amber-light"
-                  : "border-border bg-card opacity-75"
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-2xl">{layer.icon}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-sans font-medium ${
-                    layer.status === "complete"
-                      ? "bg-secondary/15 text-secondary"
-                      : layer.status === "in-progress"
-                      ? "bg-amber/15 text-amber"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {layer.status === "complete" ? "Complete" : layer.status === "in-progress" ? "In Progress" : "Pending"}
-                </span>
-              </div>
-              <h3 className="font-serif text-lg mb-1">{layer.title}</h3>
-              <p className="text-sm text-muted-foreground">{layer.description}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Trend lines — only when real data exists */}
-      {trends.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground">
-            Your Biomarkers
-          </h3>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {trends.map((t, idx) => (
-              <button
-                key={t.label}
-                onClick={() => setSelectedIdx(idx)}
-                className={`shrink-0 px-4 py-2 rounded-full text-xs font-sans font-medium transition-all ${
-                  selectedIdx === idx
-                    ? "bg-primary/15 text-primary border border-primary/30"
-                    : "bg-muted text-muted-foreground border border-transparent hover:bg-muted/80"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {activeTrend && (
-            <motion.div
-              key={selectedIdx}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="glass-card p-5"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-sans font-semibold text-sm text-foreground">{activeTrend.label}</h4>
-                <span className="text-xs text-muted-foreground">{activeTrend.unit}</span>
-              </div>
-              {activeTrend.data.length > 1 ? (
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={activeTrend.data}>
-                      <defs>
-                        <linearGradient id={`grad-${selectedIdx}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={activeTrend.color} stopOpacity={0.25} />
-                          <stop offset="95%" stopColor={activeTrend.color} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(40, 12%, 84%)" />
-                      <XAxis dataKey="week" tick={{ fontSize: 11, fill: "hsl(225, 15%, 42%)" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 11, fill: "hsl(225, 15%, 42%)" }} axisLine={false} tickLine={false} width={40} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area
-                        type="monotone" dataKey="value"
-                        stroke={activeTrend.color} strokeWidth={2}
-                        fill={`url(#grad-${selectedIdx})`}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-24 text-muted-foreground text-sm">
-                  <p>{activeTrend.data[0]?.value} {activeTrend.unit} — single observation</p>
-                </div>
-              )}
-              <div className="mt-3 pt-3 border-t border-border/30">
-                <p className="text-sm text-foreground leading-relaxed">{activeTrend.insight}</p>
-              </div>
-            </motion.div>
-          )}
-        </div>
-      )}
-
-      {/* Empty state when no data at all */}
-      {trends.length === 0 && studyOverview.layers.length === 0 && (
-        <div className="rounded-xl border border-border bg-card/40 p-8 text-center">
-          <p className="text-muted-foreground text-sm">
-            Upload lab reports or complete your intake to see your biomarker trends here.
+      {/* TODAY BLOCK */}
+      {portrait?.the_one_action && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3"
+        >
+          <p className="text-eyebrow text-primary">START HERE TODAY</p>
+          <p className="font-serif text-xl text-foreground leading-snug">
+            {portrait.the_one_action}
           </p>
-        </div>
+          {portraitAge && (
+            <p className="text-[10px] text-muted-foreground italic">
+              Your portrait was last updated {portraitAge}
+            </p>
+          )}
+        </motion.div>
       )}
 
-      {manifest.todayBar?.lastUpdated && (
-        <p className="text-[10px] text-muted-foreground italic pt-2">
-          {manifest.todayBar.lastUpdated}
-        </p>
+      {/* CURRENT STATE — CIE gate chips */}
+      {gateChipData.length > 0 && <GateChips gates={gateChipData} />}
+
+      {/* DRILL DOWN */}
+      <DrillDownGrid cards={drillCards} />
+
+      {/* BASELINE / TRENDS sidebar content inline for now */}
+      {observations.length > 0 && !hasTrends && (
+        <BaselineCards observations={observations} />
       )}
     </PatientSectionLayout>
   );
