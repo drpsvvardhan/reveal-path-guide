@@ -202,6 +202,22 @@ const ProcessingStep: React.FC = () => {
         />
 
         <ProcessingMilestone
+          label="Action plan matched"
+          sublabel={
+            step === "planning"
+              ? "Matching interventions to your specific findings"
+              : isAfterPlanning
+              ? "Your actions are ready"
+              : "Waiting"
+          }
+          state={
+            step === "planning" ? "running" :
+            isAfterPlanning ? "complete" :
+            step === "failed" && processingState.terrain_render_complete ? "failed" : "pending"
+          }
+        />
+
+        <ProcessingMilestone
           label="Ready for you"
           sublabel={step === "done" ? "Delivering you to your Journey view" : "Almost there"}
           state={step === "done" ? "complete" : "pending"}
