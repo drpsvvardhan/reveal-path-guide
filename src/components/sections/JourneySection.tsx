@@ -6,6 +6,8 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 
+const toDateKey = (d: string) => d.slice(0, 10);
+
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
@@ -56,18 +58,21 @@ const JourneySection: React.FC = () => {
       grouped[key].points.push({ date: obs.collection_date, value: Number(obs.value) });
     }
 
-    // Only show biomarkers with data points, sorted by most data first
+    // Only show biomarkers with ≥2 distinct calendar dates (real longitudinal trends)
     return Object.values(grouped)
-      .filter((g) => g.points.length > 0)
+      .filter((g) => {
+        const distinctDates = new Set(g.points.map((p) => toDateKey(p.date)));
+        return distinctDates.size >= 2;
+      })
       .sort((a, b) => b.points.length - a.points.length)
-      .slice(0, 8) // Show top 8 biomarkers
+      .slice(0, 8)
       .map((g, i) => ({
         label: g.displayName,
         unit: g.unit,
         color: COLORS[i % COLORS.length],
         data: g.points
           .sort((a, b) => a.date.localeCompare(b.date))
-          .map((p, idx) => ({ week: p.date, value: p.value })),
+          .map((p) => ({ week: toDateKey(p.date), value: p.value })),
         insight: `${g.displayName}: ${g.points.length} observation${g.points.length > 1 ? "s" : ""} recorded`,
       }));
   }, [observations]);
