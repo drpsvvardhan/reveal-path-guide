@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { LabUpload, LabObservationRow, LabUploadProcessResult, BiomarkerObservation } from "@/types/manifest";
 
 interface LabUploadsContextValue {
@@ -48,6 +49,7 @@ function getFileExtension(mimeType: string): string {
 
 export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [uploads, setUploads] = useState<LabUpload[]>([]);
   const [observations, setObservations] = useState<LabObservationRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,7 +58,8 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setUploads([]);
       setObservations([]);
       return;
@@ -68,12 +71,12 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         supabase
           .from("patient_lab_uploads")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", uid)
           .order("created_at", { ascending: false }),
         supabase
           .from("patient_lab_observations")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", uid)
           .order("collection_date", { ascending: false }),
       ]);
 
@@ -88,7 +91,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     refresh();
