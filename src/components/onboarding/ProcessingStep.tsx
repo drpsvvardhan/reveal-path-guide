@@ -84,6 +84,21 @@ const ProcessingStep: React.FC = () => {
           markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain render skipped" });
         }
 
+        await new Promise((r) => setTimeout(r, 600));
+
+        // Step 4: Generate action plan
+        setStep("planning");
+        markProcessingMilestone({ current_status: "Matching interventions to your findings" });
+        try {
+          await supabase.functions.invoke("generate-action-plan", {
+            body: { user_id: user.id, assessment_id: currentAssessmentId },
+          });
+          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan ready" });
+        } catch (planErr) {
+          console.warn("Action plan warning:", planErr);
+          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan skipped" });
+        }
+
         await new Promise((r) => setTimeout(r, 800));
         markProcessingMilestone({ current_status: "Your twin is ready" });
         setStep("done");
