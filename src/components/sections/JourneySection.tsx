@@ -28,7 +28,7 @@ interface ActionPlanAction {
 }
 
 const JourneySection: React.FC = () => {
-  const { activeRender, isLoading: renderLoading } = useTerrainRender();
+  const { activeRender, isLoading: renderLoading, hasFailed, regenerate } = useTerrainRender();
   const { currentAssessment, gateScores, domainScores } = useCIEAssessment();
   const { observations, uploads } = useLabUploads();
   const { activeNarrative } = useNarrative();
@@ -206,11 +206,21 @@ const JourneySection: React.FC = () => {
             </p>
           </div>
         )}
-        {hasAssessment && hasUploads && (
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 text-center">
+        {hasAssessment && (hasUploads || hasFailed) && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-6 text-center space-y-3">
             <p className="text-sm text-muted-foreground">
-              Your data is here. Your terrain portrait should appear soon — the rendering engine may still be processing.
+              {hasFailed
+                ? "Your terrain portrait couldn't be generated on the first try. Tap below to retry."
+                : "Your data is here. Your terrain portrait should appear soon — the rendering engine may still be processing."}
             </p>
+            {hasFailed && (
+              <button
+                onClick={() => regenerate()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                Retry terrain generation
+              </button>
+            )}
           </div>
         )}
       </PatientSectionLayout>
