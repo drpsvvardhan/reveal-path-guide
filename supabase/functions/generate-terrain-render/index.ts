@@ -371,9 +371,14 @@ function composeUserMessage(
 
   // Data layer flags per Part 7
   const hasLabs = labObs.length > 0;
+  const inbodyObs = labObs.filter((o: any) => o.source === "InBody" || INBODY_TERRAIN_MAP[o.canonical_name]);
+  const standardObs = labObs.filter((o: any) => o.source !== "InBody" && !INBODY_TERRAIN_MAP[o.canonical_name]);
+  const hasInBody = inbodyObs.length > 0;
+
   sections.push("DATA LAYERS PRESENT FOR THIS PATIENT:");
   sections.push(`- CIE assessment: yes (${domainScores.length} domain scores, ${gateScores.length} gate scores, ${responses.length} responses)`);
-  sections.push(`- Labs: ${hasLabs ? `yes (${labObs.length} observations)` : "no"}`);
+  sections.push(`- Labs: ${standardObs.length > 0 ? `yes (${standardObs.length} observations)` : "no"}`);
+  sections.push(`- Body composition (InBody): ${hasInBody ? `yes (${inbodyObs.length} measurements)` : "no"}`);
   sections.push("- EMR/records: no");
   sections.push("- Medications: no");
   sections.push("- Sensors: no");
@@ -440,19 +445,39 @@ function composeUserMessage(
     }
   }
 
-  // Lab observations
-  if (hasLabs) {
-    sections.push(`\nLAB OBSERVATIONS (${labObs.length} biomarkers from last 6 months):`);
-    for (const o of labObs.slice(0, 30)) {
+  // InBody body composition observations with terrain mapping
+  if (hasInBody) {
+    sections.push(`\nINBODY BODY COMPOSITION ANALYSIS (${inbodyObs.length} measurements):`);
+    sections.push("Each measurement below includes its terrain state vector mapping {E, I, V, R, Σ}, contributing CIE gates, and clinical interpretation. Use these mappings to locate InBody findings on the state vector explicitly in your rendering.");
+    for (const o of inbodyObs) {
+      const mapping = INBODY_TERRAIN_MAP[o.canonical_name];
+      const flag = o.flag ? ` [${o.flag}]` : "";
+      const ref = o.ref_low != null && o.ref_high != null ? ` (ref: ${o.ref_low}-${o.ref_high})` : "";
+      let line = `  ${o.collection_date} | ${o.canonical_name}: ${o.value} ${o.unit}${flag}${ref}`;
+      if (mapping) {
+        line += `\n    → State vector: {${mapping.coordinates.join(", ")}} | Gates: ${mapping.gates.join(", ")}`;
+        line += `\n    → ${mapping.interpretation}`;
+        if (mapping.healthy_range) {
+          line += `\n    → Healthy range: ${mapping.healthy_range.low}–${mapping.healthy_range.high} (${mapping.direction})`;
+        }
+      }
+      sections.push(line);
+    }
+  }
+
+  // Standard lab observations
+  if (standardObs.length > 0) {
+    sections.push(`\nLAB OBSERVATIONS (${standardObs.length} biomarkers from last 6 months):`);
+    for (const o of standardObs.slice(0, 30)) {
       const flag = o.flag ? ` [${o.flag}]` : "";
       const ref = o.ref_low != null && o.ref_high != null ? ` (ref: ${o.ref_low}-${o.ref_high})` : "";
       sections.push(`  ${o.collection_date} | ${o.canonical_name}: ${o.value} ${o.unit}${flag}${ref}`);
     }
-  } else {
+  } else if (!hasInBody) {
     sections.push("\nLAB OBSERVATIONS: (none on file)");
   }
 
-  sections.push("\nProduce the rendering following every operational move in Part 4 of the framework. Use the voice-shift rules from Part 3 depending on which data layers are present. Never use any vocabulary from Part 5. Reach for the vocabulary in Part 6 when the data supports it. Return strict JSON in the schema defined above. No preamble. No markdown code fences.");
+  sections.push("\nProduce the rendering following every operational move in Part 4 of the framework. Use the voice-shift rules from Part 3 depending on which data layers are present. When InBody body composition data is present, reference specific measurements (phase angle, visceral fat area, skeletal muscle mass, ECW/TBW ratio) by name and number, and explicitly map them to state vector coordinates. Never use any vocabulary from Part 5. Reach for the vocabulary in Part 6 when the data supports it. Return strict JSON in the schema defined above. No preamble. No markdown code fences.");
   return sections.join("\n");
 }
 
