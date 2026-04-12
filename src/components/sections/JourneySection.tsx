@@ -32,10 +32,35 @@ const JourneySection: React.FC = () => {
   const { observations, uploads } = useLabUploads();
   const { activeNarrative } = useNarrative();
   const { patterns } = useDerivedPatterns();
+  const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
+  const [topAction, setTopAction] = useState<ActionPlanAction | null>(null);
+
+  const userId = effectiveUserId || user?.id;
 
   const hasTerrainRender = !!activeRender?.patient_portrait;
   const hasAssessment = !!currentAssessment;
   const hasUploads = uploads.length > 0;
+
+  // Fetch top action from action_plans
+  useEffect(() => {
+    if (!userId) return;
+    const fetchTopAction = async () => {
+      const { data } = await supabase
+        .from("action_plans")
+        .select("today_actions")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.today_actions) {
+        const actions = data.today_actions as any[];
+        if (actions.length > 0) setTopAction(actions[0]);
+      }
+    };
+    fetchTopAction();
+  }, [userId]);
 
   // Extract portrait data
   const portrait = activeRender?.patient_portrait as {
