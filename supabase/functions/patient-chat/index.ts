@@ -563,6 +563,28 @@ serve(async (req) => {
       );
     }
 
+    // Override patient context from DB to prevent client-side data leaks
+    if (userId) {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+      });
+      const { data: profileData } = await supabaseAdmin
+        .from("profiles")
+        .select("first_name, age, sex")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (profileData) {
+        manifest.patient = {
+          ...(manifest.patient || {}),
+          firstName: profileData.first_name || manifest.patient?.firstName || "unknown",
+          age: profileData.age || manifest.patient?.age || 0,
+          sex: profileData.sex || manifest.patient?.sex || "unknown",
+        };
+      }
+    }
+
     const systemPrompt = buildPatientSystemPrompt(manifest, documents);
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
