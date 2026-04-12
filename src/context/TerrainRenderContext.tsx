@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 
 interface TerrainPortrait {
   what_you_already_know: string;
@@ -57,12 +58,14 @@ export const useTerrainRender = () => {
 
 export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [activeRender, setActiveRender] = useState<TerrainRender | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchRender = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setIsLoading(false);
       return;
     }
@@ -74,7 +77,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       const { data, error: fetchErr } = await supabase
         .from("terrain_renders")
         .select("id, version, status, patient_portrait, clinician_summary, generated_at, created_at")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -89,7 +92,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     fetchRender();
