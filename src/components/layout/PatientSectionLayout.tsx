@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import FlowLine from "@/components/visuals/FlowLine";
+import TappableProse from "@/components/terrain/TappableProse";
 
 interface PatientSectionLayoutProps {
   eyebrow?: string;
@@ -59,9 +60,12 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
                 {title}
               </h1>
               {intro && (
-                <p className="mt-5 md:mt-6 text-base md:text-lg text-muted-foreground leading-relaxed max-w-xl font-sans font-light">
-                  {intro}
-                </p>
+                <div className="mt-5 md:mt-6 max-w-xl">
+                  <TappableProse
+                    text={intro}
+                    className="text-base md:text-lg text-muted-foreground leading-relaxed font-sans font-light"
+                  />
+                </div>
               )}
             </div>
             {heroVisual && (
