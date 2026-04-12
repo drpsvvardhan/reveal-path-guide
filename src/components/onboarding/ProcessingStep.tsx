@@ -118,10 +118,11 @@ const ProcessingStep: React.FC = () => {
     setErrorMessage(null);
   };
 
-  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "done";
-  const isAfterDeriving = step === "generating" || step === "rendering" || step === "done";
-  const isAfterGenerating = step === "rendering" || step === "done";
-  const isAfterRendering = step === "done";
+  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "planning" || step === "done";
+  const isAfterDeriving = step === "generating" || step === "rendering" || step === "planning" || step === "done";
+  const isAfterGenerating = step === "rendering" || step === "planning" || step === "done";
+  const isAfterRendering = step === "planning" || step === "done";
+  const isAfterPlanning = step === "done";
 
   return (
     <OnboardingLayout
