@@ -404,8 +404,8 @@ function composeUserMessage(
 
   // Data layer flags per Part 7
   const hasLabs = labObs.length > 0;
-  const inbodyObs = labObs.filter((o: any) => o.source === "InBody" || INBODY_TERRAIN_MAP[o.canonical_name]);
-  const standardObs = labObs.filter((o: any) => o.source !== "InBody" && !INBODY_TERRAIN_MAP[o.canonical_name]);
+  const inbodyObs = labObs.filter((o: any) => o.source === "InBody" || resolveInBodyMapping(o.canonical_name));
+  const standardObs = labObs.filter((o: any) => o.source !== "InBody" && !resolveInBodyMapping(o.canonical_name));
   const hasInBody = inbodyObs.length > 0;
 
   sections.push("DATA LAYERS PRESENT FOR THIS PATIENT:");
