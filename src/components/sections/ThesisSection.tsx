@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import FlowLine from "@/components/visuals/FlowLine";
-import ProgressRing from "@/components/ProgressRing";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
@@ -11,6 +10,8 @@ import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import { useSignatureColor } from "@/context/SignatureColorContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
+import { CIE_DOMAINS } from "@/lib/cieSeedData";
 
 // Gate-to-radar mapping: 7 most clinically meaningful gates
 const RADAR_GATES = [
@@ -23,57 +24,14 @@ const RADAR_GATES = [
   { gateId: "GRIP", label: "Risk" },
 ];
 
-const FALLBACK_AXES = [
-  { label: "Brain", score: 58 },
-  { label: "Barrier", score: 72 },
-  { label: "Fuel", score: 54 },
-  { label: "Tissue", score: 45 },
-  { label: "Longevity", score: 68 },
-  { label: "Potential", score: 62 },
-  { label: "Risk", score: 51 },
-];
-
 interface BiologyDomain {
   name: string;
   emoji: string;
   status: "improving" | "stable" | "needs-attention";
   statusLabel: string;
   summary: string;
-  whyItMatters: string;
-  whatHelps: string;
-  deepProgress: number;
+  score: number;
 }
-
-const domains: BiologyDomain[] = [
-  {
-    name: "Inflammation", emoji: "🔥", status: "improving", statusLabel: "Improving",
-    summary: "Inflammatory markers trending down. hs-CRP dropping as gut healing progresses.",
-    whyItMatters: "Chronic inflammation drives fatigue, brain fog, and metabolic dysfunction.",
-    whatHelps: "Anti-inflammatory eating pattern and consistent gut repair protocol.",
-    deepProgress: 72,
-  },
-  {
-    name: "Blood Sugar Control", emoji: "🩸", status: "improving", statusLabel: "Getting better",
-    summary: "Fasting glucose and post-meal spikes are both improving. Insulin sensitivity recovering.",
-    whyItMatters: "Better blood sugar control means more stable energy and less fat storage.",
-    whatHelps: "Walking after meals and reducing refined carbs at dinner.",
-    deepProgress: 65,
-  },
-  {
-    name: "Gut Health", emoji: "🦠", status: "stable", statusLabel: "Rebuilding",
-    summary: "Gut barrier integrity improving. Zonulin levels trending toward normal range.",
-    whyItMatters: "The gut barrier is the origin of your inflammatory cascade.",
-    whatHelps: "L-Glutamine, targeted probiotics, and eliminating inflammatory triggers.",
-    deepProgress: 55,
-  },
-  {
-    name: "Sleep & Recovery", emoji: "😴", status: "needs-attention", statusLabel: "Needs focus",
-    summary: "Averaging 5.8 hours with fragmented deep sleep. Recovery scores inconsistent.",
-    whyItMatters: "Poor sleep undermines glucose control and raises inflammation.",
-    whatHelps: "Earlier wind-down, screen reduction, and consistent wake time.",
-    deepProgress: 35,
-  },
-];
 
 const statusColors: Record<string, { text: string; bg: string }> = {
   improving: { text: "text-success", bg: "bg-sage-light" },
@@ -117,77 +75,66 @@ const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { color: signature } = useSignatureColor();
   const { user } = useAuth();
+  const { domainScores, gateScores } = useCIEAssessment();
   const { patientThesis } = manifest;
   const bridges = manifest.symptomBridges || [];
 
-  const [terrainAxes, setTerrainAxes] = useState(FALLBACK_AXES);
-  const [asideItems, setAsideItems] = useState<Array<{ label: string; value: string; subvalue?: string; tone?: "success" | "accent" | "warning" }>>([
-    { label: "Brain", value: "58%", subvalue: "Baseline" },
-    { label: "Barrier", value: "72%", subvalue: "Stable" },
-    { label: "Fuel", value: "54%", subvalue: "Needs attention", tone: "warning" },
-    { label: "Tissue", value: "45%", subvalue: "Low", tone: "warning" },
-    { label: "Longevity", value: "68%" },
-  ]);
+  // Build terrain radar axes from real gate scores only
+  const terrainAxes = useMemo(() => {
+    if (Object.keys(gateScores).length === 0) return [];
 
-  // Load CIE gate scores if available
-  useEffect(() => {
-    if (!user) return;
+    return RADAR_GATES.map((rg) => ({
+      label: rg.label,
+      score: gateScores[rg.gateId] ? Math.round(gateScores[rg.gateId].score) : 50,
+    }));
+  }, [gateScores]);
 
-    (async () => {
-      const { data: assessment } = await supabase
-        .from("cie_assessments")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "complete")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  // Build aside items from real gate scores only
+  const asideItems = useMemo(() => {
+    if (Object.keys(gateScores).length === 0) return [];
 
-      if (!assessment) return;
+    const toneMap: Record<string, "success" | "accent" | "warning" | undefined> = {
+      GREEN: "success",
+      YELLOW: undefined,
+      ORANGE: "warning",
+      RED: "accent",
+    };
 
-      const { data: gateScores } = await supabase
-        .from("cie_gate_scores")
-        .select("gate_id, score, traffic_light")
-        .eq("assessment_id", assessment.id);
-
-      if (!gateScores || gateScores.length === 0) return;
-
-      const gateMap: Record<string, { score: number; traffic_light: string }> = {};
-      for (const gs of gateScores) {
-        gateMap[gs.gate_id] = { score: Number(gs.score), traffic_light: gs.traffic_light };
-      }
-
-      // Build radar axes from gate scores
-      const axes = RADAR_GATES.map((rg) => ({
+    return RADAR_GATES.slice(0, 5).map((rg) => {
+      const gs = gateScores[rg.gateId];
+      const score = gs ? Math.round(gs.score) : 50;
+      const tl = gs?.traffic_light || "YELLOW";
+      return {
         label: rg.label,
-        score: gateMap[rg.gateId] ? Math.round(gateMap[rg.gateId].score) : 50,
-      }));
-
-      setTerrainAxes(axes);
-
-      // Build aside items from top gates
-      const toneMap: Record<string, "success" | "accent" | "warning" | undefined> = {
-        GREEN: "success",
-        YELLOW: undefined,
-        ORANGE: "warning",
-        RED: "accent",
+        value: `${score}%`,
+        subvalue: tl === "GREEN" ? "Healthy" : tl === "YELLOW" ? "Monitor" : tl === "ORANGE" ? "Needs attention" : "Critical",
+        tone: toneMap[tl],
       };
+    });
+  }, [gateScores]);
 
-      const aside = RADAR_GATES.slice(0, 5).map((rg) => {
-        const gs = gateMap[rg.gateId];
-        const score = gs ? Math.round(gs.score) : 50;
-        const tl = gs?.traffic_light || "YELLOW";
+  // Build biology domains from real CIE domain scores
+  const domains = useMemo((): BiologyDomain[] => {
+    if (Object.keys(domainScores).length === 0) return [];
+
+    return Object.entries(domainScores)
+      .map(([domainId, ds]) => {
+        const domainDef = CIE_DOMAINS.find((d) => d.id === domainId);
+        const score = Math.round(ds.final_score);
+        const status: BiologyDomain["status"] = score >= 70 ? "improving" : score >= 45 ? "stable" : "needs-attention";
+        const statusLabel = score >= 70 ? "Healthy" : score >= 45 ? "Monitor" : "Needs focus";
         return {
-          label: rg.label,
-          value: `${score}%`,
-          subvalue: tl === "GREEN" ? "Healthy" : tl === "YELLOW" ? "Monitor" : tl === "ORANGE" ? "Needs attention" : "Critical",
-          tone: toneMap[tl],
+          name: domainDef?.name || domainId,
+          emoji: "🔬",
+          status,
+          statusLabel,
+          summary: `Scored ${score}/100 in the ${domainDef?.axisName || ""} axis.`,
+          score,
         };
-      });
-
-      setAsideItems(aside);
-    })();
-  }, [user]);
+      })
+      .sort((a, b) => a.score - b.score) // Worst first
+      .slice(0, 8); // Show top 8 most important
+  }, [domainScores]);
 
   if (!patientThesis) return null;
 
@@ -196,86 +143,86 @@ const ThesisSection: React.FC = () => {
       eyebrow="WHAT'S HAPPENING IN YOUR BODY"
       title={patientThesis.title}
       intro={patientThesis.body}
-      heroVisual={<TerrainRadar axes={terrainAxes} size={320} />}
+      heroVisual={terrainAxes.length > 0 ? <TerrainRadar axes={terrainAxes} size={320} /> : undefined}
       aside={
-        <div className="space-y-4">
+        asideItems.length > 0 ? (
+          <div className="space-y-4">
+            <AsideInfoPanel
+              title="Your signature"
+              items={[
+                { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
+              ]}
+            />
+            <AsideInfoPanel
+              title="Biological terrain"
+              items={asideItems}
+              footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
+            />
+          </div>
+        ) : (
           <AsideInfoPanel
             title="Your signature"
             items={[
               { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
             ]}
           />
-          <AsideInfoPanel
-            title="Biological terrain"
-            items={asideItems}
-            footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
-          />
-        </div>
+        )
       }
       asideSticky
     >
       {/* Terrain Portrait Hero — top of main column */}
       <TerrainPortraitHero />
 
-      {/* Biology domain cards */}
-      <div>
-        <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-          Your biological terrain
-        </h3>
-        <div className="space-y-3">
-          {domains.map((domain, i) => {
-            const colors = statusColors[domain.status];
-            return (
-              <motion.div
-                key={domain.name}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 + i * 0.05 }}
-                className="glass-card p-5"
-              >
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="text-2xl">{domain.emoji}</span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="font-sans font-semibold text-sm text-foreground">{domain.name}</h4>
-                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${colors.text} ${colors.bg}`}>
-                        {domain.statusLabel}
-                      </span>
+      {/* Biology domain cards — only from real CIE data */}
+      {domains.length > 0 && (
+        <div>
+          <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+            Your domain scores
+          </h3>
+          <div className="space-y-3">
+            {domains.map((domain, i) => {
+              const colors = statusColors[domain.status];
+              return (
+                <motion.div
+                  key={domain.name}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 + i * 0.05 }}
+                  className="glass-card p-5"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="text-2xl">{domain.emoji}</span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h4 className="font-sans font-semibold text-sm text-foreground">{domain.name}</h4>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${colors.text} ${colors.bg}`}>
+                          {domain.statusLabel}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{domain.summary}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{domain.summary}</p>
                   </div>
-                </div>
 
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Deep progress</span>
-                    <span className="text-[10px] text-muted-foreground">{domain.deepProgress}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${domain.deepProgress}%` }}
-                      transition={{ duration: 1, delay: 0.3 + i * 0.05 }}
-                      className="h-full rounded-full bg-primary"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-2 border-t border-border/30">
                   <div>
-                    <span className="text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-wider">Why this matters</span>
-                    <p className="text-xs text-foreground/70 leading-relaxed mt-0.5">{domain.whyItMatters}</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Score</span>
+                      <span className="text-[10px] text-muted-foreground">{domain.score}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${domain.score}%` }}
+                        transition={{ duration: 1, delay: 0.3 + i * 0.05 }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-sans font-semibold text-muted-foreground uppercase tracking-wider">What's helping</span>
-                    <p className="text-xs text-foreground/70 leading-relaxed mt-0.5">{domain.whatHelps}</p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Symptom bridges */}
       {bridges.length > 0 && (
