@@ -483,7 +483,7 @@ function composeUserMessage(
     sections.push(`\nINBODY BODY COMPOSITION ANALYSIS (${inbodyObs.length} measurements):`);
     sections.push("Each measurement below includes its terrain state vector mapping {E, I, V, R, Σ}, contributing CIE gates, and clinical interpretation. Use these mappings to locate InBody findings on the state vector explicitly in your rendering.");
     for (const o of inbodyObs) {
-      const mapping = INBODY_TERRAIN_MAP[o.canonical_name];
+      const mapping = resolveInBodyMapping(o.canonical_name);
       const flag = o.flag ? ` [${o.flag}]` : "";
       const ref = o.ref_low != null && o.ref_high != null ? ` (ref: ${o.ref_low}-${o.ref_high})` : "";
       let line = `  ${o.collection_date} | ${o.canonical_name}: ${o.value} ${o.unit}${flag}${ref}`;
