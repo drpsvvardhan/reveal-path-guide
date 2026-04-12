@@ -59,15 +59,19 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (dbError) throw dbError;
 
       if (!data) {
-        // Profile doesn't exist yet — trigger should have created it, but fallback
-        const { data: inserted, error: insertError } = await supabase
-          .from("profiles")
-          .insert({ user_id: user.id, onboarding_step: "welcome" })
-          .select("*")
-          .single();
+        // Only create profile if viewing as self (not impersonating)
+        if (uid === user?.id) {
+          const { data: inserted, error: insertError } = await supabase
+            .from("profiles")
+            .insert({ user_id: uid, onboarding_step: "welcome" })
+            .select("*")
+            .single();
 
-        if (insertError) throw insertError;
-        setProfile(inserted as unknown as PatientProfile);
+          if (insertError) throw insertError;
+          setProfile(inserted as unknown as PatientProfile);
+        } else {
+          setProfile(null);
+        }
       } else {
         setProfile(data as unknown as PatientProfile);
       }
@@ -77,7 +81,7 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setIsLoading(false);
     }
-  }, [user, isDemoMode]);
+  }, [effectiveUserId, user, isDemoMode]);
 
   useEffect(() => {
     if (authLoading) return;
