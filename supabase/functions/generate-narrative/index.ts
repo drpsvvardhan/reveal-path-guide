@@ -565,6 +565,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     if (!userId) {
       return new Response(JSON.stringify({ error: "No userId provided" }), {
         status: 400,
@@ -577,6 +578,22 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
+
+    // Always fetch patient context from DB to prevent client-side data leaks
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("first_name, age, sex")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (profileData) {
+      manifest.patient = {
+        ...(manifest.patient || {}),
+        firstName: profileData.first_name || manifest.patient?.firstName || "unknown",
+        age: profileData.age || manifest.patient?.age || 0,
+        sex: profileData.sex || manifest.patient?.sex || "unknown",
+      };
+    }
 
     // Fetch the patient's active derived patterns
     const { data: patterns, error: patternError } = await supabase
