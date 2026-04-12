@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
+import { NavigationProvider } from "@/context/NavigationContext";
 import { LogOut, ChevronDown, Users, ArrowLeft } from "lucide-react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
@@ -60,6 +61,7 @@ const PatientShell: React.FC = () => {
   const activeNav = navItems.find((n) => n.id === activeSection);
 
   return (
+    <NavigationProvider onNavigate={handleNavigate}>
     <div className="flex h-screen overflow-hidden">
       <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
 
@@ -195,6 +197,7 @@ const PatientShell: React.FC = () => {
       <MobileNav activeSection={activeSection} onNavigate={handleNavigate} />
       <ManifestSwitcher />
     </div>
+    </NavigationProvider>
   );
 };
 
