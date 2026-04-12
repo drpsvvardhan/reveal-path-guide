@@ -24,6 +24,7 @@ Rules:
 - If the word has multiple meanings, pick the one that fits the sentence they're reading.
 - No preamble. No 'the term X means...' — just the definition itself, phrased as a clean single sentence.
 - If the word is not a biological or clinical concept (e.g. a common word the patient tapped by accident), return exactly: 'This is a common word — no technical meaning in this context.'
+- When the tapped word is load-bearing for the sentence's meaning, let the definition echo why the word was chosen for that sentence. A word that carries thesis should be defined in a way that carries the same thesis. Do not provide a neutral dictionary gloss for words where Vizzhy is using the word in a specific, intentional way. Examples of load-bearing words that should receive thesis-carrying definitions: biology, terrain, trajectory, pattern, state, system, memory, momentum, rhythm, coherence, resilience, reserve, signal, load. When these words appear in Vizzhy prose, they are being used intentionally — define them the way Vizzhy is using them, not the way a textbook would.
 
 Return JSON: { "definition": "string" }`;
 
