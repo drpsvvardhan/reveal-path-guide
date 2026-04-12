@@ -204,7 +204,7 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
     async (questionId: string, domainId: string, layer: number, questionType: string, rawResponse: string) => {
       if (!user || !state.currentAssessmentId) return;
 
-      const score = scoreResponse(questionType, rawResponse);
+      const score = scoreResponse(questionType, rawResponse, questionId);
 
       // Optimistic local update
       setState((s) => ({
@@ -269,7 +269,7 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
         const l1Questions = domain.layer1;
         const l1Scores = l1Questions.map((q) => {
           const raw = state.responses[q.id];
-          return raw ? scoreResponse(q.type, raw) : 50;
+          return raw ? scoreResponse(q.type, raw, q.id) : 50;
         });
         const result = computeDomainScore(domain.id, l1Scores);
         domainScoresMap[domain.id] = result;
