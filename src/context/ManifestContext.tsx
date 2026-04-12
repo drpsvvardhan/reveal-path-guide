@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { PatientRevealManifest, PatientProfile } from "@/types/manifest";
 import { sampleManifest, buildStubManifest } from "@/data/sampleManifest";
 
@@ -33,13 +34,15 @@ function checkDemoMode(): boolean {
 
 export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDemoMode] = useState<boolean>(checkDemoMode());
 
   const refreshProfile = useCallback(async () => {
-    if (!user || isDemoMode) {
+    const uid = effectiveUserId;
+    if (!uid || isDemoMode) {
       setIsLoading(false);
       return;
     }
@@ -50,7 +53,7 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error: dbError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .maybeSingle();
 
       if (dbError) throw dbError;
