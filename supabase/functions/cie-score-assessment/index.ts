@@ -192,22 +192,26 @@ Deno.serve(async (req) => {
       let triggeredLayer2 = false;
 
       if (data?.layer1?.length) {
-        // Sort by question index and apply weights
         const sorted = [...data.layer1].sort((a, b) => questionIndex(a.question_id, 1) - questionIndex(b.question_id, 1));
         layer1Score = 0;
         for (let i = 0; i < sorted.length && i < L1_WEIGHTS.length; i++) {
-          layer1Score += sorted[i].score * L1_WEIGHTS[i];
+          // Re-score with polarity awareness (don't trust stored score)
+          const correctedScore = scoreRaw(sorted[i].question_id, sorted[i].question_type, sorted[i].raw_response);
+          layer1Score += correctedScore * L1_WEIGHTS[i];
         }
 
         // Check trigger: domain score < 60 OR any question score < 40
-        triggeredLayer2 = layer1Score < 60 || sorted.some((r) => r.score < 40);
+        triggeredLayer2 = layer1Score < 60 || sorted.some((r) =>
+          scoreRaw(r.question_id, r.question_type, r.raw_response) < 40
+        );
       }
 
       if (data?.layer2?.length) {
         const sorted = [...data.layer2].sort((a, b) => questionIndex(a.question_id, 2) - questionIndex(b.question_id, 2));
         layer2Score = 0;
         for (let i = 0; i < sorted.length && i < L2_WEIGHTS.length; i++) {
-          layer2Score += sorted[i].score * L2_WEIGHTS[i];
+          const correctedScore = scoreRaw(sorted[i].question_id, sorted[i].question_type, sorted[i].raw_response);
+          layer2Score += correctedScore * L2_WEIGHTS[i];
         }
       }
 
