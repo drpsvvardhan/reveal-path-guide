@@ -110,7 +110,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
         },
         body: JSON.stringify({
           manifest: mergedManifest,
-          userId: user.id,
+          userId: effectiveUserId,
         }),
       });
 

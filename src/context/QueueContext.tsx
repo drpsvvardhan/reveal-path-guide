@@ -98,7 +98,7 @@ export const QueueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const maxPriority =
         questions.length > 0 ? Math.max(...questions.map((q) => q.priority)) + 1 : 0;
       const { error: dbError } = await supabase.from("patient_question_queue").insert({
-        user_id: user.id,
+        user_id: effectiveUserId || user.id,
         question: text.trim(),
         rationale: rationale?.trim() || null,
         source: "manual",
