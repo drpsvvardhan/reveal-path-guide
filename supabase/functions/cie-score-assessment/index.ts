@@ -8,7 +8,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// ── Scoring maps ──
+// ── Scoring maps (default: negative polarity — "yes" = symptom present = 0) ──
 const SCORE_MAPS: Record<string, Record<string, number>> = {
   frequency: { never: 100, rarely: 75, sometimes: 50, often: 25, always: 0 },
   yesno: { no: 100, yes: 0 },
@@ -18,6 +18,51 @@ const SCORE_MAPS: Record<string, Record<string, number>> = {
   chronotype: { morning: 75, afternoon: 50, evening: 50 },
   activity: { strength: 75, cardio: 75, mixed: 100, none: 25 },
 };
+
+// ── Positive-polarity questions: "yes"/"always" = healthy behavior = 100 ──
+// These questions ask about protective/healthy behaviors, so the score is REVERSED.
+const POSITIVE_POLARITY: Set<string> = new Set([
+  // H22 — Light & Movement
+  "H22Q1", "H22Q2",  // outdoor light, exercise 150min
+  "H22D1", "H22D2", "H22D3", "H22D5", "H22D7", "H22D8",  // morning light, blue light blocking, strength, tracking, breaks, outdoor
+  // H23 — Nutrition Identity
+  "H23Q2", "H23Q3",  // consistent eating, 5 veg servings
+  "H23D1", "H23D2", "H23D5", "H23D6", "H23D7", "H23D8", "H23D9", "H23D10",  // IF, tracking, cooking, protein, sugar limit, elimination, fermented, organic
+  // I24 — Hydration
+  "I24Q1", "I24D1", "I24D5", "I24D8",  // water, electrolytes, supplements, limit caffeine
+  // J25 — Social Connection
+  "J25Q1", "J25Q3",  // social connections, community
+  // E13 — Sleep/Circadian
+  "E13D9", "E13D10",  // consistent wake time, morning sunlight
+  // E14 — Mood
+  "E14D5", "E14D10",  // therapy, meditation
+  // E15 — Cognitive
+  "E15D10",  // brain supplements
+  // F16 — Musculoskeletal
+  "F16D8",  // strength training
+  // F17 — Skin/Connective
+  "F17D9",  // collagen supplements
+  // F18 — Bone
+  "F18D2", "F18D3", "F18D10",  // calcium/VitD, weight-bearing exercise, protein for bone
+  // G19 — Thyroid
+  "G19D10",  // iodine/selenium supplements
+  // G20 — Reproductive
+  "G20D10",  // hormone supplements
+  // G21 — Insulin-Cortisol
+  "G21D8",  // time-restricted eating
+  // D12 — Liver-Gut Loop
+  "D12D8",  // digestive enzyme supplements
+]);
+
+// ── Neutral-polarity questions: diagnostic awareness — score 50 regardless ──
+// "Have you been tested for X?" doesn't indicate health status
+const NEUTRAL_POLARITY: Set<string> = new Set([
+  "A1D8", "A2D6", "A2D8", "B4D8", "B5D5", "B5D6", "B6D5", "B6D9",
+  "C8D2", "C8D7", "C9D6", "D10D5", "D11D2", "D11D5", "D11D9",
+  "D12D5", "D12D10", "E13D5", "E15D5", "F16D5", "F16D9", "F17D8",
+  "F18D1", "G19D2", "G19D5", "G19D7", "G20D1", "G20D5", "G20D9",
+  "G21D1", "G21D5", "G21D7", "H22D9", "I24D7",
+]);
 
 const L1_WEIGHTS = [0.40, 0.35, 0.25];
 const L2_WEIGHTS = [0.15, 0.13, 0.12, 0.11, 0.10, 0.10, 0.08, 0.08, 0.07, 0.06];
@@ -51,15 +96,28 @@ const DOMAIN_AXIS: Record<string, string> = {
 
 // Question ordering per domain for weight assignment
 function questionIndex(questionId: string, layer: number): number {
-  // L1: e.g. A1Q1 -> 0, A1Q2 -> 1, A1Q3 -> 2
-  // L2: e.g. A1D1 -> 0, A1D2 -> 1, ... A1D10 -> 9
   const match = questionId.match(/\d+$/);
   return match ? parseInt(match[0]) - 1 : 0;
 }
 
-function scoreRaw(questionType: string, rawResponse: string): number {
+function scoreRaw(questionId: string, questionType: string, rawResponse: string): number {
+  // Neutral questions always score 50 — diagnostic awareness, not health status
+  if (NEUTRAL_POLARITY.has(questionId)) return 50;
+
   const map = SCORE_MAPS[questionType] || SCORE_MAPS.frequency;
-  return map[rawResponse.toLowerCase()] ?? 50;
+  const baseScore = map[rawResponse.toLowerCase()] ?? 50;
+
+  // Positive-polarity questions: reverse the score (yes=100, no=0, always=100, never=0)
+  if (POSITIVE_POLARITY.has(questionId)) {
+    // For effectiveness/comparison/chronotype/activity, polarity is already correct
+    if (questionType === "effectiveness" || questionType === "comparison" ||
+        questionType === "chronotype" || questionType === "activity") {
+      return baseScore;
+    }
+    return 100 - baseScore;
+  }
+
+  return baseScore;
 }
 
 function trafficLight(score: number): string {
