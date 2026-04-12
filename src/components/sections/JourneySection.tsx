@@ -223,8 +223,8 @@ const JourneySection: React.FC = () => {
       title={heroTitle ?? "Your biological terrain"}
       intro={heroIntro ?? undefined}
     >
-      {/* TODAY BLOCK */}
-      {portrait?.the_one_action && (
+      {/* TODAY BLOCK — prefer action plan, fall back to terrain portrait */}
+      {(topAction || portrait?.the_one_action) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -232,8 +232,13 @@ const JourneySection: React.FC = () => {
         >
           <p className="text-eyebrow text-primary">START HERE TODAY</p>
           <p className="font-serif text-xl text-foreground leading-snug">
-            {portrait.the_one_action}
+            {topAction?.what || portrait?.the_one_action}
           </p>
+          {topAction?.why && (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {topAction.why}
+            </p>
+          )}
           {portraitAge && (
             <p className="text-[10px] text-muted-foreground italic">
               Your portrait was last updated {portraitAge}
