@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useManifest } from "@/context/ManifestContext";
 import { useQueue } from "@/context/QueueContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
@@ -38,6 +39,7 @@ const DERIVE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/derive-pat
 
 export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const { manifest } = useManifest();
   const { refresh: refreshQueue } = useQueue();
   const { observations, observationsAsTimeline } = useLabUploads();
@@ -49,7 +51,8 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
   const [lastRunResult, setLastRunResult] = useState<DeriveRunResult | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setPatterns([]);
       setDismissed([]);
       return;
@@ -60,7 +63,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
       const { data, error: dbError } = await supabase
         .from("derived_patterns")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .order("severity", { ascending: true })
         .order("last_confirmed_at", { ascending: false });
 
@@ -75,7 +78,7 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     refresh();
