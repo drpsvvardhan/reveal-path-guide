@@ -8,6 +8,7 @@ import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import SharedQueue from "./pages/SharedQueue.tsx";
+import ClinicalShare from "./pages/ClinicalShare.tsx";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/share/:token" element={<SharedQueue />} />
+            <Route path="/clinical/:token" element={<ClinicalShare />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

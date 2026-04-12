@@ -3,6 +3,7 @@ import { useManifest } from "@/context/ManifestContext";
 import { User, Phone, Calendar, MessageCircle, Video, Eye } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import ClinicalHandoffPanel from "@/components/terrain/ClinicalHandoffPanel";
 
 const CareTeamSection: React.FC = () => {
   const { manifest } = useManifest();
@@ -28,6 +29,8 @@ const CareTeamSection: React.FC = () => {
         />
       }
     >
+      <ClinicalHandoffPanel />
+
       <div className="grid gap-4 sm:grid-cols-2">
         {members.map((member, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
