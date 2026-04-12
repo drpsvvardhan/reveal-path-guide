@@ -13,6 +13,7 @@ import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import GateChips from "@/components/sections/journey/GateChips";
 import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
 import BaselineCards from "@/components/sections/journey/BaselineCards";
+import TappableProse from "@/components/terrain/TappableProse";
 
 const toDateKey = (d: string) => d.slice(0, 10);
 
@@ -231,13 +232,15 @@ const JourneySection: React.FC = () => {
           className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3"
         >
           <p className="text-eyebrow text-primary">START HERE TODAY</p>
-          <p className="font-serif text-xl text-foreground leading-snug">
-            {topAction?.what || portrait?.the_one_action}
-          </p>
+          <TappableProse
+            text={topAction?.what || portrait?.the_one_action || ""}
+            className="font-serif text-xl text-foreground leading-snug"
+          />
           {topAction?.why && (
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {topAction.why}
-            </p>
+            <TappableProse
+              text={topAction.why}
+              className="text-sm text-muted-foreground leading-relaxed"
+            />
           )}
           {portraitAge && (
             <p className="text-[10px] text-muted-foreground italic">
