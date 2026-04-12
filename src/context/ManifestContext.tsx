@@ -83,25 +83,24 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Determine which manifest to return based on mode and state
   const manifest: PatientRevealManifest = React.useMemo(() => {
-    if (isDemoMode || !user) {
+    // Demo mode: show full sample manifest with all hardcoded data
+    if (isDemoMode) {
       return sampleManifest;
     }
 
+    // Not logged in: show sample manifest as landing page demo
+    if (!user) {
+      return sampleManifest;
+    }
+
+    // Authenticated user with no profile yet: stub with minimal data
     if (!profile) {
-      return sampleManifest;
+      return buildStubManifest({ firstName: "", age: 0, sex: "other" });
     }
 
-    if (profile.onboarding_step === "done") {
-      return buildStubManifest({
-        firstName: profile.first_name || "there",
-        age: profile.age || 0,
-        sex: profile.sex || "other",
-      });
-    }
-
-    // Mid-onboarding — return a minimal stub with just what's been entered
+    // Authenticated user: always use stub manifest — real data is merged in by useActiveManifest
     return buildStubManifest({
-      firstName: profile.first_name || "",
+      firstName: profile.first_name || "there",
       age: profile.age || 0,
       sex: profile.sex || "other",
     });
