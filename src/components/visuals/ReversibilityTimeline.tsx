@@ -1,4 +1,5 @@
 import React from "react";
+import TappableProse from "@/components/terrain/TappableProse";
 
 interface ReversibilityTimelineProps {
   weeks: string[];
@@ -50,7 +51,7 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
                 className="rounded-lg p-3 border transition-colors hover:border-opacity-60"
                 style={{ borderColor: `${lane.color}40`, backgroundColor: `${lane.color}08` }}
               >
-                <p className="text-xs md:text-sm text-foreground leading-snug">{item}</p>
+                <TappableProse text={item} className="text-xs md:text-sm text-foreground leading-snug" />
               </div>
             ))}
           </div>
