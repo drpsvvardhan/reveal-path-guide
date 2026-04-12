@@ -76,7 +76,8 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [refresh]);
 
   const generateNarrative = useCallback(async (): Promise<NarrativeGenerationResult | null> => {
-    if (!user || !manifest) return null;
+    const uid = effectiveUserId;
+    if (!uid || !manifest) return null;
     setGenerating(true);
     setError(null);
     try {
@@ -101,7 +102,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         },
         body: JSON.stringify({
           manifest: mergedManifest,
-          userId: user.id,
+          userId: uid,
         }),
       });
 
