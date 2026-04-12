@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { useTerrainRender } from "@/context/TerrainRenderContext";
@@ -6,6 +6,9 @@ import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useNarrative } from "@/context/NarrativeContext";
 import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
+import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
+import { supabase } from "@/integrations/supabase/client";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import GateChips from "@/components/sections/journey/GateChips";
 import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
@@ -13,16 +16,51 @@ import BaselineCards from "@/components/sections/journey/BaselineCards";
 
 const toDateKey = (d: string) => d.slice(0, 10);
 
+interface ActionPlanAction {
+  id: string;
+  what: string;
+  why: string;
+  how: string;
+  coordinates: string[];
+  gates: string[];
+  category: string;
+}
+
 const JourneySection: React.FC = () => {
   const { activeRender, isLoading: renderLoading } = useTerrainRender();
   const { currentAssessment, gateScores, domainScores } = useCIEAssessment();
   const { observations, uploads } = useLabUploads();
   const { activeNarrative } = useNarrative();
   const { patterns } = useDerivedPatterns();
+  const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
+  const [topAction, setTopAction] = useState<ActionPlanAction | null>(null);
+
+  const userId = effectiveUserId || user?.id;
 
   const hasTerrainRender = !!activeRender?.patient_portrait;
   const hasAssessment = !!currentAssessment;
   const hasUploads = uploads.length > 0;
+
+  // Fetch top action from action_plans
+  useEffect(() => {
+    if (!userId) return;
+    const fetchTopAction = async () => {
+      const { data } = await supabase
+        .from("action_plans")
+        .select("today_actions")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.today_actions) {
+        const actions = data.today_actions as any[];
+        if (actions.length > 0) setTopAction(actions[0]);
+      }
+    };
+    fetchTopAction();
+  }, [userId]);
 
   // Extract portrait data
   const portrait = activeRender?.patient_portrait as {
@@ -185,8 +223,8 @@ const JourneySection: React.FC = () => {
       title={heroTitle ?? "Your biological terrain"}
       intro={heroIntro ?? undefined}
     >
-      {/* TODAY BLOCK */}
-      {portrait?.the_one_action && (
+      {/* TODAY BLOCK — prefer action plan, fall back to terrain portrait */}
+      {(topAction || portrait?.the_one_action) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -194,8 +232,13 @@ const JourneySection: React.FC = () => {
         >
           <p className="text-eyebrow text-primary">START HERE TODAY</p>
           <p className="font-serif text-xl text-foreground leading-snug">
-            {portrait.the_one_action}
+            {topAction?.what || portrait?.the_one_action}
           </p>
+          {topAction?.why && (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {topAction.why}
+            </p>
+          )}
           {portraitAge && (
             <p className="text-[10px] text-muted-foreground italic">
               Your portrait was last updated {portraitAge}

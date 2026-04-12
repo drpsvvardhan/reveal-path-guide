@@ -447,6 +447,7 @@ export interface OnboardingProcessingState {
   patterns_detected: number;
   narrative_complete: boolean;
   terrain_render_complete: boolean;
+  action_plan_complete: boolean;
   current_status: string;
   error: string | null;
 }

@@ -38,6 +38,53 @@ export type Database = {
         }
         Relationships: []
       }
+      action_plans: {
+        Row: {
+          assessment_id: string | null
+          created_at: string
+          id: string
+          retest_schedule: Json
+          sequence_explanation: string | null
+          status: string
+          today_actions: Json
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          assessment_id?: string | null
+          created_at?: string
+          id?: string
+          retest_schedule?: Json
+          sequence_explanation?: string | null
+          status?: string
+          today_actions?: Json
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          assessment_id?: string | null
+          created_at?: string
+          id?: string
+          retest_schedule?: Json
+          sequence_explanation?: string | null
+          status?: string
+          today_actions?: Json
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_plans_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cie_assessments: {
         Row: {
           created_at: string
@@ -683,6 +730,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      next_action_plan_version: { Args: { p_user_id: string }; Returns: number }
       next_cie_version: { Args: { p_user_id: string }; Returns: number }
       next_narrative_version: { Args: { p_user_id: string }; Returns: number }
       next_terrain_render_version: {

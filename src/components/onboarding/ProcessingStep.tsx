@@ -17,7 +17,7 @@ const ProcessingStep: React.FC = () => {
   const { currentAssessmentId } = useIntake();
   const { refresh: refreshCIE } = useCIEAssessment();
   const { user } = useAuth();
-  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "rendering" | "done" | "failed">("idle");
+  const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "rendering" | "planning" | "done" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
@@ -84,6 +84,21 @@ const ProcessingStep: React.FC = () => {
           markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain render skipped" });
         }
 
+        await new Promise((r) => setTimeout(r, 600));
+
+        // Step 4: Generate action plan
+        setStep("planning");
+        markProcessingMilestone({ current_status: "Matching interventions to your findings" });
+        try {
+          await supabase.functions.invoke("generate-action-plan", {
+            body: { user_id: user.id, assessment_id: currentAssessmentId },
+          });
+          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan ready" });
+        } catch (planErr) {
+          console.warn("Action plan warning:", planErr);
+          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan skipped" });
+        }
+
         await new Promise((r) => setTimeout(r, 800));
         markProcessingMilestone({ current_status: "Your twin is ready" });
         setStep("done");
@@ -103,10 +118,11 @@ const ProcessingStep: React.FC = () => {
     setErrorMessage(null);
   };
 
-  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "done";
-  const isAfterDeriving = step === "generating" || step === "rendering" || step === "done";
-  const isAfterGenerating = step === "rendering" || step === "done";
-  const isAfterRendering = step === "done";
+  const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "planning" || step === "done";
+  const isAfterDeriving = step === "generating" || step === "rendering" || step === "planning" || step === "done";
+  const isAfterGenerating = step === "rendering" || step === "planning" || step === "done";
+  const isAfterRendering = step === "planning" || step === "done";
+  const isAfterPlanning = step === "done";
 
   return (
     <OnboardingLayout
@@ -182,6 +198,22 @@ const ProcessingStep: React.FC = () => {
             step === "rendering" ? "running" :
             isAfterRendering ? "complete" :
             step === "failed" && processingState.narrative_complete ? "failed" : "pending"
+          }
+        />
+
+        <ProcessingMilestone
+          label="Action plan matched"
+          sublabel={
+            step === "planning"
+              ? "Matching interventions to your specific findings"
+              : isAfterPlanning
+              ? "Your actions are ready"
+              : "Waiting"
+          }
+          state={
+            step === "planning" ? "running" :
+            isAfterPlanning ? "complete" :
+            step === "failed" && processingState.terrain_render_complete ? "failed" : "pending"
           }
         />
 
