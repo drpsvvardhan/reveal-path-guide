@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useManifest } from "@/context/ManifestContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { PatientNarrativeVersion, NarrativeGenerationResult, GeneratedNarrativeFields } from "@/types/manifest";
@@ -29,6 +30,7 @@ const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate
 
 export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const { manifest } = useManifest();
   const { observations, observationsAsTimeline } = useLabUploads();
   const [activeNarrative, setActiveNarrative] = useState<GeneratedNarrativeFields | null>(null);
@@ -39,7 +41,8 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lastResult, setLastResult] = useState<NarrativeGenerationResult | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setActiveNarrative(null);
       setAllVersions([]);
       return;
@@ -50,7 +53,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const { data, error: dbError } = await supabase
         .from("patient_narratives")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .order("version", { ascending: false });
 
       if (dbError) throw dbError;
@@ -66,7 +69,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     refresh();

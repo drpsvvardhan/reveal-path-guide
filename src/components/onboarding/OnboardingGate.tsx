@@ -1,6 +1,7 @@
 import React from "react";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useOnboarding } from "@/context/OnboardingContext";
 import WelcomeStep from "./WelcomeStep";
 import ProfileStep from "./ProfileStep";
@@ -15,6 +16,7 @@ interface OnboardingGateProps {
 
 const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
+  const { isViewingAs } = useViewAs();
   const { profile, isDemoMode, isLoading } = useManifest();
   const { currentStep } = useOnboarding();
 
@@ -26,7 +28,7 @@ const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
     );
   }
 
-  if (isDemoMode || !user) return <>{children}</>;
+  if (isDemoMode || !user || isViewingAs) return <>{children}</>;
   if (!profile) return <>{children}</>;
   if (profile.onboarding_step === "done") return <>{children}</>;
 

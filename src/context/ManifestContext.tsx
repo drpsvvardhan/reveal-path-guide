@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { PatientRevealManifest, PatientProfile } from "@/types/manifest";
 import { sampleManifest, buildStubManifest } from "@/data/sampleManifest";
 
@@ -33,13 +34,15 @@ function checkDemoMode(): boolean {
 
 export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [profile, setProfile] = useState<PatientProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDemoMode] = useState<boolean>(checkDemoMode());
 
   const refreshProfile = useCallback(async () => {
-    if (!user || isDemoMode) {
+    const uid = effectiveUserId;
+    if (!uid || isDemoMode) {
       setIsLoading(false);
       return;
     }
@@ -50,21 +53,25 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data, error: dbError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .maybeSingle();
 
       if (dbError) throw dbError;
 
       if (!data) {
-        // Profile doesn't exist yet — trigger should have created it, but fallback
-        const { data: inserted, error: insertError } = await supabase
-          .from("profiles")
-          .insert({ user_id: user.id, onboarding_step: "welcome" })
-          .select("*")
-          .single();
+        // Only create profile if viewing as self (not impersonating)
+        if (uid === user?.id) {
+          const { data: inserted, error: insertError } = await supabase
+            .from("profiles")
+            .insert({ user_id: uid, onboarding_step: "welcome" })
+            .select("*")
+            .single();
 
-        if (insertError) throw insertError;
-        setProfile(inserted as unknown as PatientProfile);
+          if (insertError) throw insertError;
+          setProfile(inserted as unknown as PatientProfile);
+        } else {
+          setProfile(null);
+        }
       } else {
         setProfile(data as unknown as PatientProfile);
       }
@@ -74,7 +81,7 @@ export const ManifestProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setIsLoading(false);
     }
-  }, [user, isDemoMode]);
+  }, [effectiveUserId, user, isDemoMode]);
 
   useEffect(() => {
     if (authLoading) return;
