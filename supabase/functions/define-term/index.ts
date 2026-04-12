@@ -85,14 +85,16 @@ serve(async (req) => {
     const result = await response.json();
     const text = result.content?.[0]?.text || "";
 
-    // Try to parse JSON from response
+    // Try to parse JSON from response — handle markdown-wrapped JSON
     let definition: string;
     try {
-      const parsed = JSON.parse(text);
-      definition = parsed.definition || text;
+      // Strip markdown code fences if present
+      const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      definition = parsed.definition || cleaned;
     } catch {
       // If not JSON, use raw text
-      definition = text.trim();
+      definition = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
     }
 
     // Cache it
