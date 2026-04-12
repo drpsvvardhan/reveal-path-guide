@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import ChatLayout from "@/components/layout/ChatLayout";
-import ChatReasoningTrace, { ReasoningContext } from "@/components/chat/ChatReasoningTrace";
+import ChatReasoningTrace, { ReasoningContext, AskAnythingContext } from "@/components/chat/ChatReasoningTrace";
 import ChatMessage, { ChatMessageData } from "@/components/chat/ChatMessage";
 import ChatInputBar from "@/components/chat/ChatInputBar";
 import { useAuth } from "@/context/AuthContext";
@@ -10,12 +10,9 @@ import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
+const CONTEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-ask-anything-context`;
 
-const SUGGESTED_QUESTIONS = [
-  "Why do I feel worse in the afternoon?",
-  "Is it safe to exercise while my gut heals?",
-  "What should I eat during the gut repair protocol?",
-];
+const FALLBACK_QUESTIONS = ["Tell me what I should be paying attention to right now"];
 
 const SECTION_MARKERS: { pattern: RegExp; type: "important" | "what_this_means" | "what_you_can_do" | "watch_for" | "ask_doctor" }[] = [
   { pattern: /\*\*Important[ —-]+please don't wait:?\*\*/i, type: "important" },
@@ -43,8 +40,6 @@ function parseAssistantResponse(raw: string): ChatMessageData["sections"] {
   found.sort((a, b) => a.start - b.start);
 
   const sections: NonNullable<ChatMessageData["sections"]> = [];
-
-  // Pre-text as acknowledgment
   const preText = raw.slice(0, found[0].start).trim();
   if (preText) {
     sections.push({ type: "acknowledgment", content: preText });
@@ -56,7 +51,6 @@ function parseAssistantResponse(raw: string): ChatMessageData["sections"] {
     let content = raw.slice(contentStart, contentEnd).trim();
     if (!content) continue;
 
-    // Detect cognitive mode
     let mode: "from_data" | "putting_together" | "from_knowledge" | undefined;
     for (const mp of MODE_PATTERNS) {
       if (content.includes(mp.label)) {
@@ -71,8 +65,8 @@ function parseAssistantResponse(raw: string): ChatMessageData["sections"] {
   return sections.length > 0 ? sections : undefined;
 }
 
-function extractCitedPatterns(text: string): ReasoningContext["citedPatterns"] {
-  const patterns: NonNullable<ReasoningContext["citedPatterns"]> = [];
+function extractCitedPatterns(text: string) {
+  const patterns: Array<{ title: string; severity: "critical" | "high" | "moderate" | "informational" }> = [];
   const keywords = [
     { keyword: /cardiovascular risk/i, title: "Cardiovascular cluster", severity: "high" as const },
     { keyword: /ldl/i, title: "LDL-C above normal", severity: "high" as const },
@@ -98,9 +92,10 @@ const AskSection: React.FC = () => {
 
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [askContext, setAskContext] = useState<AskAnythingContext | null>(null);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(FALLBACK_QUESTIONS);
+
   const [reasoningContext, setReasoningContext] = useState<ReasoningContext>({
-    activeBiomarkers: [],
-    citedPatterns: [],
     messageCount: 0,
   });
 
@@ -112,7 +107,40 @@ const AskSection: React.FC = () => {
     }
   }, [messages]);
 
-  // Populate biomarkers from manifest
+  // Fetch dynamic context from edge function
+  useEffect(() => {
+    if (!effectiveUserId) return;
+
+    const fetchContext = async () => {
+      try {
+        const resp = await fetch(CONTEXT_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            user_id: effectiveUserId,
+            assessment_id: null,
+          }),
+        });
+
+        if (resp.ok) {
+          const data: AskAnythingContext = await resp.json();
+          setAskContext(data);
+          if (data.suggested_questions && data.suggested_questions.length > 0) {
+            setSuggestedQuestions(data.suggested_questions);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch ask-anything context:", e);
+      }
+    };
+
+    fetchContext();
+  }, [effectiveUserId]);
+
+  // Update reasoning context with biomarker data window from manifest
   useEffect(() => {
     const biomarkers = manifest.rawData?.biomarkerTimeline || [];
     const seen = new Set<string>();
@@ -128,11 +156,7 @@ const AskSection: React.FC = () => {
 
     setReasoningContext((prev) => ({
       ...prev,
-      activeBiomarkers: recent.map((b) => ({
-        name: b.name,
-        value: `${b.value} ${b.unit}`,
-        flag: b.flag,
-      })),
+      askContext,
       dataWindow:
         recent.length > 0
           ? {
@@ -143,9 +167,9 @@ const AskSection: React.FC = () => {
           : undefined,
       messageCount: messages.length,
     }));
-  }, [manifest, messages.length]);
+  }, [manifest, messages.length, askContext]);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = useCallback(async (text: string) => {
     const userMessage: ChatMessageData = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -211,22 +235,19 @@ const AskSection: React.FC = () => {
         }
       }
 
-      // Parse structured sections
       const sections = parseAssistantResponse(fullText);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: sections ? fullText : fullText, sections }
+            ? { ...m, content: fullText, sections }
             : m
         )
       );
 
-      // Update reasoning trace
       const citedPatterns = extractCitedPatterns(fullText);
       const firstMode = sections?.find((s) => s.mode)?.mode || "from_data";
       setReasoningContext((prev) => ({
         ...prev,
-        citedPatterns,
         currentMode: firstMode,
       }));
 
@@ -245,7 +266,11 @@ const AskSection: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [messages, manifest, documents, effectiveUserId, refreshQueue]);
+
+  const handleChipTap = useCallback((question: string) => {
+    sendMessage(question);
+  }, [sendMessage]);
 
   return (
     <ChatLayout
@@ -258,9 +283,26 @@ const AskSection: React.FC = () => {
                 <h2 className="font-serif text-2xl text-foreground mb-3">
                   Ask anything about your results
                 </h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
                   Your answers will be grounded in your actual data. The companion will tell you
                   what it knows, what it doesn't, and what to ask your doctor.
+                </p>
+
+                {/* Dynamic suggested questions */}
+                <div className="flex flex-wrap gap-2 justify-center mb-4">
+                  {suggestedQuestions.map((q, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => sendMessage(q)}
+                      className="text-[12px] text-foreground bg-muted/40 hover:bg-muted/80 border border-border/60 rounded-full px-4 py-2 transition-colors text-left leading-snug max-w-[280px]"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-muted-foreground/60 italic">
+                  Or tap any biomarker on the right to ask about it directly.
                 </p>
               </div>
             </div>
@@ -279,10 +321,15 @@ const AskSection: React.FC = () => {
         <ChatInputBar
           onSend={sendMessage}
           isLoading={isLoading}
-          suggestedQuestions={messages.length === 0 ? SUGGESTED_QUESTIONS : []}
+          suggestedQuestions={messages.length === 0 ? suggestedQuestions : []}
         />
       }
-      reasoningTrace={<ChatReasoningTrace context={reasoningContext} />}
+      reasoningTrace={
+        <ChatReasoningTrace
+          context={reasoningContext}
+          onChipTap={handleChipTap}
+        />
+      }
     />
   );
 };
