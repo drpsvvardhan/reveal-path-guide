@@ -7,6 +7,7 @@ import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
 import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
+import TappableProse from "@/components/terrain/TappableProse";
 import { useSignatureColor } from "@/context/SignatureColorContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -48,13 +49,13 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
       <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
         <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
           <p className="text-base md:text-lg text-foreground font-serif italic leading-snug">
-            {left.trim()}
+            <TappableProse text={left.trim()} />
           </p>
           <div className="flex items-center justify-center text-secondary">
             <ArrowRight className="h-4 w-4 md:rotate-0 rotate-90" />
           </div>
           <p className="text-base md:text-lg text-muted-foreground leading-snug">
-            {right.trim()}
+            <TappableProse text={right.trim()} />
           </p>
         </div>
         <p className="text-[10px] text-muted-foreground/60 mt-3 uppercase tracking-wider">
@@ -66,7 +67,7 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
 
   return (
     <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
-      <p className="text-base md:text-lg text-foreground leading-relaxed">{text}</p>
+      <p className="text-base md:text-lg text-foreground leading-relaxed"><TappableProse text={text} /></p>
     </div>
   );
 };

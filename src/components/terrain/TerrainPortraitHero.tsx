@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import FlowLine from "@/components/visuals/FlowLine";
 import { useTerrainRender } from "@/context/TerrainRenderContext";
 import { Compass, ArrowRight } from "lucide-react";
+import TappableProse from "@/components/terrain/TappableProse";
 import { formatDistanceToNow } from "date-fns";
 
 interface TerrainPortraitHeroProps {
@@ -91,9 +92,7 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
           <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
             What you already know
           </h3>
-          <p className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]">
-            {portrait.what_you_already_know}
-          </p>
+          <TappableProse text={portrait.what_you_already_know} className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]" />
         </div>
 
         <SectionDivider />
@@ -103,9 +102,7 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
           <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
             What's working harder than you realize
           </h3>
-          <p className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em] font-medium">
-            {portrait.working_harder_than_you_realize}
-          </p>
+          <TappableProse text={portrait.working_harder_than_you_realize} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em] font-medium" />
         </div>
 
         <SectionDivider />
@@ -115,9 +112,7 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
           <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
             Where to start
           </h3>
-          <p className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]">
-            {portrait.where_to_start}
-          </p>
+          <TappableProse text={portrait.where_to_start} className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]" />
         </div>
 
         {/* The One Action card */}
@@ -125,9 +120,7 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
           <p className="text-[10px] font-sans font-semibold uppercase tracking-[0.25em] text-secondary mb-2">
             START HERE
           </p>
-          <p className="font-serif text-xl text-foreground leading-snug">
-            {portrait.the_one_action}
-          </p>
+          <TappableProse text={portrait.the_one_action} className="font-serif text-xl text-foreground leading-snug" />
         </div>
 
         {/* Footnote */}
