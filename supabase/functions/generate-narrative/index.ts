@@ -565,6 +565,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     if (!userId) {
       return new Response(JSON.stringify({ error: "No userId provided" }), {
         status: 400,
