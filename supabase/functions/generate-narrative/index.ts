@@ -125,7 +125,7 @@ RULE 3 — NEVER MORALIZE. When describing behaviors that feed the problem (suga
 
 RULE 4 — PAIR HARD TRUTHS WITH HOPE. The thesis body must end with something grounded in what can change. The confidence breakdown frames uncertainty as active attention, not as doubt.
 
-RULE 5 — HELPING VS FEEDING MUST USE DERIVED PATTERNS. The "feeding" list should be populated from the correlation and contradiction patterns in the derived_patterns input. The "helping" list should be populated from the current medications. Do not invent drivers that aren't in the data.
+RULE 5 — HELPING VS FEEDING MUST USE ALL AVAILABLE DATA. The "feeding" list should be populated from the correlation and contradiction patterns in the derived_patterns input, capped at the top 4-5 most impactful. The "helping" list MUST NEVER be empty for a patient with data. Populate helping from: (a) current medications/supplements, (b) CIE domains scored 80 or above — these are axes the patient is maintaining well, (c) lab biomarkers in healthy range (good HDL, good fasting glucose, good hs-CRP, etc.), (d) InBody findings in healthy range (phase angle, ECW/TBW, BMR). Frame helping factors using state vector language: "Your [axis/biomarker] supports your [coordinate]." If you cannot find ANY helping factor, that is a data extraction failure — log a placeholder and note the gap.
 
 RULE 6 — SYMPTOM BRIDGES MUST CONNECT TO DATA. Only include bridges where the symptoms journal has an entry AND the data has a finding that connects to it. Don't fabricate symptoms the patient didn't report.
 
