@@ -5,6 +5,7 @@ import { useViewAs } from "@/context/ViewAsContext";
 import { Check, ChevronDown, ChevronUp, Clock, FlaskConical } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
+import TappableProse from "@/components/terrain/TappableProse";
 import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
@@ -87,12 +88,13 @@ const InterventionCard: React.FC<{
         <div className="flex-1 min-w-0">
           {/* What */}
           <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            {action.what}
+            <TappableProse text={action.what} />
+          </h4>
           </h4>
 
           {/* Why */}
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            {action.why}
+            <TappableProse text={action.why} />
           </p>
 
           {/* Coordinate + gate badges */}
@@ -126,7 +128,7 @@ const InterventionCard: React.FC<{
               How to do it
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 border-t border-border pt-2">
-              <p className="text-xs text-muted-foreground leading-relaxed">{action.how}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed"><TappableProse text={action.how} /></p>
             </CollapsibleContent>
           </Collapsible>
         </div>
