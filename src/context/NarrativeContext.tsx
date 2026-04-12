@@ -125,7 +125,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setGenerating(false);
     }
-  }, [user, manifest, observations, observationsAsTimeline, refresh]);
+  }, [effectiveUserId, manifest, observations, observationsAsTimeline, refresh]);
 
   const restoreVersion = useCallback(
     async (versionId: string) => {
