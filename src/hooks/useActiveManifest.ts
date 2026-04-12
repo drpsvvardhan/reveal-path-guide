@@ -220,6 +220,34 @@ export function useActiveManifest(): PatientRevealManifest {
       };
     }
 
+    // Step 5: Deterministic helping/feeding overlay
+    // Ensure helping is never empty for a user with CIE data or lab data
+    const existingHelping = merged.helpingVsFeeding?.helping || [];
+    const existingFeeding = merged.helpingVsFeeding?.feeding || [];
+
+    const deterministicHelping = computeDeterministicHelping(domainScores, observations);
+
+    // Deduplicate: skip deterministic items whose labels overlap with LLM-generated ones
+    const existingLabels = new Set(existingHelping.map((h) => h.label.toLowerCase()));
+    const newHelping = deterministicHelping.filter(
+      (h) => !existingLabels.has(h.label.toLowerCase())
+    );
+
+    const combinedHelping = [...existingHelping, ...newHelping];
+    const cappedFeeding = capFeeding(existingFeeding, 5);
+
+    if (combinedHelping.length === 0 && (Object.keys(domainScores).length > 0 || observations.length > 0)) {
+      console.warn("[useActiveManifest] WARNING: 0 helping factors for a user with data. Extraction may be broken.");
+    }
+
+    merged = {
+      ...merged,
+      helpingVsFeeding: {
+        helping: combinedHelping,
+        feeding: cappedFeeding,
+      },
+    };
+
     return merged;
   }, [baseManifest, activeNarrative, observations, observationsAsTimeline, currentAssessment, domainScores, gateScores]);
 }
