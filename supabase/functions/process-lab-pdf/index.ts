@@ -7,198 +7,132 @@ const corsHeaders = {
 };
 
 // ============================================================================
-// CANONICAL ANALYTE MAPPING
+// CANONICAL ANALYTE MAPPING (standard labs)
 // ============================================================================
 
 const CANONICAL_MAPPING: Record<string, string> = {
   // Glucose / diabetes
-  "glucose": "Glucose",
-  "fasting glucose": "Glucose",
-  "glucose, fasting": "Glucose",
-  "blood glucose": "Glucose",
-  "hba1c": "HbA1c",
-  "hemoglobin a1c": "HbA1c",
-  "a1c": "HbA1c",
-  "glycohemoglobin": "HbA1c",
-  "insulin": "Insulin",
-  "insulin, fasting": "Insulin",
-  "fasting insulin": "Insulin",
-  "c-peptide": "C-Peptide",
-  "c peptide": "C-Peptide",
-
+  "glucose": "Glucose", "fasting glucose": "Glucose", "glucose, fasting": "Glucose",
+  "blood glucose": "Glucose", "hba1c": "HbA1c", "hemoglobin a1c": "HbA1c",
+  "a1c": "HbA1c", "glycohemoglobin": "HbA1c", "insulin": "Insulin",
+  "insulin, fasting": "Insulin", "fasting insulin": "Insulin",
+  "c-peptide": "C-Peptide", "c peptide": "C-Peptide",
   // Lipid panel
-  "total cholesterol": "Total Cholesterol",
-  "cholesterol, total": "Total Cholesterol",
-  "cholesterol total": "Total Cholesterol",
-  "ldl": "LDL-C",
-  "ldl-c": "LDL-C",
-  "ldl cholesterol": "LDL-C",
-  "ldl, calculated": "LDL-C",
-  "ldl, direct": "LDL-C",
-  "hdl": "HDL-C",
-  "hdl-c": "HDL-C",
-  "hdl cholesterol": "HDL-C",
-  "triglycerides": "Triglycerides",
-  "trig": "Triglycerides",
-  "non-hdl cholesterol": "Non-HDL Cholesterol",
-  "non hdl cholesterol": "Non-HDL Cholesterol",
-  "vldl": "VLDL",
-  "apolipoprotein b": "ApoB",
-  "apo b": "ApoB",
-  "apob": "ApoB",
-  "lipoprotein(a)": "Lp(a)",
-  "lp(a)": "Lp(a)",
-  "lp a": "Lp(a)",
-
+  "total cholesterol": "Total Cholesterol", "cholesterol, total": "Total Cholesterol",
+  "cholesterol total": "Total Cholesterol", "ldl": "LDL-C", "ldl-c": "LDL-C",
+  "ldl cholesterol": "LDL-C", "ldl, calculated": "LDL-C", "ldl, direct": "LDL-C",
+  "hdl": "HDL-C", "hdl-c": "HDL-C", "hdl cholesterol": "HDL-C",
+  "triglycerides": "Triglycerides", "trig": "Triglycerides",
+  "non-hdl cholesterol": "Non-HDL Cholesterol", "non hdl cholesterol": "Non-HDL Cholesterol",
+  "vldl": "VLDL", "apolipoprotein b": "ApoB", "apo b": "ApoB", "apob": "ApoB",
+  "lipoprotein(a)": "Lp(a)", "lp(a)": "Lp(a)", "lp a": "Lp(a)",
   // CMP / liver / kidney
-  "bun": "BUN",
-  "blood urea nitrogen": "BUN",
-  "urea nitrogen": "BUN",
-  "creatinine": "Creatinine",
-  "creatinine, serum": "Creatinine",
-  "egfr": "eGFR",
-  "egfr non-african american": "eGFR",
-  "estimated gfr": "eGFR",
-  "cystatin c": "Cystatin C",
-  "sodium": "Sodium",
-  "potassium": "Potassium",
-  "chloride": "Chloride",
-  "co2": "CO2",
-  "carbon dioxide": "CO2",
-  "calcium": "Calcium",
-  "magnesium": "Magnesium",
-  "total protein": "Total Protein",
-  "protein, total": "Total Protein",
-  "albumin": "Albumin",
-  "globulin": "Globulin",
-  "a/g ratio": "A/G Ratio",
-  "albumin/globulin ratio": "A/G Ratio",
-  "ast": "AST",
-  "aspartate aminotransferase": "AST",
-  "sgot": "AST",
-  "alt": "ALT",
-  "alanine aminotransferase": "ALT",
-  "sgpt": "ALT",
-  "alk phos": "Alkaline Phosphatase",
-  "alkaline phosphatase": "Alkaline Phosphatase",
-  "alp": "Alkaline Phosphatase",
-  "ggt": "GGT",
-  "gamma-glutamyl transferase": "GGT",
-  "total bilirubin": "Total Bilirubin",
-  "bilirubin, total": "Total Bilirubin",
-  "direct bilirubin": "Direct Bilirubin",
-  "bilirubin, direct": "Direct Bilirubin",
-  "microalbumin": "Microalbumin",
-  "albumin/creatinine ratio": "Albumin/Creatinine Ratio",
-
+  "bun": "BUN", "blood urea nitrogen": "BUN", "urea nitrogen": "BUN",
+  "creatinine": "Creatinine", "creatinine, serum": "Creatinine", "egfr": "eGFR",
+  "egfr non-african american": "eGFR", "estimated gfr": "eGFR",
+  "cystatin c": "Cystatin C", "sodium": "Sodium", "potassium": "Potassium",
+  "chloride": "Chloride", "co2": "CO2", "carbon dioxide": "CO2",
+  "calcium": "Calcium", "magnesium": "Magnesium", "total protein": "Total Protein",
+  "protein, total": "Total Protein", "albumin": "Albumin", "globulin": "Globulin",
+  "a/g ratio": "A/G Ratio", "albumin/globulin ratio": "A/G Ratio",
+  "ast": "AST", "aspartate aminotransferase": "AST", "sgot": "AST",
+  "alt": "ALT", "alanine aminotransferase": "ALT", "sgpt": "ALT",
+  "alk phos": "Alkaline Phosphatase", "alkaline phosphatase": "Alkaline Phosphatase",
+  "alp": "Alkaline Phosphatase", "ggt": "GGT", "gamma-glutamyl transferase": "GGT",
+  "total bilirubin": "Total Bilirubin", "bilirubin, total": "Total Bilirubin",
+  "direct bilirubin": "Direct Bilirubin", "bilirubin, direct": "Direct Bilirubin",
+  "microalbumin": "Microalbumin", "albumin/creatinine ratio": "Albumin/Creatinine Ratio",
   // CBC
-  "wbc": "WBC",
-  "white blood cell count": "WBC",
-  "white blood cells": "WBC",
-  "rbc": "RBC",
-  "red blood cell count": "RBC",
-  "red blood cells": "RBC",
-  "hemoglobin": "Hemoglobin",
-  "hgb": "Hemoglobin",
-  "hematocrit": "Hematocrit",
-  "hct": "Hematocrit",
-  "mcv": "MCV",
-  "mch": "MCH",
-  "mchc": "MCHC",
-  "rdw": "RDW",
-  "platelets": "Platelets",
-  "platelet count": "Platelets",
-  "mpv": "MPV",
-  "neutrophils": "Neutrophils",
-  "neutrophil percentage": "Neutrophils",
-  "lymphocytes": "Lymphocytes",
-  "monocytes": "Monocytes",
-  "eosinophils": "Eosinophils",
-  "basophils": "Basophils",
-
+  "wbc": "WBC", "white blood cell count": "WBC", "white blood cells": "WBC",
+  "rbc": "RBC", "red blood cell count": "RBC", "red blood cells": "RBC",
+  "hemoglobin": "Hemoglobin", "hgb": "Hemoglobin", "hematocrit": "Hematocrit",
+  "hct": "Hematocrit", "mcv": "MCV", "mch": "MCH", "mchc": "MCHC",
+  "rdw": "RDW", "platelets": "Platelets", "platelet count": "Platelets",
+  "mpv": "MPV", "neutrophils": "Neutrophils", "neutrophil percentage": "Neutrophils",
+  "lymphocytes": "Lymphocytes", "monocytes": "Monocytes",
+  "eosinophils": "Eosinophils", "basophils": "Basophils",
   // Thyroid
-  "tsh": "TSH",
-  "thyroid stimulating hormone": "TSH",
-  "free t4": "Free T4",
-  "ft4": "Free T4",
-  "t4, free": "Free T4",
-  "free t3": "Free T3",
-  "ft3": "Free T3",
-  "t3, free": "Free T3",
-  "reverse t3": "Reverse T3",
-  "rt3": "Reverse T3",
-  "tpo antibodies": "TPO Antibodies",
-  "thyroid peroxidase antibodies": "TPO Antibodies",
+  "tsh": "TSH", "thyroid stimulating hormone": "TSH", "free t4": "Free T4",
+  "ft4": "Free T4", "t4, free": "Free T4", "free t3": "Free T3", "ft3": "Free T3",
+  "t3, free": "Free T3", "reverse t3": "Reverse T3", "rt3": "Reverse T3",
+  "tpo antibodies": "TPO Antibodies", "thyroid peroxidase antibodies": "TPO Antibodies",
   "thyroglobulin": "Thyroglobulin",
-
   // Inflammation
-  "crp": "CRP",
-  "c-reactive protein": "CRP",
-  "hs-crp": "hs-CRP",
-  "high sensitivity crp": "hs-CRP",
-  "hscrp": "hs-CRP",
-  "esr": "ESR",
-  "sedimentation rate": "ESR",
-  "erythrocyte sedimentation rate": "ESR",
-  "ferritin": "Ferritin",
-  "fibrinogen": "Fibrinogen",
-  "homocysteine": "Homocysteine",
-
+  "crp": "CRP", "c-reactive protein": "CRP", "hs-crp": "hs-CRP",
+  "high sensitivity crp": "hs-CRP", "hscrp": "hs-CRP", "esr": "ESR",
+  "sedimentation rate": "ESR", "erythrocyte sedimentation rate": "ESR",
+  "ferritin": "Ferritin", "fibrinogen": "Fibrinogen", "homocysteine": "Homocysteine",
   // Vitamins / minerals
-  "vitamin d": "Vitamin D",
-  "vitamin d, 25-hydroxy": "Vitamin D",
-  "25-hydroxyvitamin d": "Vitamin D",
-  "25(oh)d": "Vitamin D",
-  "vitamin b12": "Vitamin B12",
-  "b12": "Vitamin B12",
-  "cobalamin": "Vitamin B12",
-  "folate": "Folate",
-  "folic acid": "Folate",
-  "iron": "Iron",
-  "iron, serum": "Iron",
-  "tibc": "TIBC",
-  "total iron binding capacity": "TIBC",
-  "transferrin saturation": "Transferrin Saturation",
-  "transferrin sat": "Transferrin Saturation",
-  "transferrin": "Transferrin",
-  "zinc": "Zinc",
-  "selenium": "Selenium",
-
+  "vitamin d": "Vitamin D", "vitamin d, 25-hydroxy": "Vitamin D",
+  "25-hydroxyvitamin d": "Vitamin D", "25(oh)d": "Vitamin D",
+  "vitamin b12": "Vitamin B12", "b12": "Vitamin B12", "cobalamin": "Vitamin B12",
+  "folate": "Folate", "folic acid": "Folate", "iron": "Iron", "iron, serum": "Iron",
+  "tibc": "TIBC", "total iron binding capacity": "TIBC",
+  "transferrin saturation": "Transferrin Saturation", "transferrin sat": "Transferrin Saturation",
+  "transferrin": "Transferrin", "zinc": "Zinc", "selenium": "Selenium",
   // Cardiac
-  "troponin": "Troponin",
-  "troponin i": "Troponin",
-  "troponin t": "Troponin",
-  "nt-probnp": "NT-proBNP",
-  "bnp": "BNP",
-  "ck-mb": "CK-MB",
-
+  "troponin": "Troponin", "troponin i": "Troponin", "troponin t": "Troponin",
+  "nt-probnp": "NT-proBNP", "bnp": "BNP", "ck-mb": "CK-MB",
   // Hormones
-  "testosterone": "Testosterone",
-  "testosterone, total": "Testosterone Total",
-  "total testosterone": "Testosterone Total",
-  "free testosterone": "Testosterone Free",
-  "testosterone, free": "Testosterone Free",
-  "estradiol": "Estradiol",
-  "e2": "Estradiol",
-  "dhea-s": "DHEA-S",
-  "dheas": "DHEA-S",
-  "cortisol": "Cortisol",
-  "cortisol, am": "Cortisol",
-  "morning cortisol": "Cortisol",
-  "progesterone": "Progesterone",
-  "fsh": "FSH",
-  "follicle stimulating hormone": "FSH",
-  "lh": "LH",
-  "luteinizing hormone": "LH",
-  "shbg": "SHBG",
-  "sex hormone binding globulin": "SHBG",
-  "prolactin": "Prolactin",
+  "testosterone": "Testosterone", "testosterone, total": "Testosterone Total",
+  "total testosterone": "Testosterone Total", "free testosterone": "Testosterone Free",
+  "testosterone, free": "Testosterone Free", "estradiol": "Estradiol", "e2": "Estradiol",
+  "dhea-s": "DHEA-S", "dheas": "DHEA-S", "cortisol": "Cortisol",
+  "cortisol, am": "Cortisol", "morning cortisol": "Cortisol",
+  "progesterone": "Progesterone", "fsh": "FSH",
+  "follicle stimulating hormone": "FSH", "lh": "LH", "luteinizing hormone": "LH",
+  "shbg": "SHBG", "sex hormone binding globulin": "SHBG", "prolactin": "Prolactin",
 };
 
 function normalizeAnalyteName(rawName: string): string {
   if (!rawName) return rawName;
   const cleaned = rawName.trim().toLowerCase().replace(/\s+/g, " ");
   return CANONICAL_MAPPING[cleaned] || rawName.trim();
+}
+
+// ============================================================================
+// INBODY CANONICAL NAME MAPPING
+// ============================================================================
+
+const INBODY_CANONICAL_NAMES: Record<string, string> = {
+  "phase angle - whole body": "phase_angle_whole_body",
+  "whole body phase angle": "phase_angle_whole_body",
+  "phase angle": "phase_angle_whole_body",
+  "visceral fat area": "visceral_fat_area",
+  "vfa": "visceral_fat_area",
+  "skeletal muscle mass": "skeletal_muscle_mass",
+  "smm": "skeletal_muscle_mass",
+  "ecw/tbw": "ecw_tbw_ratio",
+  "ecw/tbw ratio": "ecw_tbw_ratio",
+  "basal metabolic rate": "basal_metabolic_rate",
+  "bmr": "basal_metabolic_rate",
+  "percent body fat": "body_fat_percent",
+  "pbf": "body_fat_percent",
+  "body fat percentage": "body_fat_percent",
+  "fat free mass": "fat_free_mass",
+  "ffm": "fat_free_mass",
+  "dry lean mass": "dry_lean_mass",
+  "body fat mass": "body_fat_mass",
+  "right arm lean mass": "segmental_lean_right_arm",
+  "left arm lean mass": "segmental_lean_left_arm",
+  "trunk lean mass": "segmental_lean_trunk",
+  "right leg lean mass": "segmental_lean_right_leg",
+  "left leg lean mass": "segmental_lean_left_leg",
+  "right arm ecw/tbw": "segmental_ecw_tbw_right_arm",
+  "left arm ecw/tbw": "segmental_ecw_tbw_left_arm",
+  "trunk ecw/tbw": "segmental_ecw_tbw_trunk",
+  "right leg ecw/tbw": "segmental_ecw_tbw_right_leg",
+  "left leg ecw/tbw": "segmental_ecw_tbw_left_leg",
+  "impedance 5khz - whole body": "whole_body_impedance_5khz",
+  "impedance 50khz - whole body": "whole_body_impedance_50khz",
+  "whole body impedance at 5khz": "whole_body_impedance_5khz",
+  "whole body impedance at 50khz": "whole_body_impedance_50khz",
+};
+
+function normalizeInBodyName(rawName: string): string {
+  if (!rawName) return rawName;
+  const cleaned = rawName.trim().toLowerCase().replace(/\s+/g, " ");
+  return INBODY_CANONICAL_NAMES[cleaned] || rawName.trim();
 }
 
 // ============================================================================
@@ -210,35 +144,20 @@ const SUPPORTED_MIME_TYPES: Record<string, { mediaType: string; contentType: "do
   "image/jpeg": { mediaType: "image/jpeg", contentType: "image" },
   "image/png": { mediaType: "image/png", contentType: "image" },
   "image/webp": { mediaType: "image/webp", contentType: "image" },
-  "image/heic": { mediaType: "image/jpeg", contentType: "image" }, // HEIC converted on upload
+  "image/heic": { mediaType: "image/jpeg", contentType: "image" },
 };
-
-function getFileExtension(mimeType: string): string {
-  const map: Record<string, string> = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/heic": ".jpg",
-  };
-  return map[mimeType] || ".bin";
-}
 
 function detectMimeFromPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
-    pdf: "application/pdf",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    webp: "image/webp",
-    heic: "image/heic",
+    pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg",
+    png: "image/png", webp: "image/webp", heic: "image/heic",
   };
   return map[ext || ""] || "application/pdf";
 }
 
 // ============================================================================
-// THE EXTRACTION SYSTEM PROMPT
+// THE STANDARD EXTRACTION SYSTEM PROMPT
 // ============================================================================
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a structured data extractor for medical lab reports. You will receive a lab report (as a PDF or photo/image) and must extract every biomarker observation as structured JSON.
@@ -306,6 +225,111 @@ If you encounter an empty document, an unreadable scan, or a document that is no
 { "meta": { "source_lab": null, "collection_date": null, "ordering_provider": null }, "observations": [] }`;
 
 // ============================================================================
+// INBODY-SPECIFIC EXTRACTION SYSTEM PROMPT
+// ============================================================================
+
+const INBODY_EXTRACTION_SYSTEM_PROMPT = `You are a structured data extractor for InBody body composition analysis reports (InBody 970, InBody 770, InBody S10, or any InBody BWA report). You will receive an InBody report and must extract every measurable output as structured JSON.
+
+Your output must be a single valid JSON object. No preamble. No markdown code fences. No explanation. Just the JSON, starting with { and ending with }.
+
+═══════════════════════════════════════════════════════════════════════════
+OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
+═══════════════════════════════════════════════════════════════════════════
+
+{
+  "meta": {
+    "source_lab": "InBody",
+    "collection_date": "string — test date in ISO format YYYY-MM-DD",
+    "ordering_provider": null,
+    "is_inbody": true
+  },
+  "observations": [
+    {
+      "raw_name": "string — the measurement name using these EXACT canonical names (see list below)",
+      "value": "number — the numeric result",
+      "unit": "string — the unit of measurement",
+      "ref_low": "number or null",
+      "ref_high": "number or null",
+      "flag": "string — 'low', 'normal', 'high', or 'critical'"
+    }
+  ]
+}
+
+═══════════════════════════════════════════════════════════════════════════
+CANONICAL MEASUREMENT NAMES — USE THESE EXACT STRINGS
+═══════════════════════════════════════════════════════════════════════════
+
+Extract these measurements using EXACTLY these raw_name values:
+
+WHOLE BODY COMPOSITION:
+- "Skeletal Muscle Mass" — SMM value (unit: lb or kg)
+- "Body Fat Mass" — total body fat mass (unit: lb or kg)
+- "Fat Free Mass" — FFM value (unit: lb or kg)
+- "Dry Lean Mass" — DLM value (unit: lb or kg)
+- "Percent Body Fat" — PBF value (unit: %)
+- "Visceral Fat Area" — VFA value (unit: cm²)
+- "Basal Metabolic Rate" — BMR value (unit: kcal)
+- "ECW/TBW" — whole body ECW/TBW ratio (unit: ratio)
+- "Phase Angle - Whole Body" — whole body phase angle at 50kHz (unit: °)
+
+BODY WATER:
+- "Total Body Water" — TBW value (unit: lb or kg)
+- "Intracellular Water" — ICW value (unit: lb or kg)
+- "Extracellular Water" — ECW value (unit: lb or kg)
+
+SEGMENTAL LEAN MASS (from Segmental Lean Analysis section):
+- "Right Arm Lean Mass" — right arm lean mass (unit: lb or kg)
+- "Left Arm Lean Mass" — left arm lean mass (unit: lb or kg)
+- "Trunk Lean Mass" — trunk lean mass (unit: lb or kg)
+- "Right Leg Lean Mass" — right leg lean mass (unit: lb or kg)
+- "Left Leg Lean Mass" — left leg lean mass (unit: lb or kg)
+
+SEGMENTAL ECW/TBW (from Segmental ECW/TBW Analysis or Segmental Lean Analysis ECW/TBW column):
+- "Right Arm ECW/TBW" — (unit: ratio)
+- "Left Arm ECW/TBW" — (unit: ratio)
+- "Trunk ECW/TBW" — (unit: ratio)
+- "Right Leg ECW/TBW" — (unit: ratio)
+- "Left Leg ECW/TBW" — (unit: ratio)
+
+SEGMENTAL PHASE ANGLES (if available, from Phase Angle section):
+- "Phase Angle - Right Arm" (unit: °)
+- "Phase Angle - Left Arm" (unit: °)
+- "Phase Angle - Trunk" (unit: °)
+- "Phase Angle - Right Leg" (unit: °)
+- "Phase Angle - Left Leg" (unit: °)
+
+OBESITY:
+- "BMI" — Body Mass Index (unit: kg/m²)
+- "Weight" — total weight (unit: lb or kg)
+
+═══════════════════════════════════════════════════════════════════════════
+EXTRACTION RULES
+═══════════════════════════════════════════════════════════════════════════
+
+RULE 1 — EXTRACT EVERY MEASUREMENT LISTED ABOVE that appears in the report. InBody reports are dense — read every section carefully. The bar charts contain numeric values at their endpoints or labels.
+
+RULE 2 — USE THE EXACT RAW_NAME strings listed above. Do NOT use abbreviations like "SMM" or "PBF" as raw_name. Use the full canonical name.
+
+RULE 3 — REFERENCE RANGES. InBody reports show ranges as bar chart regions. Extract the normal range boundaries when visible. For ECW/TBW, the normal range is 0.360-0.390. For PBF female: 18-28%, male: 10-20%. For VFA: 0-100 cm².
+
+RULE 4 — FLAG DETERMINATION. If a value falls outside its reference range:
+  - ECW/TBW > 0.390 → "high"
+  - PBF above sex-specific range → "high"
+  - VFA > 100 → "high"
+  - If the bar chart shows the value in the "over" zone → "high"
+  - If in normal zone → "normal"
+  - If below normal zone → "low"
+
+RULE 5 — TEST DATE. The test date appears near the top of the report (e.g., "09.01.2026 10:42"). Convert to YYYY-MM-DD format. Note: InBody dates may use DD.MM.YYYY or MM.DD.YYYY format — use context clues to determine the correct parsing.
+
+RULE 6 — SEGMENTAL DATA. The Segmental Lean Analysis table has both lean mass values AND ECW/TBW ratios per segment. Extract BOTH — the lean mass as separate observations AND the per-segment ECW/TBW as separate observations.
+
+RULE 7 — OUTPUT MUST BE VALID JSON. Your entire response is a single JSON object. No preamble. No markdown code fences. No closing comments. Just the JSON.
+
+If you cannot read the report or it is not an InBody report, return:
+{ "meta": { "source_lab": null, "collection_date": null, "ordering_provider": null, "is_inbody": false }, "observations": [] }`;
+
+// ============================================================================
 // CHUNKED BASE64 ENCODING
 // ============================================================================
 
@@ -321,34 +345,34 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 // ============================================================================
+// INBODY DETECTION
+// ============================================================================
+
+function isInBodyReport(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.includes("inbody") || lower.includes("bwa") || lower.includes("body composition");
+}
+
+// ============================================================================
 // CLAUDE VISION CALL — supports PDF and images
 // ============================================================================
 
-async function callClaudeWithDocument(base64Data: string, mimeType: string): Promise<string> {
+async function callClaudeWithDocument(base64Data: string, mimeType: string, systemPrompt: string): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
   const typeInfo = SUPPORTED_MIME_TYPES[mimeType] || SUPPORTED_MIME_TYPES["application/pdf"];
 
-  // Build the content block based on whether it's a document (PDF) or image
   let sourceBlock: any;
   if (typeInfo.contentType === "document") {
     sourceBlock = {
       type: "document",
-      source: {
-        type: "base64",
-        media_type: typeInfo.mediaType,
-        data: base64Data,
-      },
+      source: { type: "base64", media_type: typeInfo.mediaType, data: base64Data },
     };
   } else {
     sourceBlock = {
       type: "image",
-      source: {
-        type: "base64",
-        media_type: typeInfo.mediaType,
-        data: base64Data,
-      },
+      source: { type: "base64", media_type: typeInfo.mediaType, data: base64Data },
     };
   }
 
@@ -362,19 +386,17 @@ async function callClaudeWithDocument(base64Data: string, mimeType: string): Pro
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 16384,
-      system: EXTRACTION_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            sourceBlock,
-            {
-              type: "text",
-              text: "Extract all biomarker observations from this lab report. Return only the JSON object as specified in your instructions.",
-            },
-          ],
-        },
-      ],
+      system: systemPrompt,
+      messages: [{
+        role: "user",
+        content: [
+          sourceBlock,
+          {
+            type: "text",
+            text: "Extract all measurements from this report. Return only the JSON object as specified in your instructions.",
+          },
+        ],
+      }],
     }),
   });
 
@@ -388,24 +410,17 @@ async function callClaudeWithDocument(base64Data: string, mimeType: string): Pro
 }
 
 function extractJsonFromText(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    if (fenceMatch) {
-      try {
-        return JSON.parse(fenceMatch[1]);
-      } catch {}
-    }
-    const firstBrace = text.indexOf("{");
-    const lastBrace = text.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      try {
-        return JSON.parse(text.slice(firstBrace, lastBrace + 1));
-      } catch {}
-    }
-    throw new Error("Could not extract valid JSON from extraction output");
+  try { return JSON.parse(text); } catch { /* continue */ }
+  const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1]); } catch { /* continue */ }
   }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)); } catch { /* continue */ }
+  }
+  throw new Error("Could not extract valid JSON from extraction output");
 }
 
 // ============================================================================
@@ -426,6 +441,7 @@ interface ExtractionResult {
     source_lab: string | null;
     collection_date: string | null;
     ordering_provider: string | null;
+    is_inbody?: boolean;
   };
   observations: ExtractedObservation[];
 }
@@ -439,6 +455,7 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
       source_lab: typeof raw.meta?.source_lab === "string" ? raw.meta.source_lab : null,
       collection_date: typeof raw.meta?.collection_date === "string" ? raw.meta.collection_date : null,
       ordering_provider: typeof raw.meta?.ordering_provider === "string" ? raw.meta.ordering_provider : null,
+      is_inbody: raw.meta?.is_inbody === true,
     },
     observations: [],
   };
@@ -475,7 +492,6 @@ async function processUpload(uploadId: string) {
     auth: { persistSession: false },
   });
 
-  // Fetch the upload row
   const { data: upload, error: uploadError } = await supabase
     .from("patient_lab_uploads")
     .select("*")
@@ -506,15 +522,18 @@ async function processUpload(uploadId: string) {
       throw new Error(`Failed to download file from storage: ${downloadError?.message}`);
     }
 
-    // Convert to base64 using chunked approach
     const arrayBuffer = await fileData.arrayBuffer();
     const base64Data = arrayBufferToBase64(arrayBuffer);
-
-    // Detect MIME type from file path
     const mimeType = detectMimeFromPath(upload.storage_path);
 
-    // Call Claude vision
-    const rawOutput = await callClaudeWithDocument(base64Data, mimeType);
+    // Detect if this is an InBody report
+    const isInBody = isInBodyReport(upload.original_filename);
+    const systemPrompt = isInBody ? INBODY_EXTRACTION_SYSTEM_PROMPT : EXTRACTION_SYSTEM_PROMPT;
+
+    console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}`);
+
+    // Call Claude vision with appropriate prompt
+    const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
     const parsed = extractJsonFromText(rawOutput);
     const extracted = validateAndCleanExtraction(parsed);
 
@@ -522,14 +541,17 @@ async function processUpload(uploadId: string) {
       throw new Error("Extracted data did not match expected schema");
     }
 
-    // Determine collection_date
+    // Also detect InBody from the LLM response
+    const detectedInBody = isInBody || extracted.meta.is_inbody === true;
+
     const collectionDate = extracted.meta.collection_date || new Date().toISOString().slice(0, 10);
+    const sourceLab = detectedInBody ? "InBody" : extracted.meta.source_lab;
 
     // Update upload metadata
     await supabase
       .from("patient_lab_uploads")
       .update({
-        source_lab: extracted.meta.source_lab,
+        source_lab: sourceLab,
         collection_date: collectionDate,
         ordering_provider: extracted.meta.ordering_provider,
         observations_extracted: extracted.observations.length,
@@ -541,7 +563,10 @@ async function processUpload(uploadId: string) {
     let duplicates = 0;
 
     for (const obs of extracted.observations) {
-      const canonicalName = normalizeAnalyteName(obs.raw_name);
+      // Use InBody canonical names for InBody reports, standard mapping otherwise
+      const canonicalName = detectedInBody
+        ? normalizeInBodyName(obs.raw_name)
+        : normalizeAnalyteName(obs.raw_name);
 
       const { error: insertError } = await supabase
         .from("patient_lab_observations")
@@ -550,14 +575,14 @@ async function processUpload(uploadId: string) {
           upload_id: uploadId,
           raw_name: obs.raw_name,
           canonical_name: canonicalName,
-          display_name: canonicalName,
+          display_name: obs.raw_name,
           value: obs.value,
           unit: obs.unit,
           ref_low: obs.ref_low,
           ref_high: obs.ref_high,
           flag: obs.flag,
           collection_date: collectionDate,
-          source: extracted.meta.source_lab,
+          source: sourceLab,
         });
 
       if (insertError) {
@@ -582,7 +607,7 @@ async function processUpload(uploadId: string) {
       })
       .eq("id", uploadId);
 
-    console.log(`Upload ${uploadId} complete: ${extracted.observations.length} extracted, ${inserted} inserted, ${duplicates} duplicates`);
+    console.log(`Upload ${uploadId} complete: ${extracted.observations.length} extracted, ${inserted} inserted, ${duplicates} duplicates, isInBody=${detectedInBody}`);
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     console.error(`Upload ${uploadId} failed:`, errorMessage);
@@ -622,7 +647,6 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Verify the upload exists
     const { data: upload, error: uploadError } = await supabase
       .from("patient_lab_uploads")
       .select("id, status")
@@ -636,7 +660,6 @@ serve(async (req) => {
       });
     }
 
-    // Process in background using EdgeRuntime.waitUntil
     // @ts-ignore — EdgeRuntime is available in Supabase edge functions
     EdgeRuntime.waitUntil(processUpload(uploadId));
 
