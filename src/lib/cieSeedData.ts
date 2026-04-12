@@ -580,10 +580,44 @@ export const CIE_GATES: CieGate[] = [
 export const CIE_DOMAIN_MAP = Object.fromEntries(CIE_DOMAINS.map((d) => [d.id, d]));
 export const CIE_GATE_MAP = Object.fromEntries(CIE_GATES.map((g) => [g.id, g]));
 
+// ── Positive-polarity questions: "yes"/"always" = healthy behavior = 100 ──
+const POSITIVE_POLARITY: Set<string> = new Set([
+  "H22Q1", "H22Q2", "H22D1", "H22D2", "H22D3", "H22D5", "H22D7", "H22D8",
+  "H23Q2", "H23Q3", "H23D1", "H23D2", "H23D5", "H23D6", "H23D7", "H23D8", "H23D9", "H23D10",
+  "I24Q1", "I24D1", "I24D5", "I24D8",
+  "J25Q1", "J25Q3",
+  "E13D9", "E13D10", "E14D5", "E14D10", "E15D10",
+  "F16D8", "F17D9",
+  "F18D2", "F18D3", "F18D10",
+  "G19D10", "G20D10", "G21D8",
+  "D12D8",
+]);
+
+// ── Neutral-polarity questions: diagnostic awareness — score 50 regardless ──
+const NEUTRAL_POLARITY: Set<string> = new Set([
+  "A1D8", "A2D6", "A2D8", "B4D8", "B5D5", "B5D6", "B6D5", "B6D9",
+  "C8D2", "C8D7", "C9D6", "D10D5", "D11D2", "D11D5", "D11D9",
+  "D12D5", "D12D10", "E13D5", "E15D5", "F16D5", "F16D9", "F17D8",
+  "F18D1", "G19D2", "G19D5", "G19D7", "G20D1", "G20D5", "G20D9",
+  "G21D1", "G21D5", "G21D7", "H22D9", "I24D7",
+]);
+
 // ── Client-side scoring (mirrors edge function for optimistic UI) ──
-export function scoreResponse(questionType: string, rawResponse: string): number {
+export function scoreResponse(questionType: string, rawResponse: string, questionId?: string): number {
+  if (questionId && NEUTRAL_POLARITY.has(questionId)) return 50;
+
   const map = SCORE_MAPS[questionType] || SCORE_MAPS.frequency;
-  return map[rawResponse.toLowerCase()] ?? 50;
+  const baseScore = map[rawResponse.toLowerCase()] ?? 50;
+
+  if (questionId && POSITIVE_POLARITY.has(questionId)) {
+    if (questionType === "effectiveness" || questionType === "comparison" ||
+        questionType === "chronotype" || questionType === "activity") {
+      return baseScore;
+    }
+    return 100 - baseScore;
+  }
+
+  return baseScore;
 }
 
 export function computeDomainScore(
