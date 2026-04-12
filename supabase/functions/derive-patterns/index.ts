@@ -113,6 +113,9 @@ function mean(nums: number[]): number {
 // RULE 1 — Biomarker trend detection
 // ============================================================================
 
+/** Normalize any timestamp to YYYY-MM-DD for date-distinct counting */
+const toDateKey = (ts: string) => ts.slice(0, 10);
+
 function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
   const results: RuleDetection[] = [];
   const timeline = raw.biomarkerTimeline || [];
@@ -127,7 +130,19 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
 
   for (const [name, observations] of Object.entries(byName)) {
     if (observations.length < 3) continue;
-    const sorted = sortByDate(observations, true);
+
+    // ── Gate: require ≥3 distinct calendar dates ──
+    // InBody and similar single-report sources produce multiple observations
+    // on the same date (segmental data). Those are NOT trends.
+    const distinctDates = new Set(observations.map((o) => toDateKey(o.timestamp)));
+    if (distinctDates.size < 3) continue;
+
+    // Deduplicate to one observation per date (latest value wins)
+    const byDate: Record<string, BiomarkerObservation> = {};
+    for (const obs of sortByDate(observations, true)) {
+      byDate[toDateKey(obs.timestamp)] = obs;
+    }
+    const sorted = Object.values(byDate).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const recent = sorted.slice(-3);
 
     const values = recent.map((o) => o.value);
@@ -166,7 +181,7 @@ function ruleBiomarkerTrend(raw: RawDataLayer): RuleDetection[] {
       summary: `Your ${name} has been ${direction} over the last three measurements — from ${firstVal} ${unit} on ${firstDate} to ${lastVal} ${unit} on ${lastDate}. ${direction === "rising" && refHigh != null && lastVal > refHigh ? "The most recent value is above the normal range." : direction === "falling" && refLow != null && lastVal < refLow ? "The most recent value is below the normal range." : "The values are still within normal range, but the direction is worth noting."}`,
       evidence: {
         source: "biomarker_timeline",
-        description: `Three most recent ${name} measurements`,
+        description: `Three most recent ${name} measurements on distinct dates`,
         values: recent.map((o) => ({ value: o.value, unit: o.unit, date: o.timestamp.slice(0, 10), flag: o.flag })),
       },
       suggested_question:
