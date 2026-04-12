@@ -4,6 +4,7 @@ import ChatReasoningTrace, { ReasoningContext } from "@/components/chat/ChatReas
 import ChatMessage, { ChatMessageData } from "@/components/chat/ChatMessage";
 import ChatInputBar from "@/components/chat/ChatInputBar";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
