@@ -298,7 +298,17 @@ function composeUserMessage(
 ): string {
   const sections: string[] = [];
 
-  sections.push("PATIENT IDENTITY:");
+  // Data layer flags per Part 7
+  const hasLabs = labObs.length > 0;
+  sections.push("DATA LAYERS PRESENT FOR THIS PATIENT:");
+  sections.push(`- CIE assessment: yes (${domainScores.length} domain scores, ${gateScores.length} gate scores, ${responses.length} responses)`);
+  sections.push(`- Labs: ${hasLabs ? `yes (${labObs.length} observations)` : "no"}`);
+  sections.push("- EMR/records: no");
+  sections.push("- Medications: no");
+  sections.push("- Sensors: no");
+  sections.push("- Food log: no");
+
+  sections.push("\nPATIENT IDENTITY:");
   sections.push(`Name: ${profile.first_name || "Unknown"}, Age: ${profile.age || "?"}, Sex: ${profile.sex || "?"}`);
 
   sections.push("\nGATE SCORES (9 gates):");
@@ -333,7 +343,6 @@ function composeUserMessage(
   const gaps: string[] = [];
   for (const d of domainScores) {
     if (d.final_score >= 70) {
-      // High domain score — check if any gate it contributes to is YELLOW/ORANGE/RED
       const contributingGates = gateScores.filter(g =>
         (g.contributing_domains || []).includes(d.domain_id) && g.traffic_light !== "GREEN"
       );
@@ -349,7 +358,7 @@ function composeUserMessage(
     for (const g of gaps.slice(0, 10)) sections.push(`  - ${g}`);
   }
 
-  // CIE responses summary — just counts by domain for context
+  // CIE responses summary
   if (responses.length > 0) {
     const lowResponses = responses.filter(r => r.score <= 25);
     if (lowResponses.length > 0) {
@@ -361,7 +370,7 @@ function composeUserMessage(
   }
 
   // Lab observations
-  if (labObs.length > 0) {
+  if (hasLabs) {
     sections.push(`\nLAB OBSERVATIONS (${labObs.length} biomarkers from last 6 months):`);
     for (const o of labObs.slice(0, 30)) {
       const flag = o.flag ? ` [${o.flag}]` : "";
@@ -372,7 +381,7 @@ function composeUserMessage(
     sections.push("\nLAB OBSERVATIONS: (none on file)");
   }
 
-  sections.push("\nProduce the terrain render JSON now. Output only the JSON, nothing else.");
+  sections.push("\nProduce the rendering following every operational move in Part 4 of the framework. Use the voice-shift rules from Part 3 depending on which data layers are present. Never use any vocabulary from Part 5. Reach for the vocabulary in Part 6 when the data supports it. Return strict JSON in the schema defined above. No preamble. No markdown code fences.");
   return sections.join("\n");
 }
 
