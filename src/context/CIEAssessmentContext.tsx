@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 
 interface CIEDomainScore {
   domain_id: string;
@@ -47,13 +48,15 @@ export function useCIEAssessment() {
 
 export const CIEAssessmentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const [currentAssessment, setCurrentAssessment] = useState<CIEAssessment | null>(null);
   const [domainScores, setDomainScores] = useState<Record<string, CIEDomainScore>>({});
   const [gateScores, setGateScores] = useState<Record<string, CIEGateScore>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const uid = effectiveUserId;
+    if (!uid) {
       setIsLoading(false);
       return;
     }
@@ -64,7 +67,7 @@ export const CIEAssessmentProvider: React.FC<{ children: React.ReactNode }> = ({
       const { data: assessment } = await supabase
         .from("cie_assessments")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", uid)
         .eq("status", "complete")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -129,7 +132,7 @@ export const CIEAssessmentProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
     refresh();
