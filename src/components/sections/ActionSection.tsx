@@ -214,11 +214,12 @@ const ActionSection: React.FC = () => {
   const totalCount = actions.length;
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  if (loading) {
+  if (loading || generating) {
     return (
-      <PatientSectionLayout eyebrow="WHAT TO DO" title="Loading your action plan…">
-        <div className="h-48 flex items-center justify-center">
+      <PatientSectionLayout eyebrow="WHAT TO DO" title={generating ? "Matching interventions to your data…" : "Loading your action plan…"}>
+        <div className="h-48 flex items-center justify-center flex-col gap-3">
           <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          {generating && <p className="text-sm text-muted-foreground">This takes a few seconds</p>}
         </div>
       </PatientSectionLayout>
     );
