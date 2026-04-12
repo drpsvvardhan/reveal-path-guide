@@ -4,6 +4,7 @@ import ChatReasoningTrace, { ReasoningContext } from "@/components/chat/ChatReas
 import ChatMessage, { ChatMessageData } from "@/components/chat/ChatMessage";
 import ChatInputBar from "@/components/chat/ChatInputBar";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
@@ -90,6 +91,7 @@ function extractCitedPatterns(text: string): ReasoningContext["citedPatterns"] {
 
 const AskSection: React.FC = () => {
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const manifest = useActiveManifest();
   const { documents } = useDocuments();
   const { refresh: refreshQueue } = useQueue();
@@ -171,7 +173,7 @@ const AskSection: React.FC = () => {
           manifest,
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: "claude-sonnet-4-20250514",
-          userId: user?.id,
+          userId: effectiveUserId,
         }),
       });
 
