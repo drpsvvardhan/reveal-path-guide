@@ -2,7 +2,8 @@ import React, { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut, ChevronDown } from "lucide-react";
+import { useViewAs } from "@/context/ViewAsContext";
+import { LogOut, ChevronDown, Users, ArrowLeft } from "lucide-react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
@@ -45,6 +46,7 @@ const sections: Record<string, React.FC> = {
 const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
   const { signOut, user } = useAuth();
+  const { isAdmin, isViewingAs, allProfiles, viewAs, resetViewAs, effectiveUserId } = useViewAs();
   const [activeSection, setActiveSection] = useState("journey");
   const [profileOpen, setProfileOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
