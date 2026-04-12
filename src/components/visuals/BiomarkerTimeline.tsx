@@ -6,6 +6,9 @@ interface BiomarkerTimelineProps {
   className?: string;
 }
 
+/** Normalize any timestamp to YYYY-MM-DD for date-distinct counting */
+const toDateKey = (ts: string) => ts.slice(0, 10);
+
 const BiomarkerTimeline: React.FC<BiomarkerTimelineProps> = ({ observations, className }) => {
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
 
@@ -15,18 +18,42 @@ const BiomarkerTimeline: React.FC<BiomarkerTimelineProps> = ({ observations, cla
     byMarker[obs.name].push(obs);
   }
 
-  const topMarkers = Object.entries(byMarker)
-    .filter(([, obs]) => obs.length >= 2)
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 4)
-    .map(([name]) => name);
+  // Separate markers with ≥2 distinct calendar dates (real trends)
+  // from single-date markers (first measurements awaiting a second point)
+  const trendMarkers: string[] = [];
+  const singleDateMarkers: string[] = [];
 
-  if (topMarkers.length === 0) {
+  for (const [name, obs] of Object.entries(byMarker)) {
+    const distinctDates = new Set(obs.map((o) => toDateKey(o.timestamp)));
+    if (distinctDates.size >= 2) {
+      trendMarkers.push(name);
+    } else {
+      singleDateMarkers.push(name);
+    }
+  }
+
+  // Sort trend markers by observation count descending, take top 4
+  const topTrends = trendMarkers
+    .sort((a, b) => byMarker[b].length - byMarker[a].length)
+    .slice(0, 4);
+
+  // If fewer than 4 trends, fill remaining slots with single-date markers
+  const singleSlots = Math.max(0, 4 - topTrends.length);
+  const topSingles = singleDateMarkers
+    .sort((a, b) => {
+      // Most recent observation first
+      const latestA = byMarker[a].sort((x, y) => y.timestamp.localeCompare(x.timestamp))[0];
+      const latestB = byMarker[b].sort((x, y) => y.timestamp.localeCompare(x.timestamp))[0];
+      return latestB.timestamp.localeCompare(latestA.timestamp);
+    })
+    .slice(0, singleSlots);
+
+  if (topTrends.length === 0 && topSingles.length === 0) {
     return (
       <div className={`rounded-xl border border-border bg-card/50 p-5 ${className || ""}`}>
         <p className="text-[10px] font-sans font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">BIOMARKER TIMELINE</p>
         <p className="text-xs text-muted-foreground italic">
-          Upload more labs to see your biomarker trends over time. At least two measurements per marker are needed.
+          Upload more labs to see your biomarker trends over time. At least two measurements on different dates per marker are needed.
         </p>
       </div>
     );
@@ -39,7 +66,7 @@ const BiomarkerTimeline: React.FC<BiomarkerTimelineProps> = ({ observations, cla
         <p className="text-[11px] text-muted-foreground">Your most-tracked markers over time</p>
       </div>
       <div className="space-y-5">
-        {topMarkers.map((markerName) => (
+        {topTrends.map((markerName) => (
           <MiniLineChart
             key={markerName}
             name={markerName}
@@ -49,6 +76,42 @@ const BiomarkerTimeline: React.FC<BiomarkerTimelineProps> = ({ observations, cla
             onLeave={() => setSelectedMarker(null)}
           />
         ))}
+        {topSingles.map((markerName) => (
+          <SingleMeasurementCard
+            key={markerName}
+            name={markerName}
+            observations={byMarker[markerName]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** Card for markers with only one calendar date — no trend line, just a dot */
+const SingleMeasurementCard: React.FC<{
+  name: string;
+  observations: BiomarkerObservation[];
+}> = ({ name, observations }) => {
+  const sorted = [...observations].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const latest = sorted[0];
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-xs font-medium text-foreground truncate">{name}</p>
+        <div className="flex items-baseline gap-1 shrink-0">
+          <span className="text-xs font-mono text-foreground">{latest.value} {latest.unit}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 py-2">
+        <svg width={280} height={20} viewBox="0 0 280 20" className="w-full">
+          <circle cx={140} cy={10} r={4} fill="currentColor" className="text-foreground/40" />
+        </svg>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-[9px] text-muted-foreground/60">{toDateKey(latest.timestamp)}</span>
+        <span className="text-[9px] text-muted-foreground italic">First measurement — awaiting second point for trend</span>
       </div>
     </div>
   );
@@ -115,8 +178,8 @@ const MiniLineChart: React.FC<{
         <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={4} fill="none" stroke="currentColor" strokeWidth={1.5} className={latest.flag === "high" ? "text-amber-600" : latest.flag === "low" ? "text-blue-600" : "text-success"} />
       </svg>
       <div className="flex justify-between text-[9px] text-muted-foreground/60">
-        <span>{first.timestamp.slice(0, 7)}</span>
-        <span>{latest.timestamp.slice(0, 7)}</span>
+        <span>{toDateKey(first.timestamp)}</span>
+        <span>{toDateKey(latest.timestamp)}</span>
       </div>
     </div>
   );
