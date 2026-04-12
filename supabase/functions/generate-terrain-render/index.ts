@@ -94,6 +94,39 @@ const INBODY_TERRAIN_MAP: Record<string, {
   segmental_phase_angle_asymmetry: { coordinates: ["V", "Σ"], gates: ["GRIP", "CLI"], interpretation: "Localized cellular compromise and autonomic asymmetry", direction: "lower_is_better" },
 };
 
+// Reverse lookup: old-format canonical names → terrain map keys
+// Handles data already stored with the previous extraction prompt
+const INBODY_NAME_LOOKUP: Record<string, string> = {
+  "whole body phase angle": "phase_angle_whole_body",
+  "phase angle": "phase_angle_whole_body",
+  "visceral fat area": "visceral_fat_area",
+  "vfa": "visceral_fat_area",
+  "skeletal muscle mass": "skeletal_muscle_mass",
+  "smm": "skeletal_muscle_mass",
+  "ecw/tbw": "ecw_tbw_ratio",
+  "basal metabolic rate": "basal_metabolic_rate",
+  "bmr": "basal_metabolic_rate",
+  "pbf": "body_fat_percent",
+  "percent body fat": "body_fat_percent",
+  "fat free mass": "fat_free_mass",
+  "dry lean mass": "dry_lean_mass",
+  "body fat mass": "body_fat_mass",
+  "right arm lean mass": "segmental_lean_right_arm",
+  "left arm lean mass": "segmental_lean_left_arm",
+  "trunk lean mass": "segmental_lean_trunk",
+  "right leg lean mass": "segmental_lean_right_leg",
+  "left leg lean mass": "segmental_lean_left_leg",
+};
+
+function resolveInBodyMapping(canonicalName: string): typeof INBODY_TERRAIN_MAP[string] | null {
+  // Direct match on new-format keys
+  if (INBODY_TERRAIN_MAP[canonicalName]) return INBODY_TERRAIN_MAP[canonicalName];
+  // Reverse lookup on old-format names
+  const key = INBODY_NAME_LOOKUP[canonicalName.toLowerCase()];
+  if (key && INBODY_TERRAIN_MAP[key]) return INBODY_TERRAIN_MAP[key];
+  return null;
+}
+
 // ============================================================================
 // THE TERRAIN RENDER SYSTEM PROMPT
 // ============================================================================
