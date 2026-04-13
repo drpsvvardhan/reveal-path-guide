@@ -73,12 +73,14 @@ async function callClaude(
       throw new Error(`Anthropic API error ${response.status}: ${errText}`);
     }
 
-  const data = await response.json();
-  const textBlock = data.content?.find((b: any) => b.type === "text");
-  if (!textBlock) {
-    throw new Error("Claude returned no text content");
+    const data = await response.json();
+    const textBlock = data.content?.find((b: any) => b.type === "text");
+    if (!textBlock) {
+      throw new Error("Claude returned no text content");
+    }
+    return stripJsonFences(textBlock.text);
   }
-  return stripJsonFences(textBlock.text);
+  throw new Error("Max retries exceeded for Claude API call");
 }
 
 async function runTriangulationPipeline(patientId: string) {
