@@ -189,6 +189,13 @@ const IntakeQuestionCard: React.FC<IntakeQuestionCardProps> = ({
             )}
           </AnimatePresence>
         </div>
+
+        {/* Subtle long-press hint — only shown once at the start */}
+        {!revealed && (
+          <p className="text-[10px] text-muted-foreground/40 mt-2 tracking-wide">
+            Misread a question? Long-press to go back one.
+          </p>
+        )}
       </motion.div>
     </AnimatePresence>
   );
