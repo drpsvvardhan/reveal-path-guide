@@ -182,7 +182,7 @@ export async function loadPatientContext(
     .limit(40);
 
   return {
-    patient_id: patientId,
+    patient_id: canonicalPatientId,
     profile: {
       display_name: profile?.display_name ?? null,
       age: profile?.age ?? null,
