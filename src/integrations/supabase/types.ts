@@ -228,7 +228,10 @@ export type Database = {
           question_id: string
           question_type: string
           raw_response: string
+          response_latency_ms: number | null
           score: number
+          t1_answer: string | null
+          t1_latency_ms: number | null
           user_id: string
         }
         Insert: {
@@ -240,7 +243,10 @@ export type Database = {
           question_id: string
           question_type: string
           raw_response: string
+          response_latency_ms?: number | null
           score?: number
+          t1_answer?: string | null
+          t1_latency_ms?: number | null
           user_id: string
         }
         Update: {
@@ -252,7 +258,10 @@ export type Database = {
           question_id?: string
           question_type?: string
           raw_response?: string
+          response_latency_ms?: number | null
           score?: number
+          t1_answer?: string | null
+          t1_latency_ms?: number | null
           user_id?: string
         }
         Relationships: [
@@ -619,6 +628,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      reconsideration_events: {
+        Row: {
+          assessment_id: string
+          created_at: string
+          delta_type: string | null
+          domain_id: string
+          id: string
+          question_id: string
+          t1_answer: string
+          t1_latency_ms: number
+          t2_answer: string | null
+          t2_latency_ms: number | null
+          user_id: string
+        }
+        Insert: {
+          assessment_id: string
+          created_at?: string
+          delta_type?: string | null
+          domain_id: string
+          id?: string
+          question_id: string
+          t1_answer: string
+          t1_latency_ms: number
+          t2_answer?: string | null
+          t2_latency_ms?: number | null
+          user_id: string
+        }
+        Update: {
+          assessment_id?: string
+          created_at?: string
+          delta_type?: string | null
+          domain_id?: string
+          id?: string
+          question_id?: string
+          t1_answer?: string
+          t1_latency_ms?: number
+          t2_answer?: string | null
+          t2_latency_ms?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconsideration_events_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       terrain_renders: {
         Row: {
