@@ -11,19 +11,36 @@ const COORDINATES: { label: string; short: string; key: Coordinate }[] = [
   { label: "Scar", short: "Σ", key: "Scar" },
 ];
 
-const KEYWORD_MAP: [RegExp, Coordinate][] = [
-  [/inflammat|immune|barrier|gut/i, "Inflammation"],
-  [/cardiovasc|vascular|endothel|particle|hdl|ldl/i, "Vascular"],
-  [/regulat|thyroid|adrenal|circadian|autonomic|stress|sleep/i, "Regulation"],
-  [/scar|calc|fibrosis|irreversible|historical/i, "Scar"],
-  [/metabol|glucose|lipid|hepatic|mitochondrial/i, "Energy"],
-];
+function classifyKind(kindOrText: string): Coordinate {
+  const text = kindOrText.toLowerCase();
 
-function classifyKind(kind: string): Coordinate {
-  for (const [re, coord] of KEYWORD_MAP) {
-    if (re.test(kind)) return coord;
+  // Scar — irreversible structural change
+  if (/\b(scar|calc|fibros|sclero|stenos|plaque|irreversibl|historical|stiffness)\b/.test(text)) {
+    return "Scar";
   }
-  return "Energy";
+
+  // Vascular — endothelium, particles, vessels, kidney filtration
+  if (/\b(cardiovascular|vascular|endothel|particle|hdl|ldl|apo|lipoprotein|atherogen|cimt|cac|renal|kidney|gfr|creatinine|cystatin|filtration)\b/.test(text)) {
+    return "Vascular";
+  }
+
+  // Regulation — endocrine, autonomic, circadian, hormonal
+  if (/\b(regulator|thyroid|tsh|t3|t4|adrenal|cortisol|circadian|autonomic|hrv|stress|sleep|hormone|shbg|dhea|reproductive|melatonin|insulin.cortisol)\b/.test(text)) {
+    return "Regulation";
+  }
+
+  // Energy — metabolic flux, mitochondrial, fuel processing, iron oxygen carriers
+  if (/\b(metabol|glucose|glycem|insulin|hba1c|homa|lipid|hepatic|liver|alt|ast|ggt|albumin|bilirubin|mitochondri|fuel|atp|carnitine|iron|ferritin|hemoglobin|tibc|saturation|omega)\b/.test(text)) {
+    return "Energy";
+  }
+
+  // Inflammation — immune tone, barrier, gut, oxidative stress, microbiome
+  if (/\b(inflamm|immune|barrier|gut|microbiom|tmao|crp|il6|tnf|cytokine|oxidat|nlr|tolerance)\b/.test(text)) {
+    return "Inflammation";
+  }
+
+  // Default fallback: Inflammation rather than Energy
+  return "Inflammation";
 }
 
 interface CoherenceMapProps {

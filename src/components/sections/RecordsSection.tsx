@@ -69,9 +69,8 @@ const RecordsSection: React.FC = () => {
   } = useLabUploads();
   const { documents } = useDocuments();
   const { clusters, loading: clustersLoading, error: clustersError, refetch } = useClusters();
-  const { isAdmin } = useViewAs();
+  const { isAdmin, isViewingAs, effectiveUserId } = useViewAs();
   const { user } = useAuth();
-  const { effectiveUserId } = useViewAs();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
@@ -237,8 +236,8 @@ const RecordsSection: React.FC = () => {
         <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
 
-        {/* Admin-only regenerate clusters button */}
-        {isAdmin && (
+        {/* View-as-only regenerate clusters button */}
+        {isViewingAs && (
           <button
             onClick={handleRegenerateClusters}
             disabled={regenerating}
