@@ -228,16 +228,32 @@ const ActionSection: React.FC = () => {
   }
 
   if (!plan || actions.length === 0) {
+    // Check if user has data — if they do, their profile is well-optimized
+    const hasData = plan !== null; // plan exists but 0 actions = no interventions triggered
     return (
       <PatientSectionLayout
         eyebrow="WHAT TO DO"
-        title="Your action plan is being prepared"
-        intro="Once your terrain is rendered, we match your specific findings to concrete interventions. Each one comes with what to do, why it matters for your biology, and how to do it."
+        title={hasData ? "Your terrain is well-managed" : "Your action plan is being prepared"}
+        intro={hasData
+          ? "Based on your current labs and intake data, your biomarkers and domain scores are within healthy ranges. No urgent interventions are needed right now — keep doing what you're doing."
+          : "Once your terrain is rendered, we match your specific findings to concrete interventions. Each one comes with what to do, why it matters for your biology, and how to do it."
+        }
       >
-        <div className="rounded-xl border border-border bg-card p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Complete your intake and upload labs to generate your personalized action plan.
-          </p>
+        <div className="rounded-xl border border-border bg-card p-6 text-center space-y-3">
+          {hasData ? (
+            <>
+              <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-emerald-500/10 mx-auto">
+                <Check className="h-6 w-6 text-emerald-600" />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                All gates are tracking green. Your next lab upload or intake update may surface new optimization actions.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Complete your intake and upload labs to generate your personalized action plan.
+            </p>
+          )}
         </div>
       </PatientSectionLayout>
     );
