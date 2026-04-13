@@ -403,7 +403,7 @@ serve(async (req) => {
     const [gateRes, domainRes, obsRes, patternRes] = await Promise.all([
       supabase.from("cie_gate_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(50),
       supabase.from("cie_domain_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(100),
-      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(200),
+      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(1000),
       supabase.from("derived_patterns").select("rule_id, severity").eq("user_id", user_id).eq("status", "active"),
     ]);
 
