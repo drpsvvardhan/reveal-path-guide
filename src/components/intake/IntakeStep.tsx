@@ -4,8 +4,10 @@ import { useOnboarding } from "@/context/OnboardingContext";
 import IntakeQuestionCard from "./IntakeQuestionCard";
 import IntakeProgress from "./IntakeProgress";
 import IntakeResultsScreen from "./IntakeResultsScreen";
+import InstinctOnboardingCard from "./InstinctOnboardingCard";
 import OnboardingLayout from "@/components/onboarding/OnboardingLayout";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { useLongPressRecovery, RecoveryDots } from "@/hooks/useLongPressRecovery";
+import { Loader2 } from "lucide-react";
 
 const IntakeStep: React.FC = () => {
   const {
@@ -18,15 +20,39 @@ const IntakeStep: React.FC = () => {
     recordResponse,
     advanceToNextQuestion,
     getCurrentQuestion,
+    getPreviousQuestion,
     evaluateLayer1Triggers,
     completeAssessment,
     progress,
     totalQuestionsForPhase,
     currentQuestionIndex,
+    stepBackOneQuestion,
+    logReconsiderationEvent,
   } = useIntake();
 
   const { advanceToStep } = useOnboarding();
   const [transitioning, setTransitioning] = useState(false);
+  const [onboarded, setOnboarded] = useState(false);
+
+  // Long-press recovery hook
+  const recovery = useLongPressRecovery({
+    maxRecoveries: 3,
+    onRecover: async () => {
+      const lastQ = getPreviousQuestion();
+      if (!lastQ || !currentAssessmentId) return;
+      const lastResponse = responses[lastQ.question.id];
+      if (lastResponse) {
+        await logReconsiderationEvent({
+          assessmentId: currentAssessmentId,
+          questionId: lastQ.question.id,
+          domainId: lastQ.domainId,
+          t1Answer: lastResponse.answer,
+          t1LatencyMs: lastResponse.latencyMs,
+        });
+      }
+      stepBackOneQuestion();
+    },
+  });
 
   // Auto-start assessment if none exists
   useEffect(() => {
@@ -81,10 +107,6 @@ const IntakeStep: React.FC = () => {
     await advanceToStep("upload");
   }, [advanceToStep]);
 
-  const handleBack = useCallback(() => {
-    advanceToStep("profile");
-  }, [advanceToStep]);
-
   // Show results screen when complete
   if (currentPhase === "complete") {
     return <IntakeResultsScreen onContinue={handleContinueToUpload} />;
@@ -104,6 +126,23 @@ const IntakeStep: React.FC = () => {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
+      </OnboardingLayout>
+    );
+  }
+
+  // Instinct onboarding gate — Card #0 before any real question
+  if (!onboarded) {
+    return (
+      <OnboardingLayout
+        stepNumber={3}
+        totalSteps={5}
+        eyebrow="CLINICAL INTAKE"
+        title=""
+        intro=""
+        hideHeader
+        footer={<div />}
+      >
+        <InstinctOnboardingCard onReady={() => setOnboarded(true)} />
       </OnboardingLayout>
     );
   }
@@ -137,22 +176,17 @@ const IntakeStep: React.FC = () => {
       intro=""
       hideHeader
       footer={
-        <>
-          <button
-            onClick={handleBack}
-            disabled={isLoading}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Profile
-          </button>
+        <div className="w-full flex items-center justify-between">
+          <RecoveryDots remaining={recovery.remaining} max={3} />
           <span className="text-xs text-muted-foreground">
             {progress.current} / {progress.total}
           </span>
-        </>
+        </div>
       }
     >
-      <div className="space-y-8">
+      <div {...recovery.bind} className="space-y-8">
+        {recovery.dialog}
+
         {/* Progress bar */}
         <IntakeProgress
           currentDomainId={currentQ.domainId}
