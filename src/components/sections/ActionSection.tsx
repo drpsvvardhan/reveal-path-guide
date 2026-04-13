@@ -164,9 +164,10 @@ const ActionSection: React.FC = () => {
         .limit(1)
         .single();
 
-      if (data) {
+      const todayActions = (data?.today_actions as any) || [];
+      if (data && todayActions.length > 0) {
         setPlan({
-          today_actions: (data.today_actions as any) || [],
+          today_actions: todayActions,
           sequence_explanation: data.sequence_explanation || "",
           retest_schedule: (data.retest_schedule as any) || [],
         });
