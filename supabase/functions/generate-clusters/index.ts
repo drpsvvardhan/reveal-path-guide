@@ -40,27 +40,38 @@ async function callClaude(
   apiKey: string,
   model: string,
   system: string,
-  user: string
+  user: string,
+  maxRetries = 3
 ): Promise<string> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: MAX_TOKENS,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_TOKENS,
+        system,
+        messages: [{ role: "user", content: user }],
+      }),
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${errText}`);
-  }
+    if (response.status === 429 && attempt < maxRetries) {
+      const retryAfter = parseInt(response.headers.get("retry-after") || "60", 10);
+      const waitMs = Math.max(retryAfter * 1000, 30_000 * (attempt + 1));
+      console.log(`[generate-clusters] Rate limited (429). Waiting ${waitMs / 1000}s before retry ${attempt + 1}/${maxRetries}`);
+      await response.text(); // consume body
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+    }
 
   const data = await response.json();
   const textBlock = data.content?.find((b: any) => b.type === "text");
