@@ -91,6 +91,8 @@ async function runTriangulationPipeline(patientId: string) {
 
   try {
     const context = await loadPatientContext(SUPABASE_URL, SERVICE_ROLE_KEY, patientId);
+    // context.patient_id is the canonical profiles.id (FK target for clusters table)
+    const canonicalPatientId = context.patient_id;
     const contextJson = JSON.stringify(context, null, 2);
     const contextCompressed = compressContextForCritique(context);
     const generationRunId = crypto.randomUUID();
