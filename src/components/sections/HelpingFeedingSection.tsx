@@ -44,7 +44,7 @@ const HelpingFeedingSection: React.FC = () => {
       }
       asideSticky
     >
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-medium text-foreground mb-4">
             <CheckCircle className="h-5 w-5 text-success" />

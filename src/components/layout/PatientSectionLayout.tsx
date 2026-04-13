@@ -84,7 +84,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
       <div
         className={
           aside
-            ? "grid gap-7 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]"
+            ? "grid gap-7 lg:gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]"
             : "max-w-3xl"
         }
       >
