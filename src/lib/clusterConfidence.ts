@@ -476,6 +476,7 @@ export function deriveClusterConfidence(
       has_imaging_or_omics: hasImagingOrOmics,
       n_time_points: nTimePoints,
       trajectory_dependent: trajectoryDependent,
+      platonic_set_known: missingResult.platonic_set_known,
     },
     dimensions
   );
