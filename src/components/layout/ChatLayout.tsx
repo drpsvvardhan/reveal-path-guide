@@ -53,7 +53,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
       </header>
 
       {/* Main grid */}
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-8 flex-1 min-h-0 pb-4">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-8 flex-1 min-h-0 pb-4">
         {/* Conversation column */}
         <div className="flex flex-col min-h-0 relative">
           <div className="flex-1 overflow-y-auto pr-2 pb-4">
@@ -65,7 +65,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
         </div>
 
         {/* Reasoning trace panel */}
-        <aside className="hidden lg:flex flex-col min-h-0 overflow-y-auto">
+        <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto">
           {reasoningTrace}
         </aside>
       </div>
