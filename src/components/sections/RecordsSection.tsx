@@ -236,8 +236,8 @@ const RecordsSection: React.FC = () => {
         <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
 
-        {/* View-as-only regenerate clusters button */}
-        {isViewingAs && (
+        {/* Admin-only regenerate clusters button (visible in view-as mode or for admin viewing own profile) */}
+        {(isViewingAs || isAdmin) && (
           <button
             onClick={handleRegenerateClusters}
             disabled={regenerating}
