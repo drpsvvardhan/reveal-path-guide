@@ -69,6 +69,9 @@ const RecordsSection: React.FC = () => {
   } = useLabUploads();
   const { documents } = useDocuments();
   const { clusters, loading: clustersLoading, error: clustersError, refetch } = useClusters();
+  const { isAdmin } = useViewAs();
+  const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
@@ -76,6 +79,44 @@ const RecordsSection: React.FC = () => {
   const [editingObs, setEditingObs] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [uploadsOpen, setUploadsOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
+
+  const handleRegenerateClusters = useCallback(async () => {
+    const uid = effectiveUserId || user?.id;
+    if (!uid) return;
+    setRegenerating(true);
+    setRegenerateMsg(null);
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (!profile?.id) throw new Error("Profile not found");
+
+      const clusterUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-clusters`;
+      const resp = await fetch(clusterUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ patient_id: profile.id }),
+      });
+      if (!resp.ok && resp.status !== 202) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Failed (${resp.status})`);
+      }
+      setRegenerateMsg("Cluster generation started. Results will appear in a few minutes.");
+      // Poll for new clusters after a delay
+      setTimeout(() => refetch(), 60_000);
+    } catch (e: any) {
+      setRegenerateMsg(`Error: ${e.message}`);
+    } finally {
+      setRegenerating(false);
+    }
+  }, [effectiveUserId, user?.id, refetch]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
