@@ -65,7 +65,6 @@ const IntakeStep: React.FC = () => {
 
   const handleAnswer = useCallback(
     async (rawResponse: string, latencyMs: number) => {
-      console.log("[IntakeStep] handleAnswer called", { rawResponse, latencyMs, currentQ: currentQ?.question.id });
       if (!currentQ) return;
       setTransitioning(true);
 

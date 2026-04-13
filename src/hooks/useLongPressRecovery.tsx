@@ -69,6 +69,7 @@ export function useLongPressRecovery(opts: UseLongPressRecoveryOpts) {
     onTouchStart: startHold,
     onTouchEnd: clearHold,
     onTouchCancel: clearHold,
+    onTouchMove: clearHold, // Cancel hold if finger moves (prevents conflict with drag)
   };
 
   const dialog = (
