@@ -33,8 +33,11 @@ export function useLongPressRecovery(opts: UseLongPressRecoveryOpts) {
     setHoldProgress(0);
   }, []);
 
-  const startHold = useCallback(() => {
+  const startHold = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (remaining <= 0) return;
+    // Don't trigger on interactive elements (buttons, links, draggable cards)
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, [draggable], [data-drag]') || target.closest('.touch-none')) return;
     startRef.current = performance.now();
     const tick = () => {
       const pct = Math.min(1, (performance.now() - startRef.current) / holdMs);
@@ -66,6 +69,7 @@ export function useLongPressRecovery(opts: UseLongPressRecoveryOpts) {
     onTouchStart: startHold,
     onTouchEnd: clearHold,
     onTouchCancel: clearHold,
+    onTouchMove: clearHold, // Cancel hold if finger moves (prevents conflict with drag)
   };
 
   const dialog = (
