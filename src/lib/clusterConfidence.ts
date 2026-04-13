@@ -125,14 +125,14 @@ export interface PlatonicEvidenceItem {
 export const PLATONIC_EVIDENCE_SETS: Record<string, PlatonicEvidenceItem[]> = {
   cardiovascular_particle: [
     { id: 'apob', description: 'ApoB measurement', match: (e) => /apob/i.test(e.evidence_id) },
-    { id: 'ldl_p', description: 'LDL particle count (LDL-P)', match: (e) => /ldl[\s_-]*p\b|ldl[\s_-]*particle/i.test(e.evidence_id) },
+    { id: 'ldl_p', description: 'LDL particle count (LDL-P)', match: (e) => /ldl[\s_-]*p(?:[_\s-]|$)|ldl[\s_-]*particle/i.test(e.evidence_id) },
     { id: 'ldl_small', description: 'LDL small dense fraction', match: (e) => /ldl.*small|small.*ldl/i.test(e.evidence_id) },
     { id: 'apoa1', description: 'Apo A1', match: (e) => /apoa1|apo[\s_-]*a[\s_-]*1/i.test(e.evidence_id) },
-    { id: 'hdl_p', description: 'HDL particle count', match: (e) => /hdl[\s_-]*p\b|hdl[\s_-]*particle/i.test(e.evidence_id) },
-    { id: 'lpa', description: 'Lp(a)', match: (e) => /\blpa\b|lp\(a\)|lipoprotein.*a/i.test(e.evidence_id) },
+    { id: 'hdl_p', description: 'HDL particle count', match: (e) => /hdl[\s_-]*p(?:[_\s-]|$)|hdl[\s_-]*particle/i.test(e.evidence_id) },
+    { id: 'lpa', description: 'Lp(a)', match: (e) => /\blpa(?:[_\s-]|$)|lp\(a\)|lipoprotein.*a/i.test(e.evidence_id) },
     { id: 'hs_crp', description: 'high-sensitivity CRP', match: (e) => /hs[\s_-]*crp|hscrp/i.test(e.evidence_id) },
     { id: 'tmao', description: 'TMAO', match: (e) => /tmao/i.test(e.evidence_id) },
-    { id: 'cac', description: 'coronary artery calcium score', match: (e) => /\bcac\b|calcium.*score|coronary.*calcium/i.test(e.evidence_id) },
+    { id: 'cac', description: 'coronary artery calcium score', match: (e) => /\bcac(?:[_\s-]|$)|calcium.*score|coronary.*calcium/i.test(e.evidence_id) },
   ],
   hepatic_lipid_handling: [
     { id: 'alt', description: 'ALT', match: (e) => /\balt\b/i.test(e.evidence_id) },
@@ -348,6 +348,7 @@ export function deriveTier(
     has_imaging_or_omics: boolean;
     n_time_points: number;
     trajectory_dependent: boolean;
+    platonic_set_known?: boolean;
   },
   dimensions: ClusterConfidenceDimensions
 ): ClusterConfidenceTier {
@@ -366,11 +367,14 @@ export function deriveTier(
   }
 
   // Supported floor
+  // When platonic_set_known is false, skip the completeness check —
+  // the mild penalty (0.4) is not meant to block supported, only robust.
+  const completenessMetForSupported = audit.platonic_set_known === false || completeness >= 0.75;
   if (
     audit.n_nodes >= 10 &&
     audit.n_distinct_layers >= 3 &&
     dimensions.coherence_strength >= 0.75 &&
-    completeness >= 0.75
+    completenessMetForSupported
   ) {
     return 'supported';
   }
