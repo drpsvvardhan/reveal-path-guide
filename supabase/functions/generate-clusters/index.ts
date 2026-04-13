@@ -126,8 +126,8 @@ async function runTriangulationPipeline(patientId: string) {
     console.log(`[generate-clusters] Pass 2 complete: ${criticOutput.critiques?.length ?? 0} critiques`);
 
     // ── Sleep before reconciler to clear rate limit window ───────────────
-    console.log(`[generate-clusters] Sleeping 35s before reconciler pass to clear rate limit window`);
-    await new Promise((r) => setTimeout(r, 35_000));
+    console.log(`[generate-clusters] Sleeping 15s before reconciler pass to clear rate limit window`);
+    await new Promise((r) => setTimeout(r, 15_000));
 
     // ── Pass 3 — Reconciler (compressed context) ────────────────────────
     const reconcilerInputChars = reconcilerSystemPrompt(FRAMEWORK_V2).length + contextCompressed.length + JSON.stringify(generatorOutput).length + JSON.stringify(criticOutput).length + 400;
