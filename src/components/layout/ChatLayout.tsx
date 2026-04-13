@@ -20,7 +20,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="w-full max-w-[1480px] mx-auto h-[calc(100vh-8rem)] flex flex-col"
+      className="w-full max-w-[1480px] mx-auto xl:h-[calc(100vh-8rem)] flex flex-col"
     >
       {/* Compact hero */}
       <header className="pb-4 pt-2 shrink-0">
@@ -52,11 +52,11 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
         </div>
       </header>
 
-      {/* Main grid */}
+      {/* Main grid — stacked on portrait, side-by-side on xl */}
       <div className="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-8 flex-1 min-h-0 pb-4">
         {/* Conversation column */}
         <div className="flex flex-col min-h-0 relative">
-          <div className="flex-1 overflow-y-auto pr-2 pb-4">
+          <div className="flex-1 overflow-y-auto pr-2 pb-4 xl:max-h-none max-h-[60vh]">
             {conversation}
           </div>
           <div className="shrink-0 pt-3 border-t border-border/60">
@@ -64,8 +64,8 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
           </div>
         </div>
 
-        {/* Reasoning trace panel */}
-        <aside className="hidden xl:flex flex-col min-h-0 overflow-y-auto">
+        {/* Reasoning trace panel — always visible, scrolls on portrait */}
+        <aside className="flex flex-col min-h-0 overflow-y-auto xl:max-h-none max-h-[50vh]">
           {reasoningTrace}
         </aside>
       </div>
