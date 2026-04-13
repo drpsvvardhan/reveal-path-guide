@@ -168,7 +168,7 @@ const IntakeStep: React.FC = () => {
             text={currentQ.question.text}
             type={currentQ.question.type}
             domainId={currentQ.domainId}
-            currentResponse={currentResponse}
+            currentResponse={currentResponse?.answer ?? null}
             onAnswer={handleAnswer}
           />
         </div>
