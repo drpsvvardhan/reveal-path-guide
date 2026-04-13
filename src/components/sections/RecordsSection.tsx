@@ -243,7 +243,27 @@ const RecordsSection: React.FC = () => {
         </button>
         <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
+
+        {/* Admin-only regenerate clusters button */}
+        {isAdmin && (
+          <button
+            onClick={handleRegenerateClusters}
+            disabled={regenerating}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50 ml-auto"
+          >
+            {regenerating
+              ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating...</>)
+              : (<><Zap className="h-3.5 w-3.5" />Regenerate clusters</>)}
+          </button>
+        )}
       </div>
+
+      {/* Regenerate feedback */}
+      {regenerateMsg && (
+        <div className={`text-xs ${regenerateMsg.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>
+          {regenerateMsg}
+        </div>
+      )}
 
       {/* Last result feedback */}
       {lastResult && !uploading && !processing && (
