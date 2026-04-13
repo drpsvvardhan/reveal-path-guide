@@ -30,7 +30,7 @@ Given the patient's structured context below, produce a JSON array of cluster ca
     {
       "evidence_kind": string,       // source table name: "cie_responses" | "cie_domain_scores" | "cie_gate_scores" | "patient_lab_observations" | "patient_narratives" | "derived_patterns"
       "evidence_id": string,         // the source row's primary key cast to string. For lab observations use the observation id. For CIE responses use the response id. For CIE domain scores use the domain id (e.g. "A1", "B4"). For CIE gate scores use the gate name (e.g. "OFFI", "BCS"). For InBody observations use the observation row id.
-      "layer_type": string,          // "cie" | "lab" | "inbody" | "emr" | "medication" | "sensor" | "food_log" | "imaging" | "omics" | "narrative"
+      "layer_type": string,          // EXACTLY one of these ten values, no others: "cie" | "lab" | "inbody" | "emr" | "medication" | "sensor" | "food_log" | "imaging" | "omics" | "narrative". When the evidence_kind is "derived_patterns" or "patient_narratives", use layer_type: "narrative". When the evidence_kind is "cie_responses", "cie_domain_scores", or "cie_gate_scores", use layer_type: "cie". When the evidence_kind is "patient_lab_observations", use layer_type: "lab". When the evidence_kind is "inbody_observations", use layer_type: "inbody". Never invent new layer_type values like "pattern", "history", "report", or "summary" — they will be rejected by the validator and the cluster will be discarded.
       "direction": string,           // "convergent" if this evidence supports the cluster's primary claim; "divergent" if it points against it; "neutral" otherwise. Divergent evidence MUST be preserved — do not omit signals that point against your claim. They become the cluster's tensions_held.
       "value_summary": string,       // a short human-readable summary of the value, e.g. "ApoB 111 mg/dL", "CIE A1 score 42", "phase angle 5.2", "narrative: 'fatigue after meals'"
       "time_point": string | null    // ISO date string if known; null if undated
@@ -105,23 +105,25 @@ CHECKS TO RUN ON EACH CLUSTER
 
 1. HALLUCINATION CHECK. Does every numeric or named claim in the cluster's claim field trace to a row in constituent_evidence? Does every constituent_evidence row's evidence_id actually exist in the patient context provided? Flag any claim that references a value not present in evidence. Flag any evidence row whose evidence_id is invented.
 
-2. FORBIDDEN VOCABULARY SCAN (Part 5). Search the cluster's claim and rationale for any term from Framework v2 Part 5 categories 1 through 7 (biotype archetypes, wellness-app vocabulary, population reference, prediction/prognosis, diagnosis, moralizing, vague reassurance/alarm). Flag every hit with the specific term and the category.
+2. LAYER TYPE VALIDITY CHECK. For every constituent_evidence row in the cluster, verify that layer_type is exactly one of: "cie", "lab", "inbody", "emr", "medication", "sensor", "food_log", "imaging", "omics", "narrative". Flag any other value as a blocker with severity "blocker" and the suggested_fix "rewrite layer_type to the correct enum value, mapping derived_patterns and patient_narratives to 'narrative', cie_* tables to 'cie', patient_lab_observations to 'lab', inbody_observations to 'inbody'."
 
-3. CONTRADICTION PRESERVATION CHECK (Principle 1). Did the generator preserve every contradiction visible in the patient's data? For every place where the patient context contains opposing signals across systems, verify that either a cluster exists holding the tension or the tension appears as divergent evidence within an existing cluster. Flag every collapsed contradiction — a contradiction the generator should have held but didn't.
+3. FORBIDDEN VOCABULARY SCAN (Part 5). Search the cluster's claim and rationale for any term from Framework v2 Part 5 categories 1 through 7 (biotype archetypes, wellness-app vocabulary, population reference, prediction/prognosis, diagnosis, moralizing, vague reassurance/alarm). Flag every hit with the specific term and the category.
 
-4. NON-COLLAPSE CHECK (Principle 2). For every cluster whose claim asserts a single mechanism, verify that the patient's data does not also support an alternative mechanism. If an alternative is plausible from the data, flag the cluster as a single-cause collapse and name the missing alternative hypothesis.
+4. CONTRADICTION PRESERVATION CHECK (Principle 1). Did the generator preserve every contradiction visible in the patient's data? For every place where the patient context contains opposing signals across systems, verify that either a cluster exists holding the tension or the tension appears as divergent evidence within an existing cluster. Flag every collapsed contradiction — a contradiction the generator should have held but didn't.
 
-5. COHERENCE-SEEKING CHECK (Principle 3). Did the generator surface multi-layer convergent findings above single-layer high-severity findings? Read the cluster ordering. If a single-layer cluster appears before a multi-layer convergent cluster in the output, flag the ordering. Also flag any cluster that should have included evidence from a layer it didn't reach for (e.g. a cardiovascular cluster missing the relevant CIE domain when the CIE domain has a low score).
+5. NON-COLLAPSE CHECK (Principle 2). For every cluster whose claim asserts a single mechanism, verify that the patient's data does not also support an alternative mechanism. If an alternative is plausible from the data, flag the cluster as a single-cause collapse and name the missing alternative hypothesis.
 
-6. MISSING DATA CITATION CHECK (Principle 4). Verify that every cluster has a non-empty missing_evidence array with at least one item that has both a specific item name and a specific why_it_would_sharpen reasoning. Flag clusters with empty missing_evidence. Flag clusters with vague missing_evidence ("more data" is not specific; "Lp(a) measurement" is specific).
+6. COHERENCE-SEEKING CHECK (Principle 3). Did the generator surface multi-layer convergent findings above single-layer high-severity findings? Read the cluster ordering. If a single-layer cluster appears before a multi-layer convergent cluster in the output, flag the ordering. Also flag any cluster that should have included evidence from a layer it didn't reach for (e.g. a cardiovascular cluster missing the relevant CIE domain when the CIE domain has a low score).
 
-7. STATE VECTOR CHECK (Part 4 Move 1). Can every claim in the cluster be implicitly mapped to one of {E, I, V, R, Σ}? Flag clusters that are about symptoms ("the patient feels tired") rather than terrain ("the patient's mitochondrial axis is showing capacity reduction").
+7. MISSING DATA CITATION CHECK (Principle 4). Verify that every cluster has a non-empty missing_evidence array with at least one item that has both a specific item name and a specific why_it_would_sharpen reasoning. Flag clusters with empty missing_evidence. Flag clusters with vague missing_evidence ("more data" is not specific; "Lp(a) measurement" is specific).
 
-8. TRAJECTORY CHECK (Part 4 Move 2). If the cluster has trajectory_dependent: true, does the claim actually describe direction? Flag clusters that claim trajectory but read as static state.
+8. STATE VECTOR CHECK (Part 4 Move 1). Can every claim in the cluster be implicitly mapped to one of {E, I, V, R, Σ}? Flag clusters that are about symptoms ("the patient feels tired") rather than terrain ("the patient's mitochondrial axis is showing capacity reduction").
 
-9. EVIDENCE COMPLETENESS CHECK. For every cluster, verify that the constituent_evidence array contains enough nodes to be more than a single-marker observation. Single-evidence clusters should not exist. Two-evidence clusters are at the floor. Flag any cluster with fewer than 2 constituent_evidence rows.
+9. TRAJECTORY CHECK (Part 4 Move 2). If the cluster has trajectory_dependent: true, does the claim actually describe direction? Flag clusters that claim trajectory but read as static state.
 
-10. CLAIM-EVIDENCE COHERENCE CHECK. Read each cluster's claim against its constituent_evidence. Does the claim accurately summarize what the evidence is showing, or has the LLM drifted into general clinical knowledge that the patient's specific data does not support? Flag drift between claim and evidence.
+10. EVIDENCE COMPLETENESS CHECK. For every cluster, verify that the constituent_evidence array contains enough nodes to be more than a single-marker observation. Single-evidence clusters should not exist. Two-evidence clusters are at the floor. Flag any cluster with fewer than 2 constituent_evidence rows.
+
+11. CLAIM-EVIDENCE COHERENCE CHECK. Read each cluster's claim against its constituent_evidence. Does the claim accurately summarize what the evidence is showing, or has the LLM drifted into general clinical knowledge that the patient's specific data does not support? Flag drift between claim and evidence.
 
 OUTPUT FORMAT
 
@@ -134,7 +136,7 @@ Return strict JSON in this exact shape, with no preamble, no markdown code fence
       "cluster_kind": string,            // copied from the cluster being critiqued for readability
       "issues": [
         {
-          "check": string,               // one of: "hallucination", "forbidden_vocabulary", "contradiction_preservation", "non_collapse", "coherence_seeking", "missing_data_citation", "state_vector", "trajectory", "evidence_completeness", "claim_evidence_coherence"
+          "check": string,               // one of: "hallucination", "layer_type_validity", "forbidden_vocabulary", "contradiction_preservation", "non_collapse", "coherence_seeking", "missing_data_citation", "state_vector", "trajectory", "evidence_completeness", "claim_evidence_coherence"
           "severity": string,            // "blocker" (must fix) | "warning" (should fix) | "note" (could fix)
           "description": string,         // one-sentence description of the specific issue, naming the offending text or evidence_id
           "suggested_fix": string        // one-sentence concrete instruction for the reconciler
@@ -186,6 +188,7 @@ REPAIR MOVES
 - NON-COLLAPSE FIX: rewrite the cluster's claim to list the parallel mechanisms as alternative hypotheses, ranked by evidence strength when a ranking is justified.
 - COHERENCE FIX: reorder the cluster set so multi-layer convergent clusters appear first.
 - MISSING DATA FIX: populate the cluster's missing_evidence array with specific items and specific reasoning.
+- LAYER TYPE FIX: every constituent_evidence row's layer_type field must be EXACTLY one of these ten values, no others: "cie" | "lab" | "inbody" | "emr" | "medication" | "sensor" | "food_log" | "imaging" | "omics" | "narrative". When the evidence_kind is "derived_patterns" or "patient_narratives", use layer_type: "narrative". When the evidence_kind is "cie_responses", "cie_domain_scores", or "cie_gate_scores", use layer_type: "cie". Never invent new layer_type values — the validator will reject the cluster and it will not be written to the database.
 - ORDERING FIX: reorder the final clusters array so that clusters with more distinct layer_types in their constituent_evidence appear earlier.
 
 ANTI-PATTERNS TO REFUSE
