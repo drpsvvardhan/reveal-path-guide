@@ -153,6 +153,7 @@ const ThesisSection: React.FC = () => {
               items={[
                 { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
               ]}
+              footnote={signature.explanation}
             />
             <AsideInfoPanel
               title="Biological terrain"
@@ -166,6 +167,7 @@ const ThesisSection: React.FC = () => {
             items={[
               { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
             ]}
+            footnote={signature.explanation}
           />
         )
       }
