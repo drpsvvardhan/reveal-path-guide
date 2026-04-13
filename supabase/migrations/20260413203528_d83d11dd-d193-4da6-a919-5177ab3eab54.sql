@@ -1,0 +1,1 @@
+DELETE FROM action_plans WHERE user_id = '794ebdf8-e39e-43ea-a582-8f07ca864b71';

@@ -181,6 +181,61 @@ const INTERVENTION_LIBRARY: Intervention[] = [
     coordinates: ["R"], gates: ["BRI"], retest_weeks: 3, retest_markers: ["sleep quality"],
     contraindications: [], category: "sleep", sequence_priority: 2,
   },
+  // ── Optimization-tier interventions (for patients with good markers) ──
+  {
+    id: "opt_apob_tracking",
+    trigger: { biomarker_conditions: [{ name: "apolipoprotein_b", operator: ">", value: 80 }] },
+    what: "Track ApoB as your primary cardiovascular particle metric — target below 80 mg/dL.",
+    why_template: "Your ApoB at {apolipoprotein_b} mg/dL is above the optimal range where particle-driven atherogenesis operates at its lowest.",
+    how: "Retest ApoB every 6 months. If above 90, consider increasing omega-3 intake and reducing refined carbs. Discuss statin evaluation with your provider if above 100.",
+    coordinates: ["V"], gates: ["GRIP"], retest_weeks: 24, retest_markers: ["ApoB", "LDL-P"],
+    contraindications: [], category: "monitoring", sequence_priority: 3,
+  },
+  {
+    id: "opt_ldl_particle_awareness",
+    trigger: { biomarker_conditions: [{ name: "ldl_cholesterol", operator: ">", value: 100 }] },
+    what: "Monitor LDL-C trajectory alongside particle count to catch discordance early.",
+    why_template: "Your LDL at {ldl_cholesterol} mg/dL is within a range where particle monitoring adds clarity — standard LDL-C can mask particle-level risk.",
+    how: "Request LDL-P or ApoB with your next lab panel. Compare particle count trend with LDL-C to identify concordance or discordance.",
+    coordinates: ["V"], gates: ["GRIP", "OFFI"], retest_weeks: 12, retest_markers: ["LDL-C", "ApoB", "LDL-P"],
+    contraindications: [], category: "monitoring", sequence_priority: 4,
+  },
+  {
+    id: "opt_hba1c_maintenance",
+    trigger: { biomarker_conditions: [{ name: "hba1c", operator: ">=", value: 5.4 }] },
+    what: "Maintain glycemic stability — your HbA1c is in the upper-normal zone worth watching.",
+    why_template: "Your HbA1c at {hba1c}% is technically normal but sits above 5.4%, where metabolic vigilance starts to pay off.",
+    how: "Pair carbohydrates with protein or fat at every meal. Walk 10-15 minutes after your largest meal. Retest HbA1c in 3 months to confirm the trend.",
+    coordinates: ["E"], gates: ["FPIS"], retest_weeks: 12, retest_markers: ["HbA1c", "fasting glucose", "fasting insulin"],
+    contraindications: [], category: "nutrition", sequence_priority: 3,
+  },
+  {
+    id: "opt_inflammation_baseline",
+    trigger: { biomarker_conditions: [{ name: "hs_crp", operator: ">", value: 1.0 }] },
+    what: "Track hs-CRP as your systemic inflammation baseline — target below 1.0 mg/L.",
+    why_template: "Your hs-CRP at {hs_crp} mg/L is above the optimal floor. While not alarming, keeping it below 1.0 supports long-term tissue integrity.",
+    how: "Prioritize anti-inflammatory foods: fatty fish 2×/week, turmeric, berries, leafy greens. Ensure 7-8 hours of sleep. Retest in 8 weeks.",
+    coordinates: ["I", "V"], gates: ["TIS"], retest_weeks: 8, retest_markers: ["hs-CRP"],
+    contraindications: [], category: "nutrition", sequence_priority: 4,
+  },
+  {
+    id: "opt_daily_movement",
+    trigger: { domain_conditions: [{ domain: "H22", operator: "<", value: 90 }] },
+    what: "Increase daily movement — aim for 30+ minutes of moderate activity most days.",
+    why_template: "Your lifestyle movement domain at {H22_score}/100 has room to improve. Consistent movement is the single broadest-spectrum intervention in biology.",
+    how: "Walk briskly for 30 minutes daily, preferably outdoors. Add 2 resistance sessions per week. Track daily steps — target 8,000+.",
+    coordinates: ["E", "V", "R"], gates: ["HPI", "GRIP", "CLI"], retest_weeks: 8, retest_markers: ["movement domain", "resting heart rate"],
+    contraindications: [], category: "movement", sequence_priority: 2,
+  },
+  {
+    id: "opt_retest_comprehensive",
+    trigger: { biomarker_conditions: [{ name: "hs_crp", operator: ">", value: 0 }] },
+    what: "Schedule a comprehensive retest in 12 weeks to track trajectory across all biomarkers.",
+    why_template: "You have a strong baseline. Retesting at regular intervals is how you detect drift before it becomes a pattern.",
+    how: "Book a comprehensive lab panel (CBC, CMP, lipid panel with ApoB, hs-CRP, HbA1c, thyroid, vitamin D) for 12 weeks from your last draw. Same lab, fasted, morning.",
+    coordinates: ["E", "I", "V", "R"], gates: ["HPI"], retest_weeks: 12, retest_markers: ["comprehensive panel"],
+    contraindications: [], category: "monitoring", sequence_priority: 6,
+  },
 ];
 
 // ── Biomarker name normalization ──
@@ -348,7 +403,7 @@ serve(async (req) => {
     const [gateRes, domainRes, obsRes, patternRes] = await Promise.all([
       supabase.from("cie_gate_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(50),
       supabase.from("cie_domain_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(100),
-      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(200),
+      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(1000),
       supabase.from("derived_patterns").select("rule_id, severity").eq("user_id", user_id).eq("status", "active"),
     ]);
 
