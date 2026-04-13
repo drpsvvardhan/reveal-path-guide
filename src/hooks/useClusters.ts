@@ -71,7 +71,7 @@ export function useClusters(): {
           confidence_dimensions: (row.confidence_dimensions && typeof row.confidence_dimensions === "object")
             ? row.confidence_dimensions as any
             : { breadth: 0, depth: 0, time: 0, coherence_strength: 0, missing_data_penalty: 0 },
-        } as ClusterRow))
+        } as unknown as ClusterRow))
         .sort((a, b) => {
           const tierDiff = TIER_ORDER[a.confidence_tier] - TIER_ORDER[b.confidence_tier];
           if (tierDiff !== 0) return tierDiff;
