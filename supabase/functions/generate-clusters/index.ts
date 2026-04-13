@@ -144,13 +144,13 @@ async function runTriangulationPipeline(patientId: string) {
     console.log(`[generate-clusters] Pass 3 complete: ${reconcilerOutput.clusters?.length ?? 0} reconciled`);
 
     // ── Validate and compute confidence ─────────────────────────────────
-    const writePayloads = validateReconcilerOutput(reconcilerOutput, patientId, generationRunId);
+    const writePayloads = validateReconcilerOutput(reconcilerOutput, canonicalPatientId, generationRunId);
     const accepted = writePayloads.filter((p) => !p.validation.rejected);
     const rejected = writePayloads.filter((p) => p.validation.rejected);
     console.log(`[generate-clusters] Validation: ${accepted.length} accepted, ${rejected.length} rejected`);
 
     // ── Supersede previous active clusters ──────────────────────────────
-    await sb.from("clusters").update({ status: "superseded" }).eq("patient_id", patientId).eq("status", "active");
+    await sb.from("clusters").update({ status: "superseded" }).eq("patient_id", canonicalPatientId).eq("status", "active");
 
     // ── Insert accepted clusters + evidence ─────────────────────────────
     for (const payload of accepted) {
