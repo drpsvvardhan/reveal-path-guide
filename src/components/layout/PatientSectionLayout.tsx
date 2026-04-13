@@ -48,7 +48,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               {eyebrow}
             </p>
           )}
-          <div className={heroVisual ? "grid lg:grid-cols-[minmax(0,1fr)_auto] gap-8 lg:gap-14 items-center" : ""}>
+          <div className={heroVisual ? "grid xl:grid-cols-[minmax(0,1fr)_auto] gap-8 xl:gap-14 items-center" : ""}>
             <div className="max-w-2xl">
               <h1
                 className="font-serif text-foreground leading-[1.12] tracking-[-0.015em]"
@@ -92,7 +92,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
 
         {aside && (
           <aside
-            className={`min-w-0 ${asideSticky ? "lg:sticky lg:top-6 lg:self-start" : ""}`}
+            className={`min-w-0 ${asideSticky ? "xl:sticky xl:top-6 xl:self-start" : ""}`}
           >
             {aside}
           </aside>
