@@ -90,12 +90,16 @@ export async function loadPatientContext(
 ): Promise<PatientTerrainContext> {
   const sb = createClient(supabaseUrl, serviceRoleKey);
 
-  // Profile — user_id is the auth uid used across all tables
+  // Profile — look up by user_id first; patientId is the auth uid.
+  // We also need profiles.id because clusters.patient_id FK references profiles.id.
   const { data: profile } = await sb
     .from("profiles")
-    .select("display_name, age, sex")
+    .select("id, display_name, age, sex")
     .eq("user_id", patientId)
     .maybeSingle();
+
+  // Use profiles.id as the canonical patient_id for cluster writes (FK target).
+  const canonicalPatientId = profile?.id ?? patientId;
 
   // CIE assessment — latest completed or in_progress
   const { data: assessments } = await sb
@@ -178,7 +182,7 @@ export async function loadPatientContext(
     .limit(40);
 
   return {
-    patient_id: patientId,
+    patient_id: canonicalPatientId,
     profile: {
       display_name: profile?.display_name ?? null,
       age: profile?.age ?? null,
@@ -248,4 +252,86 @@ export async function loadPatientContext(
       })),
     },
   };
+}
+
+/**
+ * Produces a compact line-oriented representation of the patient context
+ * for the critic and reconciler passes. Keeps evidence ids so the LLM can
+ * verify generator claims trace to real data, but strips JSON overhead.
+ */
+export function compressContextForCritique(context: PatientTerrainContext): string {
+  const lines: string[] = [];
+
+  lines.push(`# PATIENT ${context.patient_id}`);
+  if (context.profile.display_name) lines.push(`name: ${context.profile.display_name}`);
+  if (context.profile.age != null) lines.push(`age: ${context.profile.age}`);
+  if (context.profile.sex) lines.push(`sex: ${context.profile.sex}`);
+  lines.push("");
+
+  if (context.cie.has_assessment) {
+    lines.push("## CIE DOMAIN SCORES");
+    for (const d of context.cie.domain_scores) {
+      const flag = d.triggered_layer2 ? " [deep_dive]" : "";
+      lines.push(`${d.domain_id}|${d.axis}|${d.final_score}${flag}`);
+    }
+    lines.push("");
+    lines.push("## CIE GATE SCORES");
+    for (const g of context.cie.gate_scores) {
+      lines.push(`${g.gate_name}|${g.score}|${g.traffic_light}`);
+    }
+    lines.push("");
+    if (context.cie.sample_responses.length > 0) {
+      lines.push("## CIE RESPONSE SAMPLE (id|question_id|domain_id|score)");
+      for (const r of context.cie.sample_responses.slice(0, 15)) {
+        lines.push(`${r.response_id}|${r.question_id}|${r.domain_id}|${r.score}`);
+      }
+      lines.push("");
+    }
+  }
+
+  if (context.labs.has_observations) {
+    lines.push(`## LABS (${context.labs.observations.length} observations)`);
+    lines.push("# format: id|analyte|value|unit|flag|date");
+    for (const l of context.labs.observations) {
+      const flag = l.flag ?? "";
+      const date = l.collection_date ? String(l.collection_date).slice(0, 10) : "";
+      lines.push(`${l.observation_id}|${l.canonical_name}|${l.value}|${l.unit}|${flag}|${date}`);
+    }
+    lines.push("");
+  }
+
+  if (context.inbody.has_observations) {
+    lines.push(`## INBODY (${context.inbody.observations.length} observations)`);
+    lines.push("# format: id|metric|value|unit|date");
+    for (const i of context.inbody.observations) {
+      const date = i.collection_date ? String(i.collection_date).slice(0, 10) : "";
+      lines.push(`${i.observation_id}|${i.canonical_name}|${i.value}|${i.unit}|${date}`);
+    }
+    lines.push("");
+  }
+
+  if (context.narrative.has_narrative && context.narrative.latest) {
+    const n = context.narrative.latest;
+    lines.push("## NARRATIVE");
+    lines.push(`narrative_id: ${n.narrative_id}`);
+    const narr = n.narrative;
+    if (typeof narr === "object" && narr !== null) {
+      if (narr.thesis) lines.push(`thesis: ${narr.thesis}`);
+      if (Array.isArray(narr.helping) && narr.helping.length > 0) lines.push(`helping: ${narr.helping.join("; ")}`);
+      if (Array.isArray(narr.feeding) && narr.feeding.length > 0) lines.push(`feeding: ${narr.feeding.join("; ")}`);
+      if (Array.isArray(narr.symptoms) && narr.symptoms.length > 0) lines.push(`symptoms: ${narr.symptoms.join("; ")}`);
+    }
+    lines.push("");
+  }
+
+  if (context.prior_patterns.has_patterns) {
+    lines.push(`## PRIOR PATTERNS (${context.prior_patterns.patterns.length})`);
+    lines.push("# format: id|severity|category|title");
+    for (const p of context.prior_patterns.patterns) {
+      lines.push(`${p.pattern_id}|${p.severity}|${p.category}|${p.title}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
