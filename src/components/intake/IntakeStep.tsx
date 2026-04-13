@@ -38,7 +38,7 @@ const IntakeStep: React.FC = () => {
   const currentQ = getCurrentQuestion();
 
   const handleAnswer = useCallback(
-    async (rawResponse: string) => {
+    async (rawResponse: string, latencyMs: number) => {
       if (!currentQ) return;
       setTransitioning(true);
 
@@ -48,7 +48,7 @@ const IntakeStep: React.FC = () => {
         currentQ.layer,
         currentQ.question.type,
         rawResponse,
-        0 // latencyMs — will be wired properly in Prompt 3
+        latencyMs
       );
 
       // Check if this was the last question in the phase
