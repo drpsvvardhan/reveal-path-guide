@@ -312,6 +312,7 @@ const AskSection: React.FC = () => {
                 key={msg.id}
                 message={msg}
                 isStreaming={isLoading && idx === messages.length - 1 && msg.role === "assistant"}
+                onSuggestionTap={!isLoading ? sendMessage : undefined}
               />
             ))
           )}
