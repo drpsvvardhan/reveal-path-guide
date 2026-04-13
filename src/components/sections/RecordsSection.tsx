@@ -1,10 +1,13 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useCallback } from "react";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useDocuments } from "@/context/DocumentContext";
+import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useClusters } from "@/hooks/useClusters";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, Trash2, Pencil, Check, X,
-  ChevronDown, ChevronUp, Calendar, Building2, RefreshCw,
+  ChevronDown, ChevronUp, Calendar, Building2, RefreshCw, Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LabUpload, LabObservationRow } from "@/types/manifest";
