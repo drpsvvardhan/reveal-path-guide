@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, AlertCircle, MessageCircle, User, Eye } from "lucide-react";
+import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight } from "lucide-react";
 import PatientCognitiveText from "@/components/PatientCognitiveText";
 
 interface ChatMessageSection {
@@ -19,6 +19,7 @@ export interface ChatMessageData {
 interface ChatMessageProps {
   message: ChatMessageData;
   isStreaming?: boolean;
+  onSuggestionTap?: (question: string) => void;
 }
 
 const sectionMeta: Record<string, { label: string; icon: React.FC<any>; color: string }> = {
@@ -36,7 +37,66 @@ const modeLabels: Record<string, { label: string; color: string }> = {
   from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
+/** Extract quoted suggestions (text in "...") from content */
+function extractQuotedSuggestions(content: string): { before: string; quotes: string[]; after: string } {
+  const quoteRegex = /"([^"]{20,})"/g;
+  const quotes: string[] = [];
+  let lastIndex = 0;
+  let before = "";
+  let match;
+
+  while ((match = quoteRegex.exec(content)) !== null) {
+    if (quotes.length === 0) {
+      before = content.slice(0, match.index).trim();
+    }
+    quotes.push(match[1]);
+    lastIndex = match.index + match[0].length;
+  }
+
+  const after = quotes.length > 0 ? content.slice(lastIndex).trim() : "";
+  return { before: quotes.length > 0 ? before : content, quotes, after };
+}
+
+function renderContentWithQuotes(
+  content: string,
+  onSuggestionTap?: (q: string) => void
+) {
+  if (!onSuggestionTap) {
+    return <PatientCognitiveText content={content} />;
+  }
+
+  const { before, quotes, after } = extractQuotedSuggestions(content);
+
+  if (quotes.length === 0) {
+    return <PatientCognitiveText content={content} />;
+  }
+
+  return (
+    <>
+      {before && <PatientCognitiveText content={before} />}
+      <div className="mt-3 space-y-2">
+        {quotes.map((q, i) => (
+          <button
+            key={i}
+            onClick={() => onSuggestionTap(q)}
+            className="w-full text-left rounded-xl border border-secondary/30 bg-secondary/5 hover:bg-secondary/10 active:bg-secondary/15 px-4 py-3 transition-colors group"
+          >
+            <div className="flex items-start gap-3">
+              <p className="text-[14px] text-foreground leading-relaxed flex-1">
+                "{q}"
+              </p>
+              <ArrowRight className="h-4 w-4 text-secondary shrink-0 mt-0.5 opacity-60 group-hover:opacity-100 transition-opacity" />
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">Tap to ask this</p>
+          </button>
+        ))}
+      </div>
+      {after && <div className="mt-2"><PatientCognitiveText content={after} /></div>}
+    </>
+  );
+}
+
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSuggestionTap }) => {
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-6">
@@ -72,6 +132,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
                 );
               }
 
+              const isLastSection = idx === (message.sections?.length ?? 0) - 1;
+
               return (
                 <div
                   key={idx}
@@ -93,7 +155,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
                     )}
                   </div>
                   <div className="text-[15px] text-foreground leading-relaxed">
-                    <PatientCognitiveText content={section.content} />
+                    {isLastSection
+                      ? renderContentWithQuotes(section.content, onSuggestionTap)
+                      : <PatientCognitiveText content={section.content} />
+                    }
                   </div>
                 </div>
               );
@@ -102,7 +167,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming }) => {
         ) : (
           <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
             <div className="text-[15px] text-foreground leading-relaxed">
-              <PatientCognitiveText content={message.content || ""} />
+              {renderContentWithQuotes(message.content || "", isStreaming ? undefined : onSuggestionTap)}
               {isStreaming && (
                 <span className="inline-block w-2 h-4 ml-1 bg-secondary animate-pulse align-middle" />
               )}
