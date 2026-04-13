@@ -47,7 +47,8 @@ const IntakeStep: React.FC = () => {
         currentQ.domainId,
         currentQ.layer,
         currentQ.question.type,
-        rawResponse
+        rawResponse,
+        0 // latencyMs — will be wired properly in Prompt 3
       );
 
       // Check if this was the last question in the phase
@@ -167,7 +168,7 @@ const IntakeStep: React.FC = () => {
             text={currentQ.question.text}
             type={currentQ.question.type}
             domainId={currentQ.domainId}
-            currentResponse={currentResponse}
+            currentResponse={currentResponse?.answer ?? null}
             onAnswer={handleAnswer}
           />
         </div>

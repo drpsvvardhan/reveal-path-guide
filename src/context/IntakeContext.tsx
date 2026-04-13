@@ -39,12 +39,19 @@ interface GateScore {
   trafficLight: string;
 }
 
+// Stored per-response so we can track latency and reconsideration state
+interface ResponseRecord {
+  answer: string;
+  latencyMs: number;
+  pendingReconsideration?: boolean; // true when user recovered to this question
+}
+
 interface IntakeState {
   currentAssessmentId: string | null;
   currentPhase: IntakePhase;
   currentQuestionIndex: number;
   totalQuestionsForPhase: number;
-  responses: Record<string, string>; // questionId → rawResponse
+  responses: Record<string, ResponseRecord>;
   triggeredDomains: string[];
   domainScores: Record<string, DomainScore>;
   gateScores: Record<string, GateScore>;
@@ -52,14 +59,25 @@ interface IntakeState {
   error: string | null;
 }
 
+interface ReconsiderationParams {
+  assessmentId: string;
+  questionId: string;
+  domainId: string;
+  t1Answer: string;
+  t1LatencyMs: number;
+}
+
 interface IntakeContextValue extends IntakeState {
   startAssessment: () => Promise<string>;
-  recordResponse: (questionId: string, domainId: string, layer: number, questionType: string, rawResponse: string) => Promise<void>;
+  recordResponse: (questionId: string, domainId: string, layer: number, questionType: string, rawResponse: string, latencyMs: number) => Promise<void>;
   advanceToNextQuestion: () => void;
   getCurrentQuestion: () => { question: CieQuestion; domainId: string; layer: number } | null;
+  getPreviousQuestion: () => { question: CieQuestion; domainId: string; layer: number } | null;
   progress: IntakeProgress;
   evaluateLayer1Triggers: () => Promise<void>;
   completeAssessment: () => Promise<void>;
+  stepBackOneQuestion: () => void;
+  logReconsiderationEvent: (params: ReconsiderationParams) => Promise<void>;
 }
 
 const IntakeContext = createContext<IntakeContextValue | null>(null);
@@ -79,6 +97,38 @@ function buildDeepDiveQuestions(triggered: string[]): { question: CieQuestion; d
   });
 }
 
+// ── Compute delta_type between T1 and T2 answers ──
+function computeDeltaType(t1: string, t2: string, questionType: string): string {
+  if (t1 === t2) return "same";
+
+  // For binary, any change is a flip
+  if (questionType === "yesno") return "flipped";
+
+  // For scale types, determine position relative to midpoint
+  const SCALE_ORDER: Record<string, string[]> = {
+    frequency: ["never", "rarely", "sometimes", "often", "always"],
+    severity: ["none", "mild", "moderate", "severe", "extreme"],
+    effectiveness: ["excellent", "good", "fair", "poor", "none"],
+    comparison: ["much_better", "better", "same", "worse", "much_worse"],
+  };
+
+  const scale = SCALE_ORDER[questionType];
+  if (!scale) return "same";
+
+  const i1 = scale.indexOf(t1);
+  const i2 = scale.indexOf(t2);
+  if (i1 === -1 || i2 === -1) return "same";
+
+  const mid = (scale.length - 1) / 2;
+  const d1 = Math.abs(i1 - mid);
+  const d2 = Math.abs(i2 - mid);
+
+  // Crossed midpoint?
+  if ((i1 < mid && i2 > mid) || (i1 > mid && i2 < mid)) return "flipped";
+
+  return d2 < d1 ? "softened" : "hardened";
+}
+
 export function IntakeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const resumeAttempted = useRef(false);
@@ -87,7 +137,7 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
     currentAssessmentId: null,
     currentPhase: "layer1",
     currentQuestionIndex: 0,
-    totalQuestionsForPhase: ALL_L1_QUESTIONS.length, // 75
+    totalQuestionsForPhase: ALL_L1_QUESTIONS.length,
     responses: {},
     triggeredDomains: [],
     domainScores: {},
@@ -121,12 +171,17 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
         // Load existing responses
         const { data: existing } = await supabase
           .from("cie_responses")
-          .select("question_id, raw_response, domain_id, layer, question_type")
+          .select("question_id, raw_response, domain_id, layer, question_type, response_latency_ms")
           .eq("assessment_id", assessment.id);
 
-        const responses: Record<string, string> = {};
+        const responses: Record<string, ResponseRecord> = {};
         if (existing) {
-          for (const r of existing) responses[r.question_id] = r.raw_response;
+          for (const r of existing) {
+            responses[r.question_id] = {
+              answer: r.raw_response,
+              latencyMs: (r as any).response_latency_ms ?? 0,
+            };
+          }
         }
 
         const triggeredDomains = assessment.triggered_domains || [];
@@ -140,11 +195,9 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
           phase = "deep_dive";
           const ddQuestions = buildDeepDiveQuestions(triggeredDomains);
           totalForPhase = ddQuestions.length;
-          // Find first unanswered deep-dive question
           questionIndex = ddQuestions.findIndex((q) => !responses[q.question.id]);
           if (questionIndex === -1) questionIndex = ddQuestions.length;
         } else {
-          // Find first unanswered L1 question
           questionIndex = ALL_L1_QUESTIONS.findIndex((q) => !responses[q.question.id]);
           if (questionIndex === -1) questionIndex = ALL_L1_QUESTIONS.length;
         }
@@ -201,34 +254,72 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
 
   // ── Record a response ──
   const recordResponse = useCallback(
-    async (questionId: string, domainId: string, layer: number, questionType: string, rawResponse: string) => {
+    async (questionId: string, domainId: string, layer: number, questionType: string, rawResponse: string, latencyMs: number) => {
       if (!user || !state.currentAssessmentId) return;
 
       const score = scoreResponse(questionType, rawResponse, questionId);
+      const existingResponse = state.responses[questionId];
+      const isReconsideration = existingResponse?.pendingReconsideration === true;
 
       // Optimistic local update
       setState((s) => ({
         ...s,
-        responses: { ...s.responses, [questionId]: rawResponse },
+        responses: {
+          ...s.responses,
+          [questionId]: { answer: rawResponse, latencyMs, pendingReconsideration: false },
+        },
       }));
 
-      // Persist
-      const { error } = await supabase.from("cie_responses").upsert(
-        {
-          assessment_id: state.currentAssessmentId,
-          user_id: user.id,
-          question_id: questionId,
-          domain_id: domainId,
-          layer,
-          question_type: questionType,
-          raw_response: rawResponse,
-          score,
-        },
-        { onConflict: "assessment_id,question_id" }
-      );
+      if (isReconsideration) {
+        // This is a T2 answer — preserve T1, update the response row
+        const t1Answer = existingResponse.answer;
+        const t1LatencyMs = existingResponse.latencyMs;
+        const deltaType = computeDeltaType(t1Answer, rawResponse, questionType);
 
-      if (error) {
-        setState((s) => ({ ...s, error: error.message }));
+        // Update cie_responses with new answer + preserve T1
+        await supabase
+          .from("cie_responses")
+          .update({
+            raw_response: rawResponse,
+            score,
+            response_latency_ms: latencyMs,
+            t1_answer: t1Answer,
+            t1_latency_ms: t1LatencyMs,
+          } as any)
+          .eq("assessment_id", state.currentAssessmentId)
+          .eq("question_id", questionId);
+
+        // Update reconsideration_events with T2 data
+        await supabase
+          .from("reconsideration_events" as any)
+          .update({
+            t2_answer: rawResponse,
+            t2_latency_ms: latencyMs,
+            delta_type: deltaType,
+          })
+          .eq("assessment_id", state.currentAssessmentId)
+          .eq("question_id", questionId)
+          .is("t2_answer", null);
+      } else {
+        // Normal first-time answer
+        const { error } = await supabase.from("cie_responses").upsert(
+          {
+            assessment_id: state.currentAssessmentId,
+            user_id: user.id,
+            question_id: questionId,
+            domain_id: domainId,
+            layer,
+            question_type: questionType,
+            raw_response: rawResponse,
+            score,
+            response_latency_ms: latencyMs,
+          } as any,
+          { onConflict: "assessment_id,question_id" }
+        );
+
+        if (error) {
+          setState((s) => ({ ...s, error: error.message }));
+        }
       }
 
       // Update assessment question count
@@ -248,28 +339,101 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // ── Step back one question (for long-press recovery) ──
+  const stepBackOneQuestion = useCallback(() => {
+    setState((s) => {
+      if (s.currentQuestionIndex <= 0) return s;
+
+      const newIndex = s.currentQuestionIndex - 1;
+
+      // Find the question we're stepping back to
+      let prevQuestionId: string | null = null;
+      if (s.currentPhase === "layer1") {
+        prevQuestionId = ALL_L1_QUESTIONS[newIndex]?.question.id ?? null;
+      } else if (s.currentPhase === "deep_dive") {
+        const ddQuestions = buildDeepDiveQuestions(s.triggeredDomains);
+        prevQuestionId = ddQuestions[newIndex]?.question.id ?? null;
+      }
+
+      // Mark the previous response as pending reconsideration
+      const updatedResponses = { ...s.responses };
+      if (prevQuestionId && updatedResponses[prevQuestionId]) {
+        updatedResponses[prevQuestionId] = {
+          ...updatedResponses[prevQuestionId],
+          pendingReconsideration: true,
+        };
+      }
+
+      return {
+        ...s,
+        currentQuestionIndex: newIndex,
+        responses: updatedResponses,
+      };
+    });
+  }, []);
+
+  // ── Log a reconsideration event ──
+  const logReconsiderationEvent = useCallback(
+    async (params: ReconsiderationParams) => {
+      if (!user) return;
+
+      await supabase.from("reconsideration_events" as any).insert({
+        assessment_id: params.assessmentId,
+        user_id: user.id,
+        question_id: params.questionId,
+        domain_id: params.domainId,
+        t1_answer: params.t1Answer,
+        t1_latency_ms: params.t1LatencyMs,
+      });
+    },
+    [user]
+  );
+
+  // ── Get previous question (for recovery) ──
+  const getPreviousQuestion = useCallback((): {
+    question: CieQuestion;
+    domainId: string;
+    layer: number;
+  } | null => {
+    const prevIndex = state.currentQuestionIndex - 1;
+    if (prevIndex < 0) return null;
+
+    if (state.currentPhase === "layer1") {
+      const entry = ALL_L1_QUESTIONS[prevIndex];
+      if (!entry) return null;
+      return { question: entry.question, domainId: entry.domainId, layer: 1 };
+    }
+
+    if (state.currentPhase === "deep_dive") {
+      const ddQuestions = buildDeepDiveQuestions(state.triggeredDomains);
+      const entry = ddQuestions[prevIndex];
+      if (!entry) return null;
+      return { question: entry.question, domainId: entry.domainId, layer: 2 };
+    }
+
+    return null;
+  }, [state.currentPhase, state.currentQuestionIndex, state.triggeredDomains]);
+
   // ── Evaluate Layer 1 triggers ──
   const evaluateLayer1Triggers = useCallback(async () => {
     if (!state.currentAssessmentId) return;
     setState((s) => ({ ...s, isLoading: true }));
 
     try {
-      // Call scoring edge function
       const { data: fnResult, error: fnError } = await supabase.functions.invoke("cie-score-assessment", {
         body: { assessment_id: state.currentAssessmentId },
       });
 
       if (fnError) throw fnError;
 
-      // Determine triggered domains from L1 scores
       const triggered: string[] = [];
       const domainScoresMap: Record<string, DomainScore> = {};
 
       for (const domain of CIE_DOMAINS) {
         const l1Questions = domain.layer1;
         const l1Scores = l1Questions.map((q) => {
-          const raw = state.responses[q.id];
-          return raw ? scoreResponse(q.type, raw, q.id) : 50;
+          const rec = state.responses[q.id];
+          return rec ? scoreResponse(q.type, rec.answer, q.id) : 50;
         });
         const result = computeDomainScore(domain.id, l1Scores);
         domainScoresMap[domain.id] = result;
@@ -281,7 +445,6 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
 
       const ddQuestions = buildDeepDiveQuestions(triggered);
 
-      // Update assessment status
       await supabase
         .from("cie_assessments")
         .update({
@@ -301,7 +464,6 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
       }));
 
-      // If no domains triggered, complete immediately
       if (triggered.length === 0) {
         await finalizeAssessment();
       }
@@ -314,12 +476,10 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
   const finalizeAssessment = useCallback(async () => {
     if (!state.currentAssessmentId) return;
 
-    // Call scoring edge function for final scores
     await supabase.functions.invoke("cie-score-assessment", {
       body: { assessment_id: state.currentAssessmentId },
     });
 
-    // Mark complete
     await supabase
       .from("cie_assessments")
       .update({
@@ -331,7 +491,6 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
       })
       .eq("id", state.currentAssessmentId);
 
-    // Read final scores from DB
     const { data: domainRows } = await supabase
       .from("cie_domain_scores")
       .select("*")
@@ -416,9 +575,12 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
         recordResponse,
         advanceToNextQuestion,
         getCurrentQuestion,
+        getPreviousQuestion,
         progress,
         evaluateLayer1Triggers,
         completeAssessment,
+        stepBackOneQuestion,
+        logReconsiderationEvent,
       }}
     >
       {children}
