@@ -88,13 +88,6 @@ const RecordsSection: React.FC = () => {
     setRegenerating(true);
     setRegenerateMsg(null);
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("user_id", uid)
-        .maybeSingle();
-      if (!profile?.id) throw new Error("Profile not found");
-
       const clusterUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-clusters`;
       const resp = await fetch(clusterUrl, {
         method: "POST",
@@ -102,7 +95,7 @@ const RecordsSection: React.FC = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ patient_id: profile.id }),
+        body: JSON.stringify({ patient_id: uid }),
       });
       if (!resp.ok && resp.status !== 202) {
         const err = await resp.json().catch(() => ({}));
