@@ -27,7 +27,7 @@ const corsHeaders = {
 const GENERATOR_MODEL = "claude-sonnet-4-20250514";
 const CRITIC_MODEL = "claude-sonnet-4-20250514";
 const RECONCILER_MODEL = "claude-sonnet-4-20250514";
-const MAX_TOKENS = 8000;
+const MAX_TOKENS = 16000;
 
 function stripJsonFences(text: string): string {
   return text

@@ -90,12 +90,16 @@ export async function loadPatientContext(
 ): Promise<PatientTerrainContext> {
   const sb = createClient(supabaseUrl, serviceRoleKey);
 
-  // Profile — user_id is the auth uid used across all tables
+  // Profile — look up by user_id first; patientId is the auth uid.
+  // We also need profiles.id because clusters.patient_id FK references profiles.id.
   const { data: profile } = await sb
     .from("profiles")
-    .select("display_name, age, sex")
+    .select("id, display_name, age, sex")
     .eq("user_id", patientId)
     .maybeSingle();
+
+  // Use profiles.id as the canonical patient_id for cluster writes (FK target).
+  const canonicalPatientId = profile?.id ?? patientId;
 
   // CIE assessment — latest completed or in_progress
   const { data: assessments } = await sb
