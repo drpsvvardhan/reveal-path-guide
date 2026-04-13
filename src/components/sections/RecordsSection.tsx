@@ -1,16 +1,21 @@
 import React, { useState, useRef, useMemo } from "react";
 import { useLabUploads } from "@/context/LabUploadsContext";
+import { useDocuments } from "@/context/DocumentContext";
 import { useClusters } from "@/hooks/useClusters";
 import {
-  Upload, FileText, Loader2, CheckCircle2, XCircle,
-  ChevronDown, ChevronUp, RefreshCw,
+  Upload, FileText, Loader2, CheckCircle2, XCircle, Trash2, Pencil, Check, X,
+  ChevronDown, ChevronUp, Calendar, Building2, RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { LabUpload, LabObservationRow } from "@/types/manifest";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
+import BiomarkerTimeline from "@/components/visuals/BiomarkerTimeline";
 import CoherenceMap from "@/components/clusters/CoherenceMap";
 import ClusterCard from "@/components/clusters/ClusterCard";
 import { ClusterTier } from "@/types/clusters";
 
+/* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
   { tier: "robust", label: "Robust" },
   { tier: "supported", label: "Supported" },
@@ -18,6 +23,24 @@ const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
   { tier: "tentative", label: "Tentative" },
   { tier: "emerging", label: "Emerging" },
 ];
+
+/* ── Small reusable bits ── */
+const StatusBadge: React.FC<{ status: LabUpload["status"] }> = ({ status }) => {
+  const styles: Record<string, { bg: string; text: string; label: string; Icon: React.FC<any> }> = {
+    uploaded: { bg: "bg-muted/40", text: "text-muted-foreground", label: "Uploaded", Icon: FileText },
+    processing: { bg: "bg-blue-50 border-blue-200", text: "text-blue-700", label: "Processing", Icon: Loader2 },
+    complete: { bg: "bg-teal-50 border-teal-200", text: "text-teal-700", label: "Complete", Icon: CheckCircle2 },
+    failed: { bg: "bg-orange-50 border-orange-200", text: "text-orange-700", label: "Failed", Icon: XCircle },
+  };
+  const s = styles[status] || styles.uploaded;
+  const Icon = s.Icon;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border ${s.bg} ${s.text}`}>
+      <Icon className={`h-3 w-3 ${status === "processing" ? "animate-spin" : ""}`} />
+      {s.label}
+    </span>
+  );
+};
 
 const FlagPill: React.FC<{ flag: string | null }> = ({ flag }) => {
   if (!flag || flag === "normal") return null;
@@ -33,13 +56,23 @@ const FlagPill: React.FC<{ flag: string | null }> = ({ flag }) => {
   );
 };
 
+/* ══════════════════════════════════════════════════════════════════
+   RecordsSection — cluster terrain reading + full upload management
+   ══════════════════════════════════════════════════════════════════ */
 const RecordsSection: React.FC = () => {
-  const { uploads, observations, uploading, processing, uploadAndProcess } = useLabUploads();
+  const {
+    uploads, observations, loading: labsLoading, uploading, processing, error: labError,
+    uploadAndProcess, deleteUpload, correctObservation,
+  } = useLabUploads();
+  const { documents } = useDocuments();
   const { clusters, loading: clustersLoading, error: clustersError, refetch } = useClusters();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
-  const [unclusteredOpen, setUnclusteredOpen] = useState(false);
+  const [expandedUploads, setExpandedUploads] = useState<Set<string>>(new Set());
+  const [editingObs, setEditingObs] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [uploadsOpen, setUploadsOpen] = useState(false);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -50,34 +83,43 @@ const RecordsSection: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Collect all evidence_ids referenced by clusters
-  const clusteredEvidenceIds = useMemo(() => {
-    const ids = new Set<string>();
-    clusters.forEach((c) => {
-      c.constituent_evidence.forEach((ev) => {
-        ids.add(ev.evidence_id);
-      });
+  const triggerFilePicker = () => fileInputRef.current?.click();
+  const toggleExpanded = (uploadId: string) => {
+    setExpandedUploads((prev) => {
+      const next = new Set(prev);
+      if (next.has(uploadId)) next.delete(uploadId); else next.add(uploadId);
+      return next;
     });
-    return ids;
-  }, [clusters]);
+  };
+  const handleStartEdit = (obs: LabObservationRow) => { setEditingObs(obs.id); setEditValue(obs.value.toString()); };
+  const handleSaveEdit = async () => {
+    if (!editingObs) return;
+    const newValue = parseFloat(editValue);
+    if (isNaN(newValue)) return;
+    await correctObservation(editingObs, newValue);
+    setEditingObs(null); setEditValue("");
+  };
+  const handleCancelEdit = () => { setEditingObs(null); setEditValue(""); };
+  const getObservationsForUpload = (uploadId: string) => observations.filter((o) => o.upload_id === uploadId);
+  const formatDate = (dateStr: string | null) => { if (!dateStr) return "—"; return new Date(dateStr).toLocaleDateString(); };
 
-  // Unclustered observations
-  const unclusteredObs = useMemo(() => {
-    return observations.filter((o) => !clusteredEvidenceIds.has(o.id));
-  }, [observations, clusteredEvidenceIds]);
+  const distinctTestCount = new Set(observations.map((o) => o.canonical_name)).size;
+  const timelineData = observations.map((o) => ({
+    name: o.canonical_name,
+    displayName: o.display_name || undefined,
+    value: o.value,
+    unit: o.unit,
+    timestamp: o.collection_date,
+    refLow: o.ref_low || undefined,
+    refHigh: o.ref_high || undefined,
+    flag: o.flag || undefined,
+    source: o.source || undefined,
+  })) as import("@/types/manifest").BiomarkerObservation[];
 
-  // Group unclustered by panel
-  const unclusteredByPanel = useMemo(() => {
-    const map: Record<string, typeof unclusteredObs> = {};
-    unclusteredObs.forEach((o) => {
-      const panel = o.source || "Other";
-      if (!map[panel]) map[panel] = [];
-      map[panel].push(o);
-    });
-    return map;
-  }, [unclusteredObs]);
+  const hasTimelineData = timelineData.length > 0;
+  const hasClusters = clusters.length > 0;
 
-  // Group clusters by tier for section headers
+  /* ── Cluster grouping ── */
   const clustersByTier = useMemo(() => {
     const map: Record<ClusterTier, typeof clusters> = {
       robust: [], supported: [], developing: [], tentative: [], emerging: [],
@@ -89,81 +131,65 @@ const RecordsSection: React.FC = () => {
   const presentTiers = TIER_ORDER.filter((t) => clustersByTier[t.tier].length > 0);
   const showTierHeaders = presentTiers.length > 1;
 
-  // Most recent cluster update
   const lastUpdated = useMemo(() => {
     if (clusters.length === 0) return null;
     return clusters.reduce((latest, c) =>
       c.updated_at > latest ? c.updated_at : latest, clusters[0].updated_at);
   }, [clusters]);
 
-  // Loading skeleton
-  if (clustersLoading) {
-    return (
-      <PatientSectionLayout eyebrow="YOUR TERRAIN" title="Loading your terrain reading…">
-        <div className="space-y-4">
-          <div className="h-[260px] rounded-lg bg-muted/20 animate-pulse" />
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-[120px] rounded-lg border border-border bg-card animate-pulse" />
-          ))}
-        </div>
-      </PatientSectionLayout>
-    );
-  }
+  /* ── Unclustered observations ── */
+  const clusteredEvidenceIds = useMemo(() => {
+    const ids = new Set<string>();
+    clusters.forEach((c) => {
+      c.constituent_evidence.forEach((ev) => ids.add(ev.evidence_id));
+    });
+    return ids;
+  }, [clusters]);
 
-  // Error state
-  if (clustersError) {
-    return (
-      <PatientSectionLayout eyebrow="YOUR TERRAIN" title="Your terrain">
-        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-6 text-center space-y-3">
-          <p className="text-sm text-destructive">{clustersError}</p>
-          <button
-            onClick={refetch}
-            className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-foreground/80 transition-colors"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Retry
-          </button>
-        </div>
-      </PatientSectionLayout>
-    );
-  }
+  const unclusteredObs = useMemo(() => {
+    return observations.filter((o) => !clusteredEvidenceIds.has(o.id));
+  }, [observations, clusteredEvidenceIds]);
 
-  // Empty state
-  if (clusters.length === 0) {
-    return (
-      <PatientSectionLayout
-        eyebrow="YOUR TERRAIN"
-        title="Your terrain is still forming"
-        intro="Upload a lab report or complete the CIE assessment to begin."
-      >
-        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-8 text-center space-y-3">
-          <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-          <p className="text-sm text-foreground font-medium">No clusters yet</p>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Your terrain reading builds itself from lab data, intake responses, and sensor readings.
-            Upload your first lab report to start.
-          </p>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs hover:bg-secondary/90 transition-colors"
-          >
-            <Upload className="h-3.5 w-3.5" /> Upload lab report
-          </button>
-          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-        </div>
-      </PatientSectionLayout>
-    );
-  }
+  const unclusteredByPanel = useMemo(() => {
+    const map: Record<string, typeof unclusteredObs> = {};
+    unclusteredObs.forEach((o) => {
+      const panel = o.source || "Other";
+      if (!map[panel]) map[panel] = [];
+      map[panel].push(o);
+    });
+    return map;
+  }, [unclusteredObs]);
+
+  const loading = clustersLoading || labsLoading;
+
+  /* ── Aside ── */
+  const aside = hasTimelineData ? (
+    <BiomarkerTimeline observations={timelineData} />
+  ) : (
+    <AsideInfoPanel
+      title="Records summary"
+      items={[
+        { label: "Uploads", value: uploads.length.toString() },
+        { label: "Biomarkers", value: observations.length.toString(), tone: "accent" },
+        { label: "Distinct tests", value: distinctTestCount.toString() },
+      ]}
+    />
+  );
 
   return (
     <PatientSectionLayout
-      eyebrow="YOUR TERRAIN"
-      title="Your terrain"
-      intro="Your biology organized as clusters of converging evidence. Each cluster shows what your data is telling us, how confident the reading is, and what would sharpen it."
+      eyebrow="MEDICAL RECORDS"
+      title={hasClusters ? "Your terrain" : "Your lab history, extracted and organized"}
+      intro={hasClusters
+        ? "Your biology organized as clusters of converging evidence. Each cluster shows what your data is telling us, how confident the reading is, and what would sharpen it."
+        : "Every PDF you upload gets read and turned into structured observations. Your timeline rebuilds itself as you add more."}
+      aside={aside}
+      asideSticky
     >
-      {/* Upload bar */}
+      {/* Upload button */}
       <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={triggerFilePicker}
           disabled={uploading || processing}
           className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50"
         >
@@ -175,7 +201,7 @@ const RecordsSection: React.FC = () => {
         <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
       </div>
 
-      {/* Last upload result */}
+      {/* Last result feedback */}
       {lastResult && !uploading && !processing && (
         <div className="text-xs">
           {lastResult.success ? (
@@ -184,6 +210,8 @@ const RecordsSection: React.FC = () => {
               <span>
                 Extracted {lastResult.observations_extracted} biomarker{lastResult.observations_extracted !== 1 ? "s" : ""}
                 {lastResult.observations_inserted > 0 && ` · ${lastResult.observations_inserted} new`}
+                {lastResult.observations_duplicates > 0 && ` · ${lastResult.observations_duplicates} duplicates skipped`}
+                {lastResult.source_lab && ` · ${lastResult.source_lab}`}
               </span>
             </div>
           ) : (
@@ -195,83 +223,201 @@ const RecordsSection: React.FC = () => {
         </div>
       )}
 
-      {/* Coherence Map */}
-      <div className="py-4">
-        <CoherenceMap clusters={clusters} />
-      </div>
+      {labError && !lastResult && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">{labError}</div>
+      )}
 
-      {/* Cluster Cards */}
-      <div className="space-y-3">
-        {presentTiers.map((tierInfo) => (
-          <div key={tierInfo.tier}>
-            {showTierHeaders && (
-              <p className="text-[10px] font-sans font-medium uppercase tracking-[0.18em] text-muted-foreground mb-2 mt-4 first:mt-0">
-                {tierInfo.label}
-              </p>
-            )}
-            <div className="space-y-3">
-              {clustersByTier[tierInfo.tier].map((cluster) => (
-                <ClusterCard key={cluster.id} cluster={cluster} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Everything else accordion */}
-      {unclusteredObs.length > 0 && (
-        <div className="pt-6 border-t border-border mt-6">
-          <button
-            onClick={() => setUnclusteredOpen(!unclusteredOpen)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-          >
-            {unclusteredOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            Everything else we're tracking ({unclusteredObs.length} markers)
-          </button>
-          <AnimatePresence>
-            {unclusteredOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden mt-3"
-              >
-                <div className="space-y-4">
-                  {Object.entries(unclusteredByPanel).map(([panel, obs]) => (
-                    <div key={panel}>
-                      <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground mb-1.5">
-                        {panel}
-                      </p>
-                      <div className="space-y-1">
-                        {obs.map((o) => (
-                          <div key={o.id} className="flex items-center gap-3 py-1 px-2 rounded hover:bg-muted/30 transition-colors">
-                            <p className="text-xs text-foreground font-medium flex-1 min-w-0 truncate">
-                              {o.canonical_name}
-                            </p>
-                            <FlagPill flag={o.flag} />
-                            <span className="text-xs font-mono text-foreground shrink-0">
-                              {o.value} {o.unit}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground shrink-0">
-                              {o.collection_date}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {clustersError && (
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
+          <span>{clustersError}</span>
+          <button onClick={refetch} className="inline-flex items-center gap-1 text-xs underline"><RefreshCw className="h-3 w-3" /> Retry</button>
         </div>
       )}
 
-      {/* Footer */}
-      {lastUpdated && (
-        <div className="text-[11px] text-muted-foreground pt-4 border-t border-border mt-6">
-          This terrain reading was last updated {new Date(lastUpdated).toLocaleDateString()}.
-          New labs, sensor data, or CIE responses will refine it automatically.
+      {loading && uploads.length === 0 && clusters.length === 0 && (
+        <div className="text-xs text-muted-foreground italic py-4">Loading your records...</div>
+      )}
+
+      {/* ════════════════ CLUSTER TERRAIN SECTION ════════════════ */}
+      {hasClusters && (
+        <>
+          {/* Coherence Map */}
+          <div className="py-4">
+            <CoherenceMap clusters={clusters} />
+          </div>
+
+          {/* Cluster Cards */}
+          <div className="space-y-3">
+            {presentTiers.map((tierInfo) => (
+              <div key={tierInfo.tier}>
+                {showTierHeaders && (
+                  <p className="text-[10px] font-sans font-medium uppercase tracking-[0.18em] text-muted-foreground mb-2 mt-4 first:mt-0">
+                    {tierInfo.label}
+                  </p>
+                )}
+                <div className="space-y-3">
+                  {clustersByTier[tierInfo.tier].map((cluster) => (
+                    <ClusterCard key={cluster.id} cluster={cluster} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Unclustered observations accordion */}
+          {unclusteredObs.length > 0 && (
+            <div className="pt-6 border-t border-border mt-6">
+              <button
+                onClick={() => setUploadsOpen((o) => !o)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+              >
+                {uploadsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                Everything else we're tracking ({unclusteredObs.length} markers)
+              </button>
+              <AnimatePresence>
+                {uploadsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden mt-3"
+                  >
+                    <div className="space-y-4">
+                      {Object.entries(unclusteredByPanel).map(([panel, obs]) => (
+                        <div key={panel}>
+                          <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground mb-1.5">
+                            {panel}
+                          </p>
+                          <div className="space-y-1">
+                            {obs.map((o) => (
+                              <div key={o.id} className="flex items-center gap-3 py-1 px-2 rounded hover:bg-muted/30 transition-colors">
+                                <p className="text-xs text-foreground font-medium flex-1 min-w-0 truncate">{o.canonical_name}</p>
+                                <FlagPill flag={o.flag} />
+                                <span className="text-xs font-mono text-foreground shrink-0">{o.value} {o.unit}</span>
+                                <span className="text-[10px] text-muted-foreground shrink-0">{o.collection_date}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Terrain footer */}
+          {lastUpdated && (
+            <div className="text-[11px] text-muted-foreground pt-4 border-t border-border mt-6">
+              This terrain reading was last updated {new Date(lastUpdated).toLocaleDateString()}.
+              New labs, sensor data, or CIE responses will refine it automatically.
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ════════════════ UPLOAD LIST (always shown) ════════════════ */}
+      {uploads.length > 0 && (
+        <div className={hasClusters ? "pt-6 border-t border-border mt-6" : ""}>
+          {hasClusters && (
+            <p className="text-[10px] font-sans font-medium uppercase tracking-[0.18em] text-muted-foreground mb-3">
+              Uploaded reports
+            </p>
+          )}
+          <div className="space-y-3">
+            {uploads.map((upload) => {
+              const uploadObs = getObservationsForUpload(upload.id);
+              const isExpanded = expandedUploads.has(upload.id);
+              return (
+                <motion.div key={upload.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-lg border border-border bg-card overflow-hidden">
+                  <div className="p-4 group">
+                    <div className="flex items-start gap-3">
+                      <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-foreground truncate">{upload.original_filename}</p>
+                          <StatusBadge status={upload.status} />
+                        </div>
+                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
+                          {upload.source_lab && (<span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{upload.source_lab}</span>)}
+                          {upload.collection_date && (<span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Collected {formatDate(upload.collection_date)}</span>)}
+                          {upload.observations_inserted != null && (<span>{upload.observations_inserted} biomarker{upload.observations_inserted !== 1 ? "s" : ""}</span>)}
+                        </div>
+                        {upload.error_message && (<p className="text-[11px] text-orange-700 mt-1.5 italic">{upload.error_message}</p>)}
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {upload.status === "complete" && uploadObs.length > 0 && (
+                          <button onClick={() => toggleExpanded(upload.id)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title={isExpanded ? "Collapse" : "Show observations"}>
+                            {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                        )}
+                        <button onClick={() => { if (confirm("Delete this upload and all its observations?")) deleteUpload(upload.id); }} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Delete upload">
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {isExpanded && uploadObs.length > 0 && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="border-t border-border bg-muted/10 overflow-hidden">
+                        <div className="p-4 space-y-1.5">
+                          {uploadObs.map((obs) => (
+                            <div key={obs.id} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-card transition-colors group">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-foreground font-medium">
+                                  {obs.canonical_name}
+                                  {obs.canonical_name !== obs.raw_name && (<span className="text-muted-foreground font-normal ml-1">({obs.raw_name})</span>)}
+                                </p>
+                                {obs.ref_low != null && obs.ref_high != null && (<p className="text-[10px] text-muted-foreground">normal: {obs.ref_low}–{obs.ref_high} {obs.unit}</p>)}
+                              </div>
+                              <FlagPill flag={obs.flag} />
+                              {editingObs === obs.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-20 rounded border border-border bg-background px-2 py-1 text-xs" autoFocus />
+                                  <button onClick={handleSaveEdit} className="p-1 rounded hover:bg-muted"><Check className="h-3.5 w-3.5 text-teal-600" /></button>
+                                  <button onClick={handleCancelEdit} className="p-1 rounded hover:bg-muted"><X className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-mono text-foreground">
+                                    {obs.value} {obs.unit}
+                                    {obs.corrected && (<span className="text-[9px] text-amber-600 ml-1" title={`Originally ${obs.original_value}`}>(corrected)</span>)}
+                                  </span>
+                                  <button onClick={() => handleStartEdit(obs)} className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" title="Correct misread value">
+                                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* No uploads empty state */}
+      {!loading && uploads.length === 0 && !hasClusters && (
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-8 text-center">
+          <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+          <p className="text-sm text-foreground font-medium mb-1">No lab reports uploaded yet</p>
+          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+            Click <span className="font-medium">Upload lab report</span> to add your first set of results. You can upload PDFs or photos of lab reports.
+          </p>
+        </div>
+      )}
+
+      {/* Summary footer */}
+      {observations.length > 0 && (
+        <div className="text-xs text-muted-foreground border-t border-border pt-3">
+          Total: <span className="font-medium text-foreground">{observations.length}</span> biomarker{observations.length !== 1 ? "s" : ""} across {distinctTestCount} distinct tests, from {uploads.filter((u) => u.status === "complete").length} processed upload{uploads.filter((u) => u.status === "complete").length !== 1 ? "s" : ""}.
         </div>
       )}
     </PatientSectionLayout>
