@@ -1,10 +1,13 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useCallback } from "react";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useDocuments } from "@/context/DocumentContext";
+import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useClusters } from "@/hooks/useClusters";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, Trash2, Pencil, Check, X,
-  ChevronDown, ChevronUp, Calendar, Building2, RefreshCw,
+  ChevronDown, ChevronUp, Calendar, Building2, RefreshCw, Zap,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LabUpload, LabObservationRow } from "@/types/manifest";
@@ -66,6 +69,9 @@ const RecordsSection: React.FC = () => {
   } = useLabUploads();
   const { documents } = useDocuments();
   const { clusters, loading: clustersLoading, error: clustersError, refetch } = useClusters();
+  const { isAdmin } = useViewAs();
+  const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
@@ -73,6 +79,44 @@ const RecordsSection: React.FC = () => {
   const [editingObs, setEditingObs] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [uploadsOpen, setUploadsOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
+
+  const handleRegenerateClusters = useCallback(async () => {
+    const uid = effectiveUserId || user?.id;
+    if (!uid) return;
+    setRegenerating(true);
+    setRegenerateMsg(null);
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (!profile?.id) throw new Error("Profile not found");
+
+      const clusterUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-clusters`;
+      const resp = await fetch(clusterUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ patient_id: profile.id }),
+      });
+      if (!resp.ok && resp.status !== 202) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Failed (${resp.status})`);
+      }
+      setRegenerateMsg("Cluster generation started. Results will appear in a few minutes.");
+      // Poll for new clusters after a delay
+      setTimeout(() => refetch(), 60_000);
+    } catch (e: any) {
+      setRegenerateMsg(`Error: ${e.message}`);
+    } finally {
+      setRegenerating(false);
+    }
+  }, [effectiveUserId, user?.id, refetch]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -199,7 +243,27 @@ const RecordsSection: React.FC = () => {
         </button>
         <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
+
+        {/* Admin-only regenerate clusters button */}
+        {isAdmin && (
+          <button
+            onClick={handleRegenerateClusters}
+            disabled={regenerating}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50 ml-auto"
+          >
+            {regenerating
+              ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating...</>)
+              : (<><Zap className="h-3.5 w-3.5" />Regenerate clusters</>)}
+          </button>
+        )}
       </div>
+
+      {/* Regenerate feedback */}
+      {regenerateMsg && (
+        <div className={`text-xs ${regenerateMsg.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>
+          {regenerateMsg}
+        </div>
+      )}
 
       {/* Last result feedback */}
       {lastResult && !uploading && !processing && (
