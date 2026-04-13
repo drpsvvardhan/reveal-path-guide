@@ -58,7 +58,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const uid = effectiveUserId;
+    const uid = effectiveUserId || user?.id;
     if (!uid) {
       setUploads([]);
       setObservations([]);
@@ -91,7 +91,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } finally {
       setLoading(false);
     }
-  }, [effectiveUserId]);
+  }, [effectiveUserId, user?.id]);
 
   useEffect(() => {
     refresh();
