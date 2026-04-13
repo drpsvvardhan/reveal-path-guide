@@ -59,13 +59,9 @@ const IntakeQuestionCard: React.FC<IntakeQuestionCardProps> = ({
 
   const submit = (value: string) => {
     const latency = Math.round(performance.now() - renderedAt.current);
-    console.log("[IntakeQuestionCard] submit called", { value, latency, questionId });
     haptic(20);
     setRevealed(true);
-    setTimeout(() => {
-      console.log("[IntakeQuestionCard] setTimeout firing onAnswer", { value, latency });
-      onAnswer(value, latency);
-    }, 220);
+    setTimeout(() => onAnswer(value, latency), 220);
   };
 
   // ── Swipe mechanics for binary questions ────────────
