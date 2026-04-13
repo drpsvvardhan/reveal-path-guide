@@ -12,30 +12,31 @@ const COORDINATES: { label: string; short: string; key: Coordinate }[] = [
 ];
 
 function classifyKind(kindOrText: string): Coordinate {
-  const text = kindOrText.toLowerCase();
+  // Replace underscores with spaces so word-boundary matching works on snake_case input
+  const text = kindOrText.toLowerCase().replace(/_/g, " ");
 
   // Scar — irreversible structural change
-  if (/\b(scar|calc|fibros|sclero|stenos|plaque|irreversibl|historical|stiffness)\b/.test(text)) {
+  if (/(scar|calc|fibros|sclero|stenos|plaque|irreversibl|historical|stiffness)/.test(text)) {
     return "Scar";
   }
 
   // Vascular — endothelium, particles, vessels, kidney filtration
-  if (/\b(cardiovascular|vascular|endothel|particle|hdl|ldl|apo|lipoprotein|atherogen|cimt|cac|renal|kidney|gfr|creatinine|cystatin|filtration)\b/.test(text)) {
+  if (/(cardiovascular|vascular|endothel|particle|hdl|ldl|apo|lipoprotein|atherogen|cimt|cac|renal|kidney|gfr|creatinine|cystatin|filtration)/.test(text)) {
     return "Vascular";
   }
 
   // Regulation — endocrine, autonomic, circadian, hormonal
-  if (/\b(regulator|thyroid|tsh|t3|t4|adrenal|cortisol|circadian|autonomic|hrv|stress|sleep|hormone|shbg|dhea|reproductive|melatonin|insulin.cortisol)\b/.test(text)) {
+  if (/(regulat|thyroid|tsh|t3|t4|adrenal|cortisol|circadian|autonomic|hrv|stress|sleep|hormone|shbg|dhea|reproductive|melatonin)/.test(text)) {
     return "Regulation";
   }
 
   // Energy — metabolic flux, mitochondrial, fuel processing, iron oxygen carriers
-  if (/\b(metabol|glucose|glycem|insulin|hba1c|homa|lipid|hepatic|liver|alt|ast|ggt|albumin|bilirubin|mitochondri|fuel|atp|carnitine|iron|ferritin|hemoglobin|tibc|saturation|omega)\b/.test(text)) {
+  if (/(metabol|glucose|glycem|insulin|hba1c|homa|lipid|hepatic|liver|alt|ast|ggt|albumin|bilirubin|mitochondri|fuel|atp|carnitine|iron|ferritin|hemoglobin|tibc|saturation|omega)/.test(text)) {
     return "Energy";
   }
 
   // Inflammation — immune tone, barrier, gut, oxidative stress, microbiome
-  if (/\b(inflamm|immune|barrier|gut|microbiom|tmao|crp|il6|tnf|cytokine|oxidat|nlr|tolerance)\b/.test(text)) {
+  if (/(inflamm|immune|barrier|gut|microbiom|tmao|crp|il6|tnf|cytokine|oxidat|nlr|tolerance)/.test(text)) {
     return "Inflammation";
   }
 
