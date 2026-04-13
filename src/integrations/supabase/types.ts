@@ -274,6 +274,124 @@ export type Database = {
           },
         ]
       }
+      cluster_evidence: {
+        Row: {
+          cluster_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["cluster_evidence_direction"]
+          evidence_id: string
+          evidence_kind: string
+          id: string
+          layer_type: Database["public"]["Enums"]["cluster_evidence_layer"]
+          time_point: string | null
+          weight: number
+        }
+        Insert: {
+          cluster_id: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["cluster_evidence_direction"]
+          evidence_id: string
+          evidence_kind: string
+          id?: string
+          layer_type: Database["public"]["Enums"]["cluster_evidence_layer"]
+          time_point?: string | null
+          weight?: number
+        }
+        Update: {
+          cluster_id?: string
+          created_at?: string
+          direction?: Database["public"]["Enums"]["cluster_evidence_direction"]
+          evidence_id?: string
+          evidence_kind?: string
+          id?: string
+          layer_type?: Database["public"]["Enums"]["cluster_evidence_layer"]
+          time_point?: string | null
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cluster_evidence_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "clusters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clusters: {
+        Row: {
+          claim: string
+          cluster_kind: string
+          coherence_signals: Json
+          confidence_dimensions: Json
+          confidence_score: number
+          confidence_tier: Database["public"]["Enums"]["cluster_confidence_tier"]
+          constituent_evidence: Json
+          created_at: string
+          generation_run_id: string | null
+          id: string
+          linked_intervention_ids: string[]
+          linked_surfaces: Json
+          missing_evidence: Json
+          notes: string | null
+          patient_id: string
+          provenance: Json
+          status: string
+          tensions_held: Json
+          updated_at: string
+        }
+        Insert: {
+          claim: string
+          cluster_kind: string
+          coherence_signals?: Json
+          confidence_dimensions?: Json
+          confidence_score?: number
+          confidence_tier?: Database["public"]["Enums"]["cluster_confidence_tier"]
+          constituent_evidence?: Json
+          created_at?: string
+          generation_run_id?: string | null
+          id?: string
+          linked_intervention_ids?: string[]
+          linked_surfaces?: Json
+          missing_evidence?: Json
+          notes?: string | null
+          patient_id: string
+          provenance?: Json
+          status?: string
+          tensions_held?: Json
+          updated_at?: string
+        }
+        Update: {
+          claim?: string
+          cluster_kind?: string
+          coherence_signals?: Json
+          confidence_dimensions?: Json
+          confidence_score?: number
+          confidence_tier?: Database["public"]["Enums"]["cluster_confidence_tier"]
+          constituent_evidence?: Json
+          created_at?: string
+          generation_run_id?: string | null
+          id?: string
+          linked_intervention_ids?: string[]
+          linked_surfaces?: Json
+          missing_evidence?: Json
+          notes?: string | null
+          patient_id?: string
+          provenance?: Json
+          status?: string
+          tensions_held?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clusters_patient_id_fkey"
+            columns: ["patient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       derived_patterns: {
         Row: {
           category: string
@@ -799,6 +917,24 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      cluster_confidence_tier:
+        | "emerging"
+        | "tentative"
+        | "developing"
+        | "supported"
+        | "robust"
+      cluster_evidence_direction: "convergent" | "divergent" | "neutral"
+      cluster_evidence_layer:
+        | "cie"
+        | "lab"
+        | "inbody"
+        | "emr"
+        | "medication"
+        | "sensor"
+        | "food_log"
+        | "imaging"
+        | "omics"
+        | "narrative"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -927,6 +1063,26 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      cluster_confidence_tier: [
+        "emerging",
+        "tentative",
+        "developing",
+        "supported",
+        "robust",
+      ],
+      cluster_evidence_direction: ["convergent", "divergent", "neutral"],
+      cluster_evidence_layer: [
+        "cie",
+        "lab",
+        "inbody",
+        "emr",
+        "medication",
+        "sensor",
+        "food_log",
+        "imaging",
+        "omics",
+        "narrative",
+      ],
     },
   },
 } as const
