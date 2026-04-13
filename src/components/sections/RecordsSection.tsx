@@ -70,6 +70,7 @@ const RecordsSection: React.FC = () => {
   const { documents } = useDocuments();
   const { clusters, loading: clustersLoading, error: clustersError, refetch } = useClusters();
   const { isAdmin, isViewingAs, effectiveUserId } = useViewAs();
+  const { user } = useAuth();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
