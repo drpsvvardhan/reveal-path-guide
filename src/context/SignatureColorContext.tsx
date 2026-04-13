@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo } from "react";
 import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { deriveSignatureColor, SignatureColor } from "@/lib/signatureColor";
 
 interface SignatureColorContextValue {
@@ -16,7 +17,8 @@ export const useSignatureColor = () => {
 
 export const SignatureColorProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { patterns } = useDerivedPatterns();
-  const color = useMemo(() => deriveSignatureColor(patterns), [patterns]);
+  const { domainScores } = useCIEAssessment();
+  const color = useMemo(() => deriveSignatureColor(patterns, domainScores), [patterns, domainScores]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--signature", color.hsl);
