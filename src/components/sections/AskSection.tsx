@@ -321,7 +321,7 @@ const AskSection: React.FC = () => {
         <ChatInputBar
           onSend={sendMessage}
           isLoading={isLoading}
-          suggestedQuestions={messages.length === 0 ? suggestedQuestions : []}
+          suggestedQuestions={suggestedQuestions}
         />
       }
       reasoningTrace={

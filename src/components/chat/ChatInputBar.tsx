@@ -1,5 +1,5 @@
-import React, { useState, useRef, KeyboardEvent } from "react";
-import { Send, Paperclip, Sparkles, Loader2 } from "lucide-react";
+import React, { useState, useRef, useEffect, KeyboardEvent } from "react";
+import { Send, Paperclip, Sparkles, Loader2, Mic, MicOff } from "lucide-react";
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
@@ -15,11 +15,57 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
   placeholder = "Ask about your results, your plan, or anything you're unsure about…",
 }) => {
   const [text, setText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const speechSupported = typeof window !== "undefined" && 
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  useEffect(() => {
+    if (!speechSupported) return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: any) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setText(transcript);
+    };
+
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    return () => {
+      try { recognition.abort(); } catch {}
+    };
+  }, [speechSupported]);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setText("");
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
 
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
+    if (isListening) {
+      try { recognitionRef.current?.stop(); } catch {}
+      setIsListening(false);
+    }
     onSend(trimmed);
     setText("");
     if (textareaRef.current) {
@@ -35,8 +81,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSuggestion = (q: string) => {
-    setText(q);
-    textareaRef.current?.focus();
+    onSend(q);
   };
 
   return (
@@ -69,7 +114,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
           }}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={isListening ? "Listening…" : placeholder}
           disabled={isLoading}
           rows={1}
           className="w-full resize-none bg-transparent px-5 pt-4 pb-2 pr-16 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none leading-relaxed"
@@ -85,8 +130,24 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             >
               <Paperclip className="h-4 w-4" />
             </button>
-            <p className="text-[10px] text-muted-foreground/60 ml-1">
-              Press <kbd className="px-1 py-0.5 bg-muted rounded text-[9px] border border-border/40">Enter</kbd> to send, <kbd className="px-1 py-0.5 bg-muted rounded text-[9px] border border-border/40">Shift+Enter</kbd> for new line
+
+            {speechSupported && (
+              <button
+                onClick={toggleListening}
+                disabled={isLoading}
+                className={`p-1.5 rounded-md transition-colors ${
+                  isListening
+                    ? "text-red-500 bg-red-50 animate-pulse"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                }`}
+                title={isListening ? "Stop listening" : "Voice input"}
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+            )}
+
+            <p className="text-[10px] text-muted-foreground/60 ml-1 hidden sm:block">
+              Press <kbd className="px-1 py-0.5 bg-muted rounded text-[9px] border border-border/40">Enter</kbd> to send
             </p>
           </div>
 
