@@ -499,10 +499,7 @@ function stripMarkersFromPortrait(parsed: any): void {
 
 function stripMarkersFromClinicianSummary(parsed: any): void {
   if (typeof parsed.clinician_summary?.terrain_overview === "string") {
-    const before = parsed.clinician_summary.terrain_overview;
     parsed.clinician_summary.terrain_overview = stripClusterMarkers(parsed.clinician_summary.terrain_overview);
-    console.log(`[strip-debug] terrain_overview before: ${before.substring(0, 80)}...`);
-    console.log(`[strip-debug] terrain_overview after: ${parsed.clinician_summary.terrain_overview.substring(0, 80)}...`);
   }
   if (Array.isArray(parsed.clinician_summary?.axis_breakdown)) {
     for (const axis of parsed.clinician_summary.axis_breakdown) {
