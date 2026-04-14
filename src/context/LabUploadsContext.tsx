@@ -100,6 +100,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const uploadAndProcess = useCallback(
     async (file: File): Promise<LabUploadProcessResult> => {
       if (!user) return { success: false, error: "Not authenticated" };
+      const targetUserId = effectiveUserId || user.id;
       if (!SUPPORTED_TYPES.includes(file.type)) {
         return { success: false, error: "Unsupported file type. Upload a PDF, JPEG, PNG, or WebP." };
       }
