@@ -601,7 +601,8 @@ serve(async (req) => {
       );
     }
 
-    // Override patient context from DB to prevent client-side data leaks
+    // Override patient context from DB to prevent client-side data leaks + fetch clusters
+    let clusters: any[] = [];
     if (userId) {
       const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
       const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -610,7 +611,7 @@ serve(async (req) => {
       });
       const { data: profileData } = await supabaseAdmin
         .from("profiles")
-        .select("first_name, age, sex")
+        .select("id, first_name, age, sex")
         .eq("user_id", userId)
         .maybeSingle();
       if (profileData) {
@@ -620,28 +621,20 @@ serve(async (req) => {
           age: profileData.age || manifest.patient?.age || 0,
           sex: profileData.sex || manifest.patient?.sex || "unknown",
         };
-      }
 
-      // Fetch active clusters for voice-disciplined context
-      let clusters: any[] = [];
-      const profileForClusters = profileData;
-      if (profileForClusters) {
+        // Fetch active clusters using profile.id as patient_id
         const { data: clusterData } = await supabaseAdmin
           .from("clusters")
           .select("id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held")
-          .eq("patient_id", profileForClusters.id)
+          .eq("patient_id", profileData.id)
           .eq("status", "active")
           .order("confidence_score", { ascending: false });
         clusters = clusterData || [];
       }
-
-      const clusterBlock = buildClusterContextBlock(clusters);
-      const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock);
-    } else {
-      // No userId — no cluster injection possible
-      var clusterBlock = '';
-      var systemPrompt = buildPatientSystemPrompt(manifest, documents);
     }
+
+    const clusterBlock = buildClusterContextBlock(clusters);
+    const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock);
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
