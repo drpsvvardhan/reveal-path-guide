@@ -116,7 +116,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const { data: uploadRow, error: insertError } = await supabase
           .from("patient_lab_uploads")
           .insert({
-            user_id: user.id,
+            user_id: targetUserId,
             original_filename: file.name,
             storage_path: "pending",
             file_size_bytes: file.size,
