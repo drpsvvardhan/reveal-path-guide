@@ -196,7 +196,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
                 },
-                body: JSON.stringify({ patient_id: user.id }),
+                body: JSON.stringify({ patient_id: targetUserId }),
               }).catch((err) => console.warn("[auto-clusters] fire-and-forget failed:", err));
               console.log("[auto-clusters] Triggered cluster generation after lab upload");
             } catch (clusterErr) {
