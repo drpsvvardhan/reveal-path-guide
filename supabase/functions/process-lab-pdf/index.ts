@@ -354,59 +354,53 @@ function isInBodyReport(filename: string): boolean {
 }
 
 // ============================================================================
-// CLAUDE VISION CALL — supports PDF and images
+// AI VISION CALL — uses Lovable AI Gateway (supports PDF and images)
 // ============================================================================
 
 async function callClaudeWithDocument(base64Data: string, mimeType: string, systemPrompt: string): Promise<string> {
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
   const typeInfo = SUPPORTED_MIME_TYPES[mimeType] || SUPPORTED_MIME_TYPES["application/pdf"];
+  const mediaType = typeInfo.mediaType;
 
-  let sourceBlock: any;
-  if (typeInfo.contentType === "document") {
-    sourceBlock = {
-      type: "document",
-      source: { type: "base64", media_type: typeInfo.mediaType, data: base64Data },
-    };
-  } else {
-    sourceBlock = {
-      type: "image",
-      source: { type: "base64", media_type: typeInfo.mediaType, data: base64Data },
-    };
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 16384,
-      system: systemPrompt,
-      messages: [{
-        role: "user",
-        content: [
-          sourceBlock,
-          {
-            type: "text",
-            text: "Extract all measurements from this report. Return only the JSON object as specified in your instructions.",
-          },
-        ],
-      }],
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              file: {
+                filename: `document.${mimeType === "application/pdf" ? "pdf" : mimeType.split("/")[1] || "jpg"}`,
+                file_data: `data:${mediaType};base64,${base64Data}`,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract all measurements from this report. Return only the JSON object as specified in your instructions.",
+            },
+          ],
+        },
+      ],
     }),
   });
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+    throw new Error(`AI Gateway error ${response.status}: ${errText}`);
   }
 
   const data = await response.json();
-  return data.content?.[0]?.text || "";
+  return data.choices?.[0]?.message?.content || "";
 }
 
 function extractJsonFromText(text: string): any {
