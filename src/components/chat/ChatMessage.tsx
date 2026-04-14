@@ -178,6 +178,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             </div>
           </div>
         )}
+        {message.voiceValidationStatus && (
+          <div className="mt-2 flex justify-end">
+            <VoiceValidationIndicator
+              status={message.voiceValidationStatus}
+              warnings={message.voiceValidationWarnings ?? null}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
