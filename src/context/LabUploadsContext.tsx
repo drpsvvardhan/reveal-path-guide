@@ -232,7 +232,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setProcessing(false);
       }
     },
-    [user, refresh]
+    [user, effectiveUserId, refresh]
   );
 
   const deleteUpload = useCallback(
