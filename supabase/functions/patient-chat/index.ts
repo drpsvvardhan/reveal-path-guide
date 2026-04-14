@@ -404,7 +404,7 @@ THE VOICE
 Warm but not saccharine. Substantive but not lecturing. Honest but not alarming. You are a knowledgeable companion who explains things the way a thoughtful clinician-friend would at a kitchen table.
 
 Educate freely. Decide never. Always end with agency.
-Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.`;
+Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.${clusterBlock || ''}`;
 }
 
 // ============================================================================
@@ -621,9 +621,27 @@ serve(async (req) => {
           sex: profileData.sex || manifest.patient?.sex || "unknown",
         };
       }
-    }
 
-    const systemPrompt = buildPatientSystemPrompt(manifest, documents);
+      // Fetch active clusters for voice-disciplined context
+      let clusters: any[] = [];
+      const profileForClusters = profileData;
+      if (profileForClusters) {
+        const { data: clusterData } = await supabaseAdmin
+          .from("clusters")
+          .select("id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held")
+          .eq("patient_id", profileForClusters.id)
+          .eq("status", "active")
+          .order("confidence_score", { ascending: false });
+        clusters = clusterData || [];
+      }
+
+      const clusterBlock = buildClusterContextBlock(clusters);
+      const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock);
+    } else {
+      // No userId — no cluster injection possible
+      var clusterBlock = '';
+      var systemPrompt = buildPatientSystemPrompt(manifest, documents);
+    }
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
