@@ -3,6 +3,9 @@
 // The Terrain Rendering Framework v2, exported as a single string constant
 // for inline embedding into LLM system prompts. The triangulation passes
 // depend on the full framework being in-context on every call.
+//
+// ADDITIVE EXPORTS (5f): vocabulary license types, validators, and helpers
+// for the prose voice discipline pipeline.
 
 export const FRAMEWORK_V2 = `
 TERRAIN RENDERING FRAMEWORK v2
@@ -239,3 +242,246 @@ All vocabulary licenses are available at this tier.
 
 The vocabulary license check is part of the Part 8 grading rubric (check 13). A rendering that uses "confirmed" language for an emerging cluster, or "early signal" language for a robust cluster, fails the rubric and must be regenerated.
 `;
+
+// ============================================================================
+// ADDITIVE EXPORTS — Vocabulary License Validator (5f)
+// ============================================================================
+
+export type ClusterTier = 'emerging' | 'tentative' | 'developing' | 'supported' | 'robust';
+
+export const TIER_VOCABULARY_LICENSES: Record<ClusterTier, {
+  allowed_verbs: string[];
+  forbidden_verbs: string[];
+  required_hedging?: string[];
+  sample_sentence_starters: string[];
+}> = {
+  robust: {
+    allowed_verbs: ['shows', 'demonstrates', 'confirms', 'establishes', 'is'],
+    forbidden_verbs: ['might', 'could', 'may suggest', 'is worth watching'],
+    sample_sentence_starters: [
+      'Your data shows X.',
+      'The pattern is established: X.',
+      'Across N layers of evidence, X.',
+    ],
+  },
+  supported: {
+    allowed_verbs: ['shows', 'indicates', 'demonstrates', 'is consistent with'],
+    forbidden_verbs: ['might', 'could be', 'is worth watching'],
+    sample_sentence_starters: [
+      'Your data indicates X.',
+      'Multiple layers of your data converge on X.',
+    ],
+  },
+  developing: {
+    allowed_verbs: ['indicates', 'is consistent with', 'suggests', 'points toward'],
+    forbidden_verbs: ['confirms', 'establishes', 'is definitively'],
+    required_hedging: ['the pattern has structure', 'evidence converges', 'consistent with', 'across'],
+    sample_sentence_starters: [
+      'Your data is consistent with X, with structure across two layers.',
+      'The pattern points toward X.',
+    ],
+  },
+  tentative: {
+    allowed_verbs: ['suggests', 'points toward', 'is consistent with', 'may indicate'],
+    forbidden_verbs: ['confirms', 'establishes', 'shows definitively', 'you have'],
+    required_hedging: ['starting to', 'softly', 'early signal', 'pattern is forming'],
+    sample_sentence_starters: [
+      'Your data softly suggests X.',
+      'An early pattern is starting to form: X.',
+    ],
+  },
+  emerging: {
+    allowed_verbs: ['hints at', 'is worth watching', 'might', 'could'],
+    forbidden_verbs: ['shows', 'indicates', 'suggests', 'is consistent with', 'confirms'],
+    required_hedging: ['hint', 'worth watching', 'too early', 'only', 'so far'],
+    sample_sentence_starters: [
+      'A hint of X is worth watching.',
+      'Two or three signals point toward X — too early to read more into it.',
+    ],
+  },
+};
+
+// Globally forbidden vocabulary — extracted from Framework v2 Part 5 categories
+export const FORBIDDEN_VOCABULARY_GLOBAL: string[] = [
+  // Category 1 — Biotype archetypes
+  'biotype', 'phenotype', 'metabolic type', 'inflammatory phenotype',
+  'your biotype is', 'you fit the profile of', 'patients like you',
+  'your archetype', "based on your pattern, you're a",
+  // Category 2 — Wellness-app vocabulary
+  'wellness journey', 'healing journey', 'transformation', 'holistic',
+  'mindfulness', 'harmony', 'optimize your', 'wellness', 'thrive',
+  'flourish', 'self-care', 'lifestyle upgrade',
+  // Category 3 — Population reference
+  'the average person', 'the typical patient', 'most people',
+  'the general population', 'compared to others',
+  // Category 4 — Prediction and prognosis
+  'your risk of', 'you will develop', 'this will lead to',
+  'you are likely to', 'in x years you will',
+  // Category 5 — Diagnosis
+  'you have diabetes', 'this means you are',
+  // Category 6 — Moralizing
+  'should stop', 'must stop', 'you need to', 'you must',
+  // Category 7 — Vague reassurance or alarm
+  'looks great', 'all clear', 'nothing to worry about',
+  "you're doing amazing", "you're in trouble",
+  'everything looks great',
+];
+
+// ── Vocabulary License Validator ──
+
+export interface VocabularyViolation {
+  sentence: string;
+  cluster_id: string | null;
+  cluster_tier: ClusterTier | null;
+  rule_violated: 'global_forbidden' | 'tier_forbidden_verb' | 'tier_missing_hedging';
+  matched_phrase: string;
+  suggested_rephrase?: string;
+}
+
+export function validateVocabularyLicense(
+  sentence: string,
+  sourceClusterTier: ClusterTier | null,
+  sourceClusterId: string | null,
+): VocabularyViolation | null {
+  const lowered = sentence.toLowerCase();
+
+  // Check 1: global forbidden vocabulary
+  for (const phrase of FORBIDDEN_VOCABULARY_GLOBAL) {
+    if (lowered.includes(phrase.toLowerCase())) {
+      return {
+        sentence,
+        cluster_id: sourceClusterId,
+        cluster_tier: sourceClusterTier,
+        rule_violated: 'global_forbidden',
+        matched_phrase: phrase,
+      };
+    }
+  }
+
+  // If no source tier, only the global check applies
+  if (!sourceClusterTier) return null;
+
+  const license = TIER_VOCABULARY_LICENSES[sourceClusterTier];
+
+  // Check 2: tier-forbidden verbs
+  for (const verb of license.forbidden_verbs) {
+    if (lowered.includes(verb.toLowerCase())) {
+      return {
+        sentence,
+        cluster_id: sourceClusterId,
+        cluster_tier: sourceClusterTier,
+        rule_violated: 'tier_forbidden_verb',
+        matched_phrase: verb,
+      };
+    }
+  }
+
+  // Check 3: tier-required hedging (developing/tentative/emerging)
+  if (license.required_hedging && license.required_hedging.length > 0) {
+    const hasHedging = license.required_hedging.some((phrase) =>
+      lowered.includes(phrase.toLowerCase())
+    );
+    if (!hasHedging) {
+      return {
+        sentence,
+        cluster_id: sourceClusterId,
+        cluster_tier: sourceClusterTier,
+        rule_violated: 'tier_missing_hedging',
+        matched_phrase: '(no hedging phrase found)',
+      };
+    }
+  }
+
+  return null;
+}
+
+// ── Prose Validation ──
+
+export interface ProseValidationResult {
+  valid: boolean;
+  violations: VocabularyViolation[];
+  sentences_checked: number;
+}
+
+export function validateProseAgainstClusters(
+  prose: string,
+  clusterTierMap: Map<string, ClusterTier>,
+  sentenceToClusterMap: Map<string, string | null>,
+): ProseValidationResult {
+  // Strip cluster markers before sentence splitting
+  const cleanProse = prose.replace(/\{cluster:[^}]+\}/g, '');
+  const sentences = cleanProse.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+
+  const violations: VocabularyViolation[] = [];
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    const clusterId = sentenceToClusterMap.get(trimmed) ?? null;
+    const tier = clusterId ? (clusterTierMap.get(clusterId) ?? null) : null;
+    const violation = validateVocabularyLicense(trimmed, tier, clusterId);
+    if (violation) violations.push(violation);
+  }
+
+  return {
+    valid: violations.length === 0,
+    violations,
+    sentences_checked: sentences.length,
+  };
+}
+
+// ── Cluster Marker Helpers ──
+
+export function stripClusterMarkers(prose: string): string {
+  return prose.replace(/\s*\{cluster:[^}]+\}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+export function parseProseAndCitations(rawProse: string): {
+  prose: string;
+  sentenceToClusterMap: Map<string, string | null>;
+} {
+  const sentenceToClusterMap = new Map<string, string | null>();
+  const sentences = rawProse.split(/(?<=[.!?])\s+/);
+
+  for (const raw of sentences) {
+    const markerMatch = raw.match(/\{cluster:([^}]+)\}\s*$/);
+    const clusterId = markerMatch ? (markerMatch[1] === 'none' ? null : markerMatch[1]) : null;
+    const cleanSentence = raw.replace(/\s*\{cluster:[^}]+\}\s*$/, '').trim();
+    if (cleanSentence.length > 0) {
+      sentenceToClusterMap.set(cleanSentence, clusterId);
+    }
+  }
+
+  return { prose: rawProse, sentenceToClusterMap };
+}
+
+// ── Retry Feedback Builder ──
+
+export function buildRetryFeedback(
+  violations: VocabularyViolation[],
+): string {
+  const lines: string[] = [
+    'Your previous attempt had vocabulary violations that need to be fixed. Please regenerate the entire output with these specific issues addressed.',
+    '',
+    'Violations from previous attempt:',
+  ];
+
+  for (const v of violations) {
+    lines.push(`- Sentence: "${v.sentence}"`);
+    if (v.cluster_id) lines.push(`  Source cluster: ${v.cluster_id} (tier: ${v.cluster_tier})`);
+    lines.push(`  Rule violated: ${v.rule_violated}`);
+    lines.push(`  Matched phrase: "${v.matched_phrase}"`);
+
+    if (v.rule_violated === 'global_forbidden') {
+      lines.push(`  Fix: Remove the phrase "${v.matched_phrase}" and rephrase using framework-voice equivalents.`);
+    } else if (v.rule_violated === 'tier_forbidden_verb' && v.cluster_tier) {
+      const allowed = TIER_VOCABULARY_LICENSES[v.cluster_tier].allowed_verbs;
+      lines.push(`  Fix: Replace "${v.matched_phrase}" with one of: ${allowed.join(', ')}. The cluster's ${v.cluster_tier} tier does not license stronger language.`);
+    } else if (v.rule_violated === 'tier_missing_hedging' && v.cluster_tier) {
+      const hedging = TIER_VOCABULARY_LICENSES[v.cluster_tier].required_hedging || [];
+      lines.push(`  Fix: Add at least one hedging phrase from: ${hedging.join(', ')}. The ${v.cluster_tier} tier requires explicit hedging.`);
+    }
+    lines.push('');
+  }
+
+  lines.push('Regenerate the entire output JSON with these fixes. Do not change sentences that were not flagged as violations.');
+  return lines.join('\n');
+}
