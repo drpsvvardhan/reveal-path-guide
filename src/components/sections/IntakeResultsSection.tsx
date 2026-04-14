@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { useIntake } from "@/context/IntakeContext";
-import { CIE_DOMAINS, CIE_GATES, CIE_DOMAIN_MAP } from "@/lib/cieSeedData";
+import { CIE_DOMAINS, CIE_GATES } from "@/lib/cieSeedData";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
 import AsideProgressRing from "@/components/layout/AsideProgressRing";
+import IntakeStep from "@/components/intake/IntakeStep";
 import { RefreshCw } from "lucide-react";
 
 const TRAFFIC_COLORS: Record<string, string> = {
@@ -30,8 +31,28 @@ const AXES = [
 ];
 
 const IntakeResultsSection: React.FC = () => {
-  const { currentAssessment, domainScores, gateScores, isLoading } = useCIEAssessment();
+  const { currentAssessment, domainScores, gateScores, isLoading, refresh: refreshCIE } = useCIEAssessment();
   const { startAssessment } = useIntake();
+  const [isRetaking, setIsRetaking] = useState(false);
+
+  const handleStartAssessment = useCallback(async () => {
+    try {
+      await startAssessment();
+      setIsRetaking(true);
+    } catch (e) {
+      console.error("Failed to start assessment:", e);
+    }
+  }, [startAssessment]);
+
+  const handleRetakeComplete = useCallback(async () => {
+    setIsRetaking(false);
+    await refreshCIE();
+  }, [refreshCIE]);
+
+  // Show the intake flow when actively retaking
+  if (isRetaking) {
+    return <IntakeStep onRetakeComplete={handleRetakeComplete} />;
+  }
 
   if (isLoading) {
     return (
@@ -49,7 +70,7 @@ const IntakeResultsSection: React.FC = () => {
         intro="Complete the clinical intake to see your biological terrain mapped across 25 domains and 9 clinical gates."
       >
         <button
-          onClick={() => startAssessment()}
+          onClick={handleStartAssessment}
           className="rounded-xl bg-primary text-primary-foreground px-6 py-3 text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           Start Assessment
@@ -148,7 +169,7 @@ const IntakeResultsSection: React.FC = () => {
       {/* Retake button */}
       <div className="pt-4 border-t border-border">
         <button
-          onClick={() => startAssessment()}
+          onClick={handleStartAssessment}
           className="flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />

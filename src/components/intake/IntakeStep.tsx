@@ -9,7 +9,12 @@ import OnboardingLayout from "@/components/onboarding/OnboardingLayout";
 import { useLongPressRecovery, RecoveryDots } from "@/hooks/useLongPressRecovery";
 import { Loader2 } from "lucide-react";
 
-const IntakeStep: React.FC = () => {
+interface IntakeStepProps {
+  /** When provided, this is a retake — call this instead of advancing onboarding on completion */
+  onRetakeComplete?: () => void;
+}
+
+const IntakeStep: React.FC<IntakeStepProps> = ({ onRetakeComplete }) => {
   const {
     currentAssessmentId,
     currentPhase,
@@ -104,8 +109,12 @@ const IntakeStep: React.FC = () => {
   );
 
   const handleContinueToUpload = useCallback(async () => {
-    await advanceToStep("upload");
-  }, [advanceToStep]);
+    if (onRetakeComplete) {
+      onRetakeComplete();
+    } else {
+      await advanceToStep("upload");
+    }
+  }, [advanceToStep, onRetakeComplete]);
 
   // Show results screen when complete
   if (currentPhase === "complete") {
