@@ -131,7 +131,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         // Step 2: Upload file to storage at {user_id}/{upload_id}{ext}
         const ext = getFileExtension(file.type);
-        const storagePath = `${user.id}/${uploadRow.id}${ext}`;
+        const storagePath = `${targetUserId}/${uploadRow.id}${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
           .upload(storagePath, file, {
