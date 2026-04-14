@@ -3,6 +3,8 @@
 
 export type ClusterTier = 'emerging' | 'tentative' | 'developing' | 'supported' | 'robust';
 
+export type VocabularyAudience = 'patient' | 'clinician';
+
 export const TIER_VOCABULARY_LICENSES: Record<ClusterTier, {
   allowed_verbs: string[];
   forbidden_verbs: string[];
@@ -33,6 +35,47 @@ export const TIER_VOCABULARY_LICENSES: Record<ClusterTier, {
   },
 };
 
+export const TIER_VOCABULARY_LICENSES_CLINICIAN: Record<ClusterTier, {
+  allowed_verbs: string[];
+  forbidden_verbs: string[];
+  required_hedging?: string[];
+}> = {
+  robust: {
+    allowed_verbs: ['demonstrates', 'establishes', 'confirms', 'shows', 'indicates'],
+    forbidden_verbs: ['may', 'might', 'could potentially'],
+  },
+  supported: {
+    allowed_verbs: ['demonstrates', 'indicates', 'shows', 'is consistent with', 'supports'],
+    forbidden_verbs: ['may suggest', 'could be interpreted as'],
+  },
+  developing: {
+    allowed_verbs: ['indicates', 'is consistent with', 'suggests', 'supports a working diagnosis of'],
+    forbidden_verbs: ['confirms', 'establishes', 'rules out'],
+    required_hedging: ['evidence base', 'pending additional workup', 'working diagnosis', 'across'],
+  },
+  tentative: {
+    allowed_verbs: ['suggests', 'may indicate', 'is compatible with', 'raises the question of'],
+    forbidden_verbs: ['confirms', 'establishes', 'is consistent with'],
+    required_hedging: [
+      'evidence base is insufficient for definitive determination',
+      'requires additional workup',
+      'workup indicated',
+      'further characterization',
+      'clinical correlation',
+    ],
+  },
+  emerging: {
+    allowed_verbs: ['raises the question of', 'warrants monitoring for', 'is worth watching for'],
+    forbidden_verbs: ['suggests', 'indicates', 'is consistent with', 'confirms'],
+    required_hedging: [
+      'insufficient data',
+      'warrants monitoring',
+      'too preliminary',
+      'clinical significance uncertain',
+    ],
+  },
+};
+
 export const FORBIDDEN_VOCABULARY_GLOBAL: string[] = [
   'biotype', 'phenotype', 'metabolic type', 'inflammatory phenotype',
   'your biotype is', 'you fit the profile of', 'patients like you',
@@ -51,6 +94,16 @@ export const FORBIDDEN_VOCABULARY_GLOBAL: string[] = [
   'everything looks great',
 ];
 
+export const FORBIDDEN_VOCABULARY_CLINICIAN: string[] = [
+  'wellness journey', 'healing journey', 'transformation', 'holistic',
+  'mindfulness', 'harmony', 'optimize your', 'wellness',
+  'thrive', 'flourish', 'self-care', 'lifestyle upgrade',
+  'looks great', 'all clear', 'nothing to worry about',
+  "you're doing amazing", "you're in trouble",
+  'biotype', 'your biotype', 'patients like you',
+  'the average person', 'the typical patient', 'most patients',
+];
+
 export interface VocabularyViolation {
   sentence: string;
   cluster_id: string | null;
@@ -58,6 +111,7 @@ export interface VocabularyViolation {
   rule_violated: 'global_forbidden' | 'tier_forbidden_verb' | 'tier_missing_hedging';
   matched_phrase: string;
   suggested_rephrase?: string;
+  section?: string;
 }
 
 export function validateVocabularyLicense(
@@ -65,9 +119,24 @@ export function validateVocabularyLicense(
   sourceClusterTier: ClusterTier | null,
   sourceClusterId: string | null,
 ): VocabularyViolation | null {
-  const lowered = sentence.toLowerCase();
+  return validateVocabularyLicenseWithAudience(sentence, sourceClusterTier, sourceClusterId, 'patient');
+}
 
-  for (const phrase of FORBIDDEN_VOCABULARY_GLOBAL) {
+export function validateVocabularyLicenseWithAudience(
+  sentence: string,
+  sourceClusterTier: ClusterTier | null,
+  sourceClusterId: string | null,
+  audience: VocabularyAudience,
+): VocabularyViolation | null {
+  const lowered = sentence.toLowerCase();
+  const forbiddenGlobal = audience === 'clinician'
+    ? FORBIDDEN_VOCABULARY_CLINICIAN
+    : FORBIDDEN_VOCABULARY_GLOBAL;
+  const licenses = audience === 'clinician'
+    ? TIER_VOCABULARY_LICENSES_CLINICIAN
+    : TIER_VOCABULARY_LICENSES;
+
+  for (const phrase of forbiddenGlobal) {
     if (lowered.includes(phrase.toLowerCase())) {
       return {
         sentence,
@@ -81,7 +150,7 @@ export function validateVocabularyLicense(
 
   if (!sourceClusterTier) return null;
 
-  const license = TIER_VOCABULARY_LICENSES[sourceClusterTier];
+  const license = licenses[sourceClusterTier];
 
   for (const verb of license.forbidden_verbs) {
     if (lowered.includes(verb.toLowerCase())) {
@@ -124,6 +193,15 @@ export function validateProseAgainstClusters(
   clusterTierMap: Map<string, ClusterTier>,
   sentenceToClusterMap: Map<string, string | null>,
 ): ProseValidationResult {
+  return validateProseAgainstClustersWithAudience(prose, clusterTierMap, sentenceToClusterMap, 'patient');
+}
+
+export function validateProseAgainstClustersWithAudience(
+  prose: string,
+  clusterTierMap: Map<string, ClusterTier>,
+  sentenceToClusterMap: Map<string, string | null>,
+  audience: VocabularyAudience,
+): ProseValidationResult {
   const cleanProse = prose.replace(/\{cluster:[^}]+\}/g, '');
   const sentences = cleanProse.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
 
@@ -132,7 +210,7 @@ export function validateProseAgainstClusters(
     const trimmed = sentence.trim();
     const clusterId = sentenceToClusterMap.get(trimmed) ?? null;
     const tier = clusterId ? (clusterTierMap.get(clusterId) ?? null) : null;
-    const violation = validateVocabularyLicense(trimmed, tier, clusterId);
+    const violation = validateVocabularyLicenseWithAudience(trimmed, tier, clusterId, audience);
     if (violation) violations.push(violation);
   }
 
