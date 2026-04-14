@@ -124,19 +124,9 @@ Deno.test("validateProseAgainstClusters with 3 violations → returns them all",
 Deno.test("parseProseAndCitations extracts cluster id", () => {
   const raw = "Your iron is depleted {cluster:abc-123}. This is a general observation {cluster:none}.";
   const { sentenceToClusterMap } = parseProseAndCitations(raw);
-  assertEquals(sentenceToClusterMap.get("Your iron is depleted"), undefined); // cleaned sentence
-  // The map uses cleaned sentences — verify a known entry
-  let found = false;
-  for (const [key, val] of sentenceToClusterMap) {
-    if (key.includes("iron is depleted")) {
-      assertEquals(val, "abc-123");
-      found = true;
-    }
-    if (key.includes("general observation")) {
-      assertEquals(val, null);
-    }
-  }
-  assertEquals(found, true);
+  // Cleaned sentences are used as keys
+  assertEquals(sentenceToClusterMap.get("Your iron is depleted"), "abc-123");
+  assertEquals(sentenceToClusterMap.get("This is a general observation"), null);
 });
 
 // ── stripClusterMarkers tests ──
