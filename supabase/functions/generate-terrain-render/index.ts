@@ -3,11 +3,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   FRAMEWORK_V2,
   TIER_VOCABULARY_LICENSES,
+  TIER_VOCABULARY_LICENSES_CLINICIAN,
   FORBIDDEN_VOCABULARY_GLOBAL,
+  FORBIDDEN_VOCABULARY_CLINICIAN,
   parseProseAndCitations,
-  validateProseAgainstClusters,
+  validateProseAgainstClustersWithAudience,
   stripClusterMarkers,
-  buildRetryFeedback,
+  buildRetryFeedbackWithSections,
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 
@@ -32,6 +34,12 @@ const CIE_AXES = [
   { id: "I", name: "Functional", domains: ["I24"] },
   { id: "J", name: "Social", domains: ["J25"] },
 ];
+
+// The 5 primary CIE axes that must appear in axis_breakdown
+const PRIMARY_AXES = ["A", "B", "C", "D", "E"];
+const PRIMARY_AXIS_NAMES = new Set(
+  CIE_AXES.filter(a => PRIMARY_AXES.includes(a.id)).map(a => a.name.toLowerCase())
+);
 
 // ============================================================================
 // INBODY TERRAIN MAP
@@ -98,27 +106,32 @@ function resolveInBodyMapping(canonicalName: string): typeof INBODY_TERRAIN_MAP[
 }
 
 // ============================================================================
-// SYSTEM PROMPT — Framework v2 with cluster sourcing
+// SYSTEM PROMPT — Framework v2 with cluster sourcing + dual audience
 // ============================================================================
 
 function buildTerrainSystemPrompt(clusters: any[]): string {
-  // Build tier vocabulary reference
-  const tierVocabLines: string[] = [];
+  // Build patient tier vocabulary reference
+  const patientTierVocabLines: string[] = [];
   for (const [tier, license] of Object.entries(TIER_VOCABULARY_LICENSES)) {
-    tierVocabLines.push(`- ${tier} tier: Allowed verbs: ${license.allowed_verbs.join(', ')}. Forbidden verbs: ${license.forbidden_verbs.join(', ')}.${license.required_hedging ? ` Required hedging: ${license.required_hedging.join(', ')}.` : ''}`);
+    patientTierVocabLines.push(`- ${tier} tier: Allowed verbs: ${license.allowed_verbs.join(', ')}. Forbidden verbs: ${license.forbidden_verbs.join(', ')}.${license.required_hedging ? ` Required hedging: ${license.required_hedging.join(', ')}.` : ''}`);
   }
 
-  const forbiddenList = FORBIDDEN_VOCABULARY_GLOBAL.map(p => `"${p}"`).join(', ');
+  // Build clinician tier vocabulary reference
+  const clinicianTierVocabLines: string[] = [];
+  for (const [tier, license] of Object.entries(TIER_VOCABULARY_LICENSES_CLINICIAN)) {
+    clinicianTierVocabLines.push(`- ${tier} tier: Allowed verbs: ${license.allowed_verbs.join(', ')}. Forbidden verbs: ${license.forbidden_verbs.join(', ')}.${license.required_hedging ? ` Required hedging: ${license.required_hedging.join(', ')}.` : ''}`);
+  }
+
+  const patientForbiddenList = FORBIDDEN_VOCABULARY_GLOBAL.map(p => `"${p}"`).join(', ');
+  const clinicianForbiddenList = FORBIDDEN_VOCABULARY_CLINICIAN.map(p => `"${p}"`).join(', ');
 
   return `You are the terrain rendering layer of Vizzhy. Your job is to produce a patient portrait and a clinician summary from this patient's current data layers.
 
 ${FRAMEWORK_V2}
 
-## Cluster sourcing rules
+## Cluster sourcing rules apply to BOTH sections
 
-You are writing prose for the patient based on their active cluster set. Each sentence you write must be drawn from a specific cluster. At the end of each sentence, append a marker in the form {cluster:<cluster_id>} to indicate the source cluster. Example: "Your iron stores are depleted with ferritin at 20 ng/mL, while transport markers remain normal {cluster:abc-123}."
-
-Sentences that do not draw from a single cluster (general framing, transitions, conclusions) may use the marker {cluster:none}. Use {cluster:none} sparingly — most sentences should cite a cluster.
+Every sentence you write — in patient_portrait AND in clinician_summary — must cite its source cluster via a {cluster:<cluster_id>} marker at the end of the sentence, or {cluster:none} for general framing. The markers will be stripped from the final output before it is displayed to either audience. Do not omit the markers.
 
 ## Active clusters for this patient
 
@@ -133,15 +146,23 @@ ${clusters.length > 0 ? JSON.stringify(clusters.map(c => ({
   tensions_held: c.tensions_held,
 })), null, 2) : '(no clusters available — use CIE and lab data directly)'}
 
-## Tier-licensed vocabulary
+## Audience-specific vocabulary
 
-Each cluster has a confidence_tier. Your vocabulary for describing a cluster must match its tier:
+patient_portrait uses the patient-facing tier vocabulary licenses:
 
-${tierVocabLines.join('\n')}
+${patientTierVocabLines.join('\n')}
 
-## Globally forbidden vocabulary
+clinician_summary uses the clinician-facing tier vocabulary licenses:
 
-The following phrases are forbidden regardless of tier: ${forbiddenList}
+${clinicianTierVocabLines.join('\n')}
+
+The two audiences have different appropriate registers. The patient voice uses soft hedging like "softly suggests" and "pattern is starting to form". The clinician voice uses formal clinical hedging like "evidence base is insufficient for definitive determination" and "workup indicated". Both voices hold the same epistemic distinctions (a tentative-tier finding is hedged in both voices) but the language is different because the audiences are different.
+
+patient_portrait global forbidden vocabulary: ${patientForbiddenList}
+
+clinician_summary global forbidden vocabulary: ${clinicianForbiddenList}
+
+Note that clinical prediction language ("elevated cardiovascular risk", "indicated workup") is acceptable in clinician_summary when a cluster's tier licenses it — a robust tier can state risk directly, a tentative tier must hedge. The tier vocabulary check enforces this; you do not need to self-censor beyond the tier license rules.
 
 ## Output format
 
@@ -165,7 +186,9 @@ Return strict JSON with this exact structure:
   }
 }
 
-Each prose field in patient_portrait can contain multiple sentences. Every sentence must end with a {cluster:...} marker. The clinician_summary section does NOT need cluster markers — clinical language is appropriate there.
+The axis_breakdown array must have exactly 5 entries, one for each primary CIE axis: A - Metabolic, B - Vascular, C - Neuroendocrine, D - Gut-Immune, E - Neuropsychological. Do not add extra axes. Do not produce fewer than 5.
+
+Each prose field in patient_portrait can contain multiple sentences. Every sentence in both patient_portrait and clinician_summary prose fields must end with a {cluster:...} marker. suggested_questions do NOT get markers.
 
 Return only valid JSON. No preamble. No markdown code fences.`;
 }
@@ -197,21 +220,45 @@ function extractJsonFromText(text: string): any {
   throw new Error("Could not extract valid JSON from LLM output");
 }
 
-function padAxisBreakdown(obj: any): void {
-  if (obj?.clinician_summary?.axis_breakdown && Array.isArray(obj.clinician_summary.axis_breakdown)) {
-    const existing = obj.clinician_summary.axis_breakdown;
-    const existingAxes = new Set(existing.map((a: any) => a.axis?.toUpperCase()));
-    for (const ax of CIE_AXES) {
-      if (!existingAxes.has(ax.name.toUpperCase()) && !existingAxes.has(ax.id)) {
-        existing.push({
-          axis: ax.name,
-          interpretation: "Insufficient data for detailed interpretation at this time.",
-          status: "monitor",
-        });
-      }
-      if (existing.length >= 10) break;
+/**
+ * Normalize axis_breakdown to exactly 5 primary CIE axes.
+ * - Keeps only axes matching the 5 primary CIE axes (A-E).
+ * - Pads missing axes with a "no finding" entry.
+ * - No ghost rows.
+ */
+function normalizeAxisBreakdown(obj: any): void {
+  if (!obj?.clinician_summary?.axis_breakdown || !Array.isArray(obj.clinician_summary.axis_breakdown)) {
+    return;
+  }
+
+  const existing: any[] = obj.clinician_summary.axis_breakdown;
+  const primaryAxes = CIE_AXES.filter(a => PRIMARY_AXES.includes(a.id));
+  const result: any[] = [];
+
+  for (const ax of primaryAxes) {
+    const label = `${ax.id} - ${ax.name}`;
+    // Find a match by axis id letter, axis name, or full label
+    const match = existing.find((e: any) => {
+      const eAxis = (e.axis || "").toLowerCase();
+      return eAxis === label.toLowerCase()
+        || eAxis === ax.name.toLowerCase()
+        || eAxis.startsWith(ax.id.toLowerCase() + " ")
+        || eAxis.startsWith(ax.id.toLowerCase() + "-")
+        || eAxis === ax.id.toLowerCase();
+    });
+
+    if (match) {
+      result.push({ ...match, axis: label });
+    } else {
+      result.push({
+        axis: label,
+        interpretation: "No findings mapped to this axis from the current data layers.",
+        status: "monitor",
+      });
     }
   }
+
+  obj.clinician_summary.axis_breakdown = result;
 }
 
 function validateTerrainRender(obj: any): { valid: boolean; errors: string[] } {
@@ -233,9 +280,10 @@ function validateTerrainRender(obj: any): { valid: boolean; errors: string[] } {
     if (typeof obj.clinician_summary.terrain_overview !== "string" || obj.clinician_summary.terrain_overview.length < 50) {
       errors.push("clinician_summary.terrain_overview missing or too short");
     }
-    padAxisBreakdown(obj);
-    if (!Array.isArray(obj.clinician_summary.axis_breakdown) || obj.clinician_summary.axis_breakdown.length < 5) {
-      errors.push("clinician_summary.axis_breakdown must have at least 5 axes");
+    // Normalize to exactly 5 primary axes
+    normalizeAxisBreakdown(obj);
+    if (!Array.isArray(obj.clinician_summary.axis_breakdown) || obj.clinician_summary.axis_breakdown.length !== 5) {
+      errors.push("clinician_summary.axis_breakdown must have exactly 5 axes (A-E)");
     }
     if (!Array.isArray(obj.clinician_summary.perception_gaps)) {
       errors.push("clinician_summary.perception_gaps must be an array");
@@ -421,11 +469,50 @@ function extractPatientPortraitProse(parsed: any): string {
     .join("\n\n");
 }
 
+function extractClinicianSummaryProse(parsed: any): string {
+  const parts: string[] = [];
+  if (parsed.clinician_summary?.terrain_overview) {
+    parts.push(parsed.clinician_summary.terrain_overview);
+  }
+  if (Array.isArray(parsed.clinician_summary?.axis_breakdown)) {
+    for (const axis of parsed.clinician_summary.axis_breakdown) {
+      if (axis.interpretation) parts.push(axis.interpretation);
+    }
+  }
+  if (Array.isArray(parsed.clinician_summary?.perception_gaps)) {
+    for (const gap of parsed.clinician_summary.perception_gaps) {
+      if (gap.summary) parts.push(gap.summary);
+    }
+  }
+  // suggested_questions are not prose — skip them
+  return parts.join("\n\n");
+}
+
 function stripMarkersFromPortrait(parsed: any): void {
   const fields = ["what_you_already_know", "working_harder_than_you_realize", "where_to_start", "the_one_action"];
   for (const f of fields) {
     if (typeof parsed.patient_portrait?.[f] === "string") {
       parsed.patient_portrait[f] = stripClusterMarkers(parsed.patient_portrait[f]);
+    }
+  }
+}
+
+function stripMarkersFromClinicianSummary(parsed: any): void {
+  if (typeof parsed.clinician_summary?.terrain_overview === "string") {
+    parsed.clinician_summary.terrain_overview = stripClusterMarkers(parsed.clinician_summary.terrain_overview);
+  }
+  if (Array.isArray(parsed.clinician_summary?.axis_breakdown)) {
+    for (const axis of parsed.clinician_summary.axis_breakdown) {
+      if (typeof axis.interpretation === "string") {
+        axis.interpretation = stripClusterMarkers(axis.interpretation);
+      }
+    }
+  }
+  if (Array.isArray(parsed.clinician_summary?.perception_gaps)) {
+    for (const gap of parsed.clinician_summary.perception_gaps) {
+      if (typeof gap.summary === "string") {
+        gap.summary = stripClusterMarkers(gap.summary);
+      }
     }
   }
 }
@@ -543,7 +630,7 @@ serve(async (req) => {
     const userMessage = composeUserMessage(profile, domainScores, gateScores, responses, labObs);
     const startTime = Date.now();
 
-    // 7. Generation loop with voice validation
+    // 7. Generation loop with dual-audience voice validation
     const MAX_VOICE_RETRIES = 3;
     let parsed: any = null;
     let lastStructuralError: string | undefined;
@@ -566,23 +653,33 @@ serve(async (req) => {
           continue;
         }
 
-        // Voice validation on patient_portrait prose only (not clinician_summary)
+        // Dual-audience voice validation
         if (clusters.length > 0) {
           const portraitProse = extractPatientPortraitProse(parsed);
-          const { sentenceToClusterMap } = parseProseAndCitations(portraitProse);
-          const voiceResult = validateProseAgainstClusters(portraitProse, clusterTierMap, sentenceToClusterMap);
+          const clinicianProse = extractClinicianSummaryProse(parsed);
 
-          if (voiceResult.valid) {
+          const { sentenceToClusterMap: patientMap } = parseProseAndCitations(portraitProse);
+          const { sentenceToClusterMap: clinicianMap } = parseProseAndCitations(clinicianProse);
+
+          const patientResult = validateProseAgainstClustersWithAudience(portraitProse, clusterTierMap, patientMap, 'patient');
+          const clinicianResult = validateProseAgainstClustersWithAudience(clinicianProse, clusterTierMap, clinicianMap, 'clinician');
+
+          if (patientResult.valid && clinicianResult.valid) {
             stripMarkersFromPortrait(parsed);
+            stripMarkersFromClinicianSummary(parsed);
             voiceValidationStatus = "passed";
             lastViolations = [];
             break;
           }
 
-          // Voice validation failed
-          lastViolations = voiceResult.violations;
-          feedbackMessage = buildRetryFeedback(voiceResult.violations);
-          console.log(`Attempt ${attempt + 1} voice validation failed: ${voiceResult.violations.length} violations`);
+          // One or both sides failed — build combined feedback
+          const combinedViolations: VocabularyViolation[] = [
+            ...patientResult.violations.map(v => ({ ...v, section: 'patient_portrait' })),
+            ...clinicianResult.violations.map(v => ({ ...v, section: 'clinician_summary' })),
+          ];
+          lastViolations = combinedViolations;
+          feedbackMessage = buildRetryFeedbackWithSections(combinedViolations);
+          console.log(`Attempt ${attempt + 1} voice validation failed: ${patientResult.violations.length} patient + ${clinicianResult.violations.length} clinician violations`);
           // Keep parsed for potential final write
         } else {
           // No clusters — skip voice validation
@@ -602,6 +699,7 @@ serve(async (req) => {
     // If we exhausted retries with voice violations but have a structurally valid parse
     if (parsed && !voiceValidationStatus && lastViolations.length > 0) {
       stripMarkersFromPortrait(parsed);
+      stripMarkersFromClinicianSummary(parsed);
       voiceValidationStatus = "failed_with_warnings";
     }
 
