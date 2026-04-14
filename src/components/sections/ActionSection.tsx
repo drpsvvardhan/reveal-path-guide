@@ -147,6 +147,7 @@ const ActionSection: React.FC = () => {
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const [voiceWarnings, setVoiceWarnings] = useState<any[] | null>(null);
   const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const hasTriedGenRef = React.useRef(false);
 

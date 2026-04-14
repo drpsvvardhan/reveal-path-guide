@@ -8,6 +8,7 @@ interface PatientSectionLayoutProps {
   title: string;
   intro?: string;
   heroVisual?: React.ReactNode;
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
   aside?: React.ReactNode;
   asideSticky?: boolean;
@@ -19,6 +20,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
   title,
   intro,
   heroVisual,
+  headerExtra,
   children,
   aside,
   asideSticky = false,
@@ -59,6 +61,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               >
                 {title}
               </h1>
+              {headerExtra && <div className="mt-2">{headerExtra}</div>}
               {intro && (
                 <div className="mt-5 md:mt-6 max-w-xl">
                   <TappableProse

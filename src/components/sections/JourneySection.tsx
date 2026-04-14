@@ -15,11 +15,6 @@ import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
 import BaselineCards from "@/components/sections/journey/BaselineCards";
 import TappableProse from "@/components/terrain/TappableProse";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
-import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import GateChips from "@/components/sections/journey/GateChips";
-import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
-import BaselineCards from "@/components/sections/journey/BaselineCards";
-import TappableProse from "@/components/terrain/TappableProse";
 
 const toDateKey = (d: string) => d.slice(0, 10);
 
