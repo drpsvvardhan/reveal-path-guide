@@ -66,7 +66,7 @@ const ChipGroup: React.FC<{
           >
             <div className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
             <span className="font-medium text-foreground">{chip.name}</span>
-            <span className="font-mono text-muted-foreground opacity-75">{chip.value} {chip.unit}</span>
+            <span className="font-sans text-muted-foreground opacity-75 font-variant-numeric-tabular">{chip.value} {chip.unit}</span>
           </button>
         ))}
       </div>
