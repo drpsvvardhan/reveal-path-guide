@@ -97,7 +97,7 @@ When the patient asks a question that no cluster covers, respond honestly that t
 `;
 }
 
-function buildPatientSystemPrompt(manifest: any, documents?: any[], clusterBlock?: string): string {
+function buildPatientSystemPrompt(manifest: any, documents?: any[], clusterBlock?: string, labHistoryBlock?: string): string {
   const patient = manifest?.patient ?? {};
   const thesis = manifest?.patientThesis ?? {};
   const study = manifest?.studyOverview ?? {};
@@ -439,7 +439,7 @@ THE VOICE
 Warm but not saccharine. Substantive but not lecturing. Honest but not alarming. You are a knowledgeable companion who explains things the way a thoughtful clinician-friend would at a kitchen table.
 
 Educate freely. Decide never. Always end with agency.
-Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.${clusterBlock || ''}`;
+Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.${labHistoryBlock || ''}${clusterBlock || ''}`;
 }
 
 // ============================================================================
