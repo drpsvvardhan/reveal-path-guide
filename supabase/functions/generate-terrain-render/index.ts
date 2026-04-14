@@ -488,11 +488,15 @@ function extractClinicianSummaryProse(parsed: any): string {
   return parts.join("\n\n");
 }
 
+function inlineStripMarkers(text: string): string {
+  return text.replace(/\s*\{cluster:[^}]+\}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
 function stripMarkersFromPortrait(parsed: any): void {
   const fields = ["what_you_already_know", "working_harder_than_you_realize", "where_to_start", "the_one_action"];
   for (const f of fields) {
     if (typeof parsed.patient_portrait?.[f] === "string") {
-      parsed.patient_portrait[f] = stripClusterMarkers(parsed.patient_portrait[f]);
+      parsed.patient_portrait[f] = inlineStripMarkers(parsed.patient_portrait[f]);
     }
   }
 }
