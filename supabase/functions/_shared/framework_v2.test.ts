@@ -144,7 +144,7 @@ Deno.test("stripClusterMarkers removes all markers", () => {
 
 Deno.test("clinician: tentative + 'confirms' → tier_forbidden_verb", () => {
   const result = validateVocabularyLicenseWithAudience(
-    "Lab findings confirm iron depletion with clinical correlation pending.",
+    "Lab findings confirms iron depletion with clinical correlation pending.",
     "tentative",
     "cluster-1",
     "clinician",
