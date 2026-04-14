@@ -50,6 +50,8 @@ export type Database = {
           updated_at: string
           user_id: string
           version: number
+          voice_validation_status: string | null
+          voice_validation_warnings: Json | null
         }
         Insert: {
           assessment_id?: string | null
@@ -62,6 +64,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           version?: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Update: {
           assessment_id?: string | null
@@ -74,6 +78,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           version?: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Relationships: [
           {
@@ -620,6 +626,8 @@ export type Database = {
           user_id: string
           validation_error: string | null
           version: number
+          voice_validation_status: string | null
+          voice_validation_warnings: Json | null
         }
         Insert: {
           created_at?: string
@@ -634,6 +642,8 @@ export type Database = {
           user_id: string
           validation_error?: string | null
           version: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Update: {
           created_at?: string
@@ -648,6 +658,8 @@ export type Database = {
           user_id?: string
           validation_error?: string | null
           version?: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Relationships: []
       }
@@ -811,6 +823,8 @@ export type Database = {
           updated_at: string
           user_id: string
           version: number
+          voice_validation_status: string | null
+          voice_validation_warnings: Json | null
         }
         Insert: {
           assessment_id?: string | null
@@ -825,6 +839,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           version?: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Update: {
           assessment_id?: string | null
@@ -839,6 +855,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           version?: number
+          voice_validation_status?: string | null
+          voice_validation_warnings?: Json | null
         }
         Relationships: [
           {
