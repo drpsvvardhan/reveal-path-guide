@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useDocuments } from "@/context/DocumentContext";
 import { useAuth } from "@/context/AuthContext";
