@@ -8,6 +8,14 @@ import { useViewAs } from "@/context/ViewAsContext";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
+import { useClusters } from "@/hooks/useClusters";
+import {
+  stripClusterMarkers,
+  parseProseAndCitations,
+  validateProseAgainstClusters,
+  ClusterTier,
+  VocabularyViolation,
+} from "@/lib/voiceValidation";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
 const CONTEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-ask-anything-context`;
@@ -89,6 +97,7 @@ const AskSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { documents } = useDocuments();
   const { refresh: refreshQueue } = useQueue();
+  const { clusters: activeClusters } = useClusters();
 
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -169,6 +178,15 @@ const AskSection: React.FC = () => {
     }));
   }, [manifest, messages.length, askContext]);
 
+  // Build cluster tier map for validation
+  const clusterTierMap = React.useMemo(() => {
+    const map = new Map<string, ClusterTier>();
+    for (const c of activeClusters) {
+      map.set(c.id, c.confidence_tier as ClusterTier);
+    }
+    return map;
+  }, [activeClusters]);
+
   const sendMessage = useCallback(async (text: string) => {
     const userMessage: ChatMessageData = {
       id: `user-${Date.now()}`,
@@ -182,7 +200,21 @@ const AskSection: React.FC = () => {
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
 
     try {
-      const allMsgs = [...messages, userMessage];
+      // Strip cluster markers from prior assistant messages before re-sending
+      const allMsgs = [...messages, userMessage].map((m) =>
+        m.role === "assistant"
+          ? {
+              role: m.role,
+              content: stripClusterMarkers(
+                m.content || m.sections?.map((s) => s.content).join("\n\n") || ""
+              ),
+            }
+          : {
+              role: m.role,
+              content: m.content || m.sections?.map((s) => s.content).join("\n\n") || "",
+            }
+      );
+
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
@@ -190,10 +222,7 @@ const AskSection: React.FC = () => {
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({
-          messages: allMsgs.map((m) => ({
-            role: m.role,
-            content: m.content || m.sections?.map((s) => s.content).join("\n\n") || "",
-          })),
+          messages: allMsgs,
           manifest,
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: "claude-sonnet-4-20250514",
@@ -223,9 +252,11 @@ const AskSection: React.FC = () => {
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) {
               fullText += delta;
+              // During streaming, show stripped content for clean display
+              const displayText = stripClusterMarkers(fullText);
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: fullText } : m
+                  m.id === assistantId ? { ...m, content: displayText } : m
                 )
               );
             }
@@ -235,16 +266,32 @@ const AskSection: React.FC = () => {
         }
       }
 
-      const sections = parseAssistantResponse(fullText);
+      // Post-stream: run voice validation on the raw response
+      const { sentenceToClusterMap } = parseProseAndCitations(fullText);
+      const validation = validateProseAgainstClusters(
+        fullText,
+        clusterTierMap,
+        sentenceToClusterMap,
+      );
+
+      const cleanText = stripClusterMarkers(fullText);
+      const sections = parseAssistantResponse(cleanText);
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: fullText, sections }
+            ? {
+                ...m,
+                content: cleanText,
+                sections,
+                voiceValidationStatus: validation.valid ? 'passed' : 'failed_with_warnings',
+                voiceValidationWarnings: validation.violations,
+              }
             : m
         )
       );
 
-      const citedPatterns = extractCitedPatterns(fullText);
+      const citedPatterns = extractCitedPatterns(cleanText);
       const firstMode = sections?.find((s) => s.mode)?.mode || "from_data";
       setReasoningContext((prev) => ({
         ...prev,
@@ -266,7 +313,7 @@ const AskSection: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, manifest, documents, effectiveUserId, refreshQueue]);
+  }, [messages, manifest, documents, effectiveUserId, refreshQueue, clusterTierMap]);
 
   const handleChipTap = useCallback((question: string) => {
     sendMessage(question);

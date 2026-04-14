@@ -1,6 +1,8 @@
 import React from "react";
 import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight } from "lucide-react";
 import PatientCognitiveText from "@/components/PatientCognitiveText";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
+import type { VocabularyViolation } from "@/lib/voiceValidation";
 
 interface ChatMessageSection {
   type: "what_this_means" | "what_you_can_do" | "watch_for" | "ask_doctor" | "important" | "acknowledgment";
@@ -14,6 +16,8 @@ export interface ChatMessageData {
   content?: string;
   sections?: ChatMessageSection[];
   timestamp?: string;
+  voiceValidationStatus?: "passed" | "failed_with_warnings" | string | null;
+  voiceValidationWarnings?: VocabularyViolation[] | null;
 }
 
 interface ChatMessageProps {
@@ -172,6 +176,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
                 <span className="inline-block w-2 h-4 ml-1 bg-secondary animate-pulse align-middle" />
               )}
             </div>
+          </div>
+        )}
+        {message.voiceValidationStatus && (
+          <div className="mt-2 flex justify-end">
+            <VoiceValidationIndicator
+              status={message.voiceValidationStatus}
+              warnings={message.voiceValidationWarnings ?? null}
+            />
           </div>
         )}
       </div>

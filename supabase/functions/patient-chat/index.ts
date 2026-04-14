@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { FRAMEWORK_V2, TIER_VOCABULARY_LICENSES, FORBIDDEN_VOCABULARY_GLOBAL } from "../_shared/framework_v2.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,44 @@ function safeString(s: string | undefined, fallback = "(not on file)"): string {
 // THE PATIENT COMPANION SYSTEM PROMPT
 // ============================================================================
 
-function buildPatientSystemPrompt(manifest: any, documents?: any[]): string {
+function buildClusterContextBlock(clusters: any[]): string {
+  if (!clusters || clusters.length === 0) {
+    return `\n## Active clusters for this patient\n(no active clusters available — respond using manifest data)\n`;
+  }
+
+  const tierVocabBlock = Object.entries(TIER_VOCABULARY_LICENSES)
+    .map(([tier, license]) => {
+      return `### ${tier.toUpperCase()}\n- Allowed verbs: ${license.allowed_verbs.join(', ')}\n- Forbidden verbs: ${license.forbidden_verbs.join(', ')}${license.required_hedging ? `\n- Required hedging: ${license.required_hedging.join(', ')}` : ''}`;
+    })
+    .join('\n\n');
+
+  const forbiddenBlock = FORBIDDEN_VOCABULARY_GLOBAL.map(p => `  - "${p}"`).join('\n');
+
+  return `
+${FRAMEWORK_V2}
+
+## Cluster sourcing rules
+You are responding to patient questions based on their active cluster set. Each sentence you write must be drawn from a specific cluster or marked as general framing. Append a marker at the end of each sentence in the form {cluster:<cluster_id>} for cluster-cited sentences, or {cluster:none} for general framing, transitions, and conclusions.
+
+IMPORTANT: Do not add cluster markers to sentences that appear in quoted material (patient statements, excerpts from documents). Only add markers to your own original sentences.
+
+## Active clusters for this patient
+${JSON.stringify(clusters, null, 2)}
+
+## Tier-licensed vocabulary
+${tierVocabBlock}
+
+## Globally forbidden vocabulary
+${forbiddenBlock}
+
+## Ask Anything specific guidance
+You are in an interactive chat, not a one-shot generation. The patient may ask direct questions that invite unhedged answers. Your voice discipline has to hold across these questions: a tentative cluster cannot become a robust cluster just because the patient asked a direct question. If the patient asks "Am I going to have a heart attack?", you cannot predict the future regardless of how directly they asked — respond with what the data says about their current state, what is missing that would sharpen the picture, and what the trajectory indicators suggest. Use the tier-licensed vocabulary of the cluster the question draws from.
+
+When the patient asks a question that no cluster covers, respond honestly that the data does not cover it. Do not fabricate cluster-grounded claims for topics where no cluster exists.
+`;
+}
+
+function buildPatientSystemPrompt(manifest: any, documents?: any[], clusterBlock?: string): string {
   const patient = manifest?.patient ?? {};
   const thesis = manifest?.patientThesis ?? {};
   const study = manifest?.studyOverview ?? {};
@@ -366,7 +404,7 @@ THE VOICE
 Warm but not saccharine. Substantive but not lecturing. Honest but not alarming. You are a knowledgeable companion who explains things the way a thoughtful clinician-friend would at a kitchen table.
 
 Educate freely. Decide never. Always end with agency.
-Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.`;
+Label every substantive paragraph with FROM YOUR DATA, PUTTING IT TOGETHER, or FROM MEDICAL KNOWLEDGE.${clusterBlock || ''}`;
 }
 
 // ============================================================================
@@ -563,7 +601,8 @@ serve(async (req) => {
       );
     }
 
-    // Override patient context from DB to prevent client-side data leaks
+    // Override patient context from DB to prevent client-side data leaks + fetch clusters
+    let clusters: any[] = [];
     if (userId) {
       const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
       const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -572,7 +611,7 @@ serve(async (req) => {
       });
       const { data: profileData } = await supabaseAdmin
         .from("profiles")
-        .select("first_name, age, sex")
+        .select("id, first_name, age, sex")
         .eq("user_id", userId)
         .maybeSingle();
       if (profileData) {
@@ -582,10 +621,20 @@ serve(async (req) => {
           age: profileData.age || manifest.patient?.age || 0,
           sex: profileData.sex || manifest.patient?.sex || "unknown",
         };
+
+        // Fetch active clusters using profile.id as patient_id
+        const { data: clusterData } = await supabaseAdmin
+          .from("clusters")
+          .select("id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held")
+          .eq("patient_id", profileData.id)
+          .eq("status", "active")
+          .order("confidence_score", { ascending: false });
+        clusters = clusterData || [];
       }
     }
 
-    const systemPrompt = buildPatientSystemPrompt(manifest, documents);
+    const clusterBlock = buildClusterContextBlock(clusters);
+    const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock);
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
