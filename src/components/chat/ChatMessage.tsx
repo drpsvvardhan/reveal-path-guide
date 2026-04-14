@@ -1,6 +1,8 @@
 import React from "react";
 import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight } from "lucide-react";
 import PatientCognitiveText from "@/components/PatientCognitiveText";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
+import type { VocabularyViolation } from "@/lib/voiceValidation";
 
 interface ChatMessageSection {
   type: "what_this_means" | "what_you_can_do" | "watch_for" | "ask_doctor" | "important" | "acknowledgment";
@@ -14,6 +16,8 @@ export interface ChatMessageData {
   content?: string;
   sections?: ChatMessageSection[];
   timestamp?: string;
+  voiceValidationStatus?: "passed" | "failed_with_warnings" | string | null;
+  voiceValidationWarnings?: VocabularyViolation[] | null;
 }
 
 interface ChatMessageProps {
