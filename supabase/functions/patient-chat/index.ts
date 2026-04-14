@@ -25,6 +25,41 @@ function safeString(s: string | undefined, fallback = "(not on file)"): string {
 // THE PATIENT COMPANION SYSTEM PROMPT
 // ============================================================================
 
+function buildLabHistoryBlock(labs: any[]): string {
+  if (!labs || labs.length === 0) return '';
+
+  // Group by canonical_name, preserving chronological order (already sorted ascending)
+  const grouped = new Map<string, { display: string; entries: { date: string; value: number; unit: string; source: string | null }[] }>();
+  for (const lab of labs) {
+    const key = lab.canonical_name.toLowerCase();
+    if (!grouped.has(key)) {
+      grouped.set(key, { display: lab.display_name || lab.canonical_name, entries: [] });
+    }
+    grouped.get(key)!.entries.push({
+      date: lab.collection_date,
+      value: lab.value,
+      unit: lab.unit,
+      source: lab.source,
+    });
+  }
+
+  const lines: string[] = [];
+  for (const [, group] of grouped) {
+    lines.push(`${group.display}:`);
+    for (const e of group.entries) {
+      lines.push(`  ${e.date}: ${e.value} ${e.unit}${e.source ? ` (${e.source})` : ''}`);
+    }
+    lines.push('');
+  }
+
+  return `
+## Patient lab history (full time series)
+
+When the patient asks about a marker over time, draw from the full time series for that marker below. The cluster graph captures the current state and the held tensions; the lab history captures the trajectory. Use both together: the cluster tier licenses the vocabulary, the lab history licenses the trajectory claim.
+
+${lines.join('\n')}`;
+}
+
 function buildClusterContextBlock(clusters: any[]): string {
   if (!clusters || clusters.length === 0) {
     return `\n## Active clusters for this patient\n(no active clusters available — respond using manifest data)\n`;
