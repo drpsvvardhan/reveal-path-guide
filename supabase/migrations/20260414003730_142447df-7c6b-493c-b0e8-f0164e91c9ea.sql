@@ -1,0 +1,1 @@
+DELETE FROM cie_assessments WHERE user_id = 'cb4b8b1b-6d04-4758-bda4-65d9a4402e57' AND status = 'in_progress' AND total_questions_answered = 0;
