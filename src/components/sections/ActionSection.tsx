@@ -10,6 +10,7 @@ import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
 import AsideProgressRing from "@/components/layout/AsideProgressRing";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 // ── Types ──
 
@@ -143,6 +144,9 @@ const ActionSection: React.FC = () => {
   const { effectiveUserId } = useViewAs();
   const { completedKeys, streak, toggleDone } = useActionCompletions();
   const [plan, setPlan] = useState<ActionPlan | null>(null);
+  const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
+  const [voiceWarnings, setVoiceWarnings] = useState<any[] | null>(null);
+  const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const hasTriedGenRef = React.useRef(false);
@@ -157,7 +161,7 @@ const ActionSection: React.FC = () => {
       setLoading(true);
       const { data } = await supabase
         .from("action_plans")
-        .select("today_actions, sequence_explanation, retest_schedule")
+        .select("today_actions, sequence_explanation, retest_schedule, voice_validation_status, voice_validation_warnings")
         .eq("user_id", userId)
         .eq("status", "active")
         .order("created_at", { ascending: false })
@@ -171,6 +175,8 @@ const ActionSection: React.FC = () => {
           sequence_explanation: data.sequence_explanation || "",
           retest_schedule: (data.retest_schedule as any) || [],
         });
+        setVoiceStatus((data as any).voice_validation_status ?? null);
+        setVoiceWarnings((data as any).voice_validation_warnings ?? null);
         setLoading(false);
         return;
       }
@@ -264,6 +270,41 @@ const ActionSection: React.FC = () => {
       eyebrow="WHAT TO DO"
       title="Actions matched to your terrain"
       intro="Each intervention below is triggered by your specific data — your scores, your labs, your measurements. Start with the first one. The sequence is deliberate."
+      headerExtra={
+        <VoiceValidationIndicator
+          status={voiceStatus}
+          warnings={voiceWarnings}
+          onRegenerate={async () => {
+            setIsRegeneratingVoice(true);
+            try {
+              await supabase.functions.invoke("generate-action-plan", {
+                body: { user_id: userId },
+              });
+              // Refetch
+              const { data } = await supabase
+                .from("action_plans")
+                .select("today_actions, sequence_explanation, retest_schedule, voice_validation_status, voice_validation_warnings")
+                .eq("user_id", userId!)
+                .eq("status", "active")
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .single();
+              if (data) {
+                setPlan({
+                  today_actions: (data.today_actions as any) || [],
+                  sequence_explanation: data.sequence_explanation || "",
+                  retest_schedule: (data.retest_schedule as any) || [],
+                });
+                setVoiceStatus((data as any).voice_validation_status ?? null);
+                setVoiceWarnings((data as any).voice_validation_warnings ?? null);
+              }
+            } finally {
+              setIsRegeneratingVoice(false);
+            }
+          }}
+          isRegenerating={isRegeneratingVoice}
+        />
+      }
       aside={
         <AsideVisualPanel
           title="Today's progress"

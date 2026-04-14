@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
@@ -9,10 +9,12 @@ import TerrainRadar from "@/components/visuals/TerrainRadar";
 import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import TappableProse from "@/components/terrain/TappableProse";
 import { useSignatureColor } from "@/context/SignatureColorContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
+import { useNarrative } from "@/context/NarrativeContext";
 import { CIE_DOMAINS } from "@/lib/cieSeedData";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 // Gate-to-radar mapping: 7 most clinically meaningful gates
 const RADAR_GATES = [
@@ -76,7 +78,10 @@ const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { color: signature } = useSignatureColor();
   const { user } = useAuth();
+  const { effectiveUserId } = useViewAs();
   const { domainScores, gateScores } = useCIEAssessment();
+  const { voiceValidationStatus, voiceValidationWarnings, generateNarrative, generating } = useNarrative();
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const { patientThesis } = manifest;
   const bridges = manifest.symptomBridges || [];
 
@@ -145,6 +150,18 @@ const ThesisSection: React.FC = () => {
       title={patientThesis.title}
       intro={patientThesis.body}
       heroVisual={terrainAxes.length > 0 ? <TerrainRadar axes={terrainAxes} size={320} /> : undefined}
+      headerExtra={
+        <VoiceValidationIndicator
+          status={voiceValidationStatus}
+          warnings={voiceValidationWarnings}
+          onRegenerate={async () => {
+            setIsRegenerating(true);
+            await generateNarrative();
+            setIsRegenerating(false);
+          }}
+          isRegenerating={isRegenerating || generating}
+        />
+      }
       aside={
         asideItems.length > 0 ? (
           <div className="space-y-4">

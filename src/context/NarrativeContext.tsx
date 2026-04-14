@@ -13,6 +13,8 @@ interface NarrativeContextValue {
   generating: boolean;
   error: string | null;
   lastResult: NarrativeGenerationResult | null;
+  voiceValidationStatus: string | null;
+  voiceValidationWarnings: any[] | null;
   refresh: () => Promise<void>;
   generateNarrative: () => Promise<NarrativeGenerationResult | null>;
   restoreVersion: (versionId: string) => Promise<void>;
@@ -39,6 +41,8 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<NarrativeGenerationResult | null>(null);
+  const [voiceValidationStatus, setVoiceValidationStatus] = useState<string | null>(null);
+  const [voiceValidationWarnings, setVoiceValidationWarnings] = useState<any[] | null>(null);
 
   const refresh = useCallback(async () => {
     const uid = effectiveUserId;
@@ -63,6 +67,8 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       const active = versions.find((v) => v.status === "active");
       setActiveNarrative(active ? (active.narrative as GeneratedNarrativeFields) : null);
+      setVoiceValidationStatus((active as any)?.voice_validation_status ?? null);
+      setVoiceValidationWarnings((active as any)?.voice_validation_warnings ?? null);
     } catch (e: any) {
       console.error("Narrative refresh failed:", e);
       setError(e.message || "Failed to load narratives");
@@ -153,6 +159,8 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         generating,
         error,
         lastResult,
+        voiceValidationStatus,
+        voiceValidationWarnings,
         refresh,
         generateNarrative,
         restoreVersion,
