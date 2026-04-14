@@ -45,7 +45,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
         {/* Title row */}
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-sm font-serif font-medium text-foreground leading-snug">
-            {formatKind(cluster.cluster_kind)}
+            {formatClusterKind(cluster.cluster_kind)}
           </h3>
           <ClusterTierBadge tier={cluster.confidence_tier} className="shrink-0 mt-0.5" />
         </div>
