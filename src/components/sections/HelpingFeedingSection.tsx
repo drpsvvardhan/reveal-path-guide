@@ -5,12 +5,16 @@ import { CheckCircle, AlertTriangle, ChevronDown } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import { useNavigation } from "@/context/NavigationContext";
+import { useNarrative } from "@/context/NarrativeContext";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 const MAX_FEEDING_VISIBLE = 5;
 
 const HelpingFeedingSection: React.FC = () => {
   const manifest = useActiveManifest();
   const { navigateTo } = useNavigation();
+  const { voiceValidationStatus, voiceValidationWarnings, generateNarrative, generating } = useNarrative();
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const data = manifest.helpingVsFeeding;
   const [showAllFeeding, setShowAllFeeding] = useState(false);
 
@@ -31,6 +35,18 @@ const HelpingFeedingSection: React.FC = () => {
       eyebrow="WHAT IS HELPING — AND WHAT IS STILL FEEDING THE PROBLEM"
       title="What's working for you, and what's working against you"
       intro="Your biology is already doing real work. These are the factors supporting your trajectory — and the drivers still pulling in the other direction."
+      headerExtra={
+        <VoiceValidationIndicator
+          status={voiceValidationStatus}
+          warnings={voiceValidationWarnings}
+          onRegenerate={async () => {
+            setIsRegenerating(true);
+            await generateNarrative();
+            setIsRegenerating(false);
+          }}
+          isRegenerating={isRegenerating || generating}
+        />
+      }
       aside={
         <AsideInfoPanel
           title="Net effect"
