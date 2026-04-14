@@ -17,6 +17,8 @@ import BiomarkerTimeline from "@/components/visuals/BiomarkerTimeline";
 import CoherenceMap from "@/components/clusters/CoherenceMap";
 import ClusterCard from "@/components/clusters/ClusterCard";
 import { ClusterTier } from "@/types/clusters";
+import { useNavigation } from "@/context/NavigationContext";
+import { ArrowRight } from "lucide-react";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
