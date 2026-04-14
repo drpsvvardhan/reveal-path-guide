@@ -456,3 +456,41 @@ describe('listMissingPlatonicItems', () => {
     expect(items.some((i) => i.id === 'lpa')).toBe(true);
   });
 });
+
+describe('text_for_matching support', () => {
+  it('platonic matchers prefer text_for_matching over evidence_id', () => {
+    const evidence: ClusterEvidenceInput[] = [
+      {
+        evidence_kind: 'patient_lab_observations',
+        evidence_id: 'cada7a85-1234-5678-9abc-def012345678',
+        layer_type: 'lab',
+        direction: 'convergent',
+        text_for_matching: 'ApoB 101 mg/dL (high)',
+      },
+    ];
+    const result = computeMissingDataPenalty('cardiovascular_particle', evidence);
+    expect(result.platonic_items_present).toBe(1);
+  });
+
+  it('listMissingPlatonicItems uses text_for_matching when evidence_id is a uuid', () => {
+    const items = listMissingPlatonicItems('cardiovascular_particle', [
+      {
+        evidence_kind: 'lab',
+        evidence_id: 'cada7a85-0000-0000-0000-000000000000',
+        layer_type: 'lab',
+        direction: 'convergent',
+        text_for_matching: 'ApoB 101 mg/dL',
+      },
+      {
+        evidence_kind: 'imaging',
+        evidence_id: 'bbb00000-0000-0000-0000-000000000000',
+        layer_type: 'imaging',
+        direction: 'convergent',
+        text_for_matching: 'CAC score 0 Agatston units',
+      },
+    ]);
+    expect(items.some((i) => i.id === 'apob')).toBe(false);
+    expect(items.some((i) => i.id === 'cac')).toBe(false);
+    expect(items.some((i) => i.id === 'lpa')).toBe(true);
+  });
+});
