@@ -82,6 +82,26 @@ const RecordsSection: React.FC = () => {
   const [uploadsOpen, setUploadsOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
+  const { navigateTo } = useNavigation();
+
+  /* ── Deep-link scroll-and-highlight from #cluster-{id} ── */
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith("#cluster-")) return;
+    const clusterId = hash.replace("#cluster-", "");
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`cluster-${clusterId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-secondary/60", "ring-offset-2", "ring-offset-background");
+        setTimeout(() => {
+          el.classList.remove("ring-2", "ring-secondary/60", "ring-offset-2", "ring-offset-background");
+          window.history.replaceState(null, "", window.location.pathname);
+        }, 2000);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [clusters]);
 
   const handleRegenerateClusters = useCallback(async () => {
     const uid = effectiveUserId || user?.id;
