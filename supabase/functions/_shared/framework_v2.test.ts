@@ -1,13 +1,15 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   validateVocabularyLicense,
+  validateVocabularyLicenseWithAudience,
   validateProseAgainstClusters,
+  validateProseAgainstClustersWithAudience,
   parseProseAndCitations,
   stripClusterMarkers,
 } from "./framework_v2.ts";
 import type { ClusterTier } from "./framework_v2.ts";
 
-// ── validateVocabularyLicense tests ──
+// ── validateVocabularyLicense tests (patient audience, default) ──
 
 Deno.test("tentative tier + 'shows definitively' → tier_forbidden_verb", () => {
   const result = validateVocabularyLicense(
@@ -136,4 +138,86 @@ Deno.test("stripClusterMarkers removes all markers", () => {
   const clean = stripClusterMarkers(raw);
   assertEquals(clean.includes("{cluster:"), false);
   assertEquals(clean.includes("Your iron is depleted"), true);
+});
+
+// ── CLINICIAN AUDIENCE TESTS (5g.b) ──
+
+Deno.test("clinician: tentative + 'confirms' → tier_forbidden_verb", () => {
+  const result = validateVocabularyLicenseWithAudience(
+    "Lab findings confirms iron depletion with clinical correlation pending.",
+    "tentative",
+    "cluster-1",
+    "clinician",
+  );
+  assertEquals(result?.rule_violated, "tier_forbidden_verb");
+  assertEquals(result?.matched_phrase, "confirms");
+});
+
+Deno.test("clinician: tentative + 'evidence base is insufficient' hedging → passes", () => {
+  const result = validateVocabularyLicenseWithAudience(
+    "The current evidence base is insufficient for definitive determination of iron deficiency; workup indicated.",
+    "tentative",
+    "cluster-1",
+    "clinician",
+  );
+  assertEquals(result, null);
+});
+
+Deno.test("clinician: robust + 'establishes elevated cardiovascular risk' → passes", () => {
+  const result = validateVocabularyLicenseWithAudience(
+    "The data establishes elevated cardiovascular risk across four data layers.",
+    "robust",
+    "cluster-1",
+    "clinician",
+  );
+  assertEquals(result, null);
+});
+
+Deno.test("patient: 'your risk of cardiovascular disease' → global_forbidden", () => {
+  // Same risk language fails on patient audience because 'your risk of' is forbidden
+  const result = validateVocabularyLicenseWithAudience(
+    "Your risk of cardiovascular disease is elevated based on particle data.",
+    "robust",
+    "cluster-1",
+    "patient",
+  );
+  assertEquals(result?.rule_violated, "global_forbidden");
+  assertEquals(result?.matched_phrase, "your risk of");
+});
+
+Deno.test("clinician: emerging + 'suggests' → tier_forbidden_verb", () => {
+  const result = validateVocabularyLicenseWithAudience(
+    "The pattern suggests iron depletion.",
+    "emerging",
+    "cluster-1",
+    "clinician",
+  );
+  assertEquals(result?.rule_violated, "tier_forbidden_verb");
+  assertEquals(result?.matched_phrase, "suggests");
+});
+
+Deno.test("clinician: 'wellness journey' → global_forbidden", () => {
+  const result = validateVocabularyLicenseWithAudience(
+    "The patient is on a wellness journey.",
+    null,
+    null,
+    "clinician",
+  );
+  assertEquals(result?.rule_violated, "global_forbidden");
+  assertEquals(result?.matched_phrase, "wellness journey");
+});
+
+Deno.test("clinician prose validation with audience → passes", () => {
+  const prose = "The data establishes metabolic compromise. Insufficient data to characterize thyroid axis; warrants monitoring on follow-up.";
+  const clusterTierMap = new Map<string, ClusterTier>([
+    ["c1", "robust"],
+    ["c2", "emerging"],
+  ]);
+  const sentenceToClusterMap = new Map<string, string | null>([
+    ["The data establishes metabolic compromise.", "c1"],
+    ["Insufficient data to characterize thyroid axis; warrants monitoring on follow-up.", "c2"],
+  ]);
+  const result = validateProseAgainstClustersWithAudience(prose, clusterTierMap, sentenceToClusterMap, "clinician");
+  assertEquals(result.valid, true);
+  assertEquals(result.violations.length, 0);
 });

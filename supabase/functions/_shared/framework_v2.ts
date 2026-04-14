@@ -6,6 +6,8 @@
 //
 // ADDITIVE EXPORTS (5f): vocabulary license types, validators, and helpers
 // for the prose voice discipline pipeline.
+// ADDITIVE EXPORTS (5g.b): clinician-audience vocabulary licenses and
+// audience-aware validation functions.
 
 export const FRAMEWORK_V2 = `
 TERRAIN RENDERING FRAMEWORK v2
@@ -249,6 +251,8 @@ The vocabulary license check is part of the Part 8 grading rubric (check 13). A 
 
 export type ClusterTier = 'emerging' | 'tentative' | 'developing' | 'supported' | 'robust';
 
+export type VocabularyAudience = 'patient' | 'clinician';
+
 export const TIER_VOCABULARY_LICENSES: Record<ClusterTier, {
   allowed_verbs: string[];
   forbidden_verbs: string[];
@@ -301,6 +305,72 @@ export const TIER_VOCABULARY_LICENSES: Record<ClusterTier, {
   },
 };
 
+// ============================================================================
+// CLINICIAN-AUDIENCE VOCABULARY LICENSES (5g.b)
+// ============================================================================
+
+export const TIER_VOCABULARY_LICENSES_CLINICIAN: Record<ClusterTier, {
+  allowed_verbs: string[];
+  forbidden_verbs: string[];
+  required_hedging?: string[];
+  sample_sentence_starters: string[];
+}> = {
+  robust: {
+    allowed_verbs: ['demonstrates', 'establishes', 'confirms', 'shows', 'indicates'],
+    forbidden_verbs: ['may', 'might', 'could potentially'],
+    sample_sentence_starters: [
+      'The data establishes X with high confidence across N layers.',
+      'Multi-omics evidence confirms X.',
+    ],
+  },
+  supported: {
+    allowed_verbs: ['demonstrates', 'indicates', 'shows', 'is consistent with', 'supports'],
+    forbidden_verbs: ['may suggest', 'could be interpreted as'],
+    sample_sentence_starters: [
+      'The findings are consistent with X across multiple data layers.',
+      'Evidence supports a diagnosis of X pending confirmatory workup.',
+    ],
+  },
+  developing: {
+    allowed_verbs: ['indicates', 'is consistent with', 'suggests', 'supports a working diagnosis of'],
+    forbidden_verbs: ['confirms', 'establishes', 'rules out'],
+    required_hedging: ['evidence base', 'pending additional workup', 'working diagnosis', 'across'],
+    sample_sentence_starters: [
+      'The evidence base is consistent with X across two layers, pending additional workup.',
+      'A working diagnosis of X is supported by the current data.',
+    ],
+  },
+  tentative: {
+    allowed_verbs: ['suggests', 'may indicate', 'is compatible with', 'raises the question of'],
+    forbidden_verbs: ['confirms', 'establishes', 'is consistent with'],
+    required_hedging: [
+      'evidence base is insufficient for definitive determination',
+      'requires additional workup',
+      'workup indicated',
+      'further characterization',
+      'clinical correlation',
+    ],
+    sample_sentence_starters: [
+      'The current evidence base is insufficient for definitive determination of X; additional workup is indicated.',
+      'The pattern raises the question of X and warrants further characterization.',
+    ],
+  },
+  emerging: {
+    allowed_verbs: ['raises the question of', 'warrants monitoring for', 'is worth watching for'],
+    forbidden_verbs: ['suggests', 'indicates', 'is consistent with', 'confirms'],
+    required_hedging: [
+      'insufficient data',
+      'warrants monitoring',
+      'too preliminary',
+      'clinical significance uncertain',
+    ],
+    sample_sentence_starters: [
+      'Insufficient data to characterize X; warrants monitoring on serial assessments.',
+      'A preliminary signal of X is present but clinical significance is uncertain.',
+    ],
+  },
+};
+
 // Globally forbidden vocabulary — extracted from Framework v2 Part 5 categories
 export const FORBIDDEN_VOCABULARY_GLOBAL: string[] = [
   // Category 1 — Biotype archetypes
@@ -327,6 +397,21 @@ export const FORBIDDEN_VOCABULARY_GLOBAL: string[] = [
   'everything looks great',
 ];
 
+// Clinician-audience globally forbidden vocabulary (5g.b)
+export const FORBIDDEN_VOCABULARY_CLINICIAN: string[] = [
+  // Wellness-app vocabulary (forbidden for both audiences)
+  'wellness journey', 'healing journey', 'transformation', 'holistic',
+  'mindfulness', 'harmony', 'optimize your', 'wellness',
+  'thrive', 'flourish', 'self-care', 'lifestyle upgrade',
+  // Patient-coddling vocabulary (forbidden for clinicians specifically)
+  'looks great', 'all clear', 'nothing to worry about',
+  "you're doing amazing", "you're in trouble",
+  // Biotype archetypes (forbidden for both audiences)
+  'biotype', 'your biotype', 'patients like you',
+  // Population reference (forbidden for both audiences)
+  'the average person', 'the typical patient', 'most patients',
+];
+
 // ── Vocabulary License Validator ──
 
 export interface VocabularyViolation {
@@ -336,6 +421,7 @@ export interface VocabularyViolation {
   rule_violated: 'global_forbidden' | 'tier_forbidden_verb' | 'tier_missing_hedging';
   matched_phrase: string;
   suggested_rephrase?: string;
+  section?: string;
 }
 
 export function validateVocabularyLicense(
@@ -343,10 +429,25 @@ export function validateVocabularyLicense(
   sourceClusterTier: ClusterTier | null,
   sourceClusterId: string | null,
 ): VocabularyViolation | null {
+  return validateVocabularyLicenseWithAudience(sentence, sourceClusterTier, sourceClusterId, 'patient');
+}
+
+export function validateVocabularyLicenseWithAudience(
+  sentence: string,
+  sourceClusterTier: ClusterTier | null,
+  sourceClusterId: string | null,
+  audience: VocabularyAudience,
+): VocabularyViolation | null {
   const lowered = sentence.toLowerCase();
+  const forbiddenGlobal = audience === 'clinician'
+    ? FORBIDDEN_VOCABULARY_CLINICIAN
+    : FORBIDDEN_VOCABULARY_GLOBAL;
+  const licenses = audience === 'clinician'
+    ? TIER_VOCABULARY_LICENSES_CLINICIAN
+    : TIER_VOCABULARY_LICENSES;
 
   // Check 1: global forbidden vocabulary
-  for (const phrase of FORBIDDEN_VOCABULARY_GLOBAL) {
+  for (const phrase of forbiddenGlobal) {
     if (lowered.includes(phrase.toLowerCase())) {
       return {
         sentence,
@@ -361,7 +462,7 @@ export function validateVocabularyLicense(
   // If no source tier, only the global check applies
   if (!sourceClusterTier) return null;
 
-  const license = TIER_VOCABULARY_LICENSES[sourceClusterTier];
+  const license = licenses[sourceClusterTier];
 
   // Check 2: tier-forbidden verbs
   for (const verb of license.forbidden_verbs) {
@@ -408,6 +509,15 @@ export function validateProseAgainstClusters(
   clusterTierMap: Map<string, ClusterTier>,
   sentenceToClusterMap: Map<string, string | null>,
 ): ProseValidationResult {
+  return validateProseAgainstClustersWithAudience(prose, clusterTierMap, sentenceToClusterMap, 'patient');
+}
+
+export function validateProseAgainstClustersWithAudience(
+  prose: string,
+  clusterTierMap: Map<string, ClusterTier>,
+  sentenceToClusterMap: Map<string, string | null>,
+  audience: VocabularyAudience,
+): ProseValidationResult {
   // Strip cluster markers before sentence splitting
   const cleanProse = prose.replace(/\{cluster:[^}]+\}/g, '');
   const sentences = cleanProse.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
@@ -417,7 +527,7 @@ export function validateProseAgainstClusters(
     const trimmed = sentence.trim();
     const clusterId = sentenceToClusterMap.get(trimmed) ?? null;
     const tier = clusterId ? (clusterTierMap.get(clusterId) ?? null) : null;
-    const violation = validateVocabularyLicense(trimmed, tier, clusterId);
+    const violation = validateVocabularyLicenseWithAudience(trimmed, tier, clusterId, audience);
     if (violation) violations.push(violation);
   }
 
@@ -458,6 +568,12 @@ export function parseProseAndCitations(rawProse: string): {
 export function buildRetryFeedback(
   violations: VocabularyViolation[],
 ): string {
+  return buildRetryFeedbackWithSections(violations.map(v => ({ ...v, section: v.section || 'patient_portrait' })));
+}
+
+export function buildRetryFeedbackWithSections(
+  violations: VocabularyViolation[],
+): string {
   const lines: string[] = [
     'Your previous attempt had vocabulary violations that need to be fixed. Please regenerate the entire output with these specific issues addressed.',
     '',
@@ -465,18 +581,21 @@ export function buildRetryFeedback(
   ];
 
   for (const v of violations) {
-    lines.push(`- Sentence: "${v.sentence}"`);
+    lines.push(`- [${v.section || 'unknown'}] Sentence: "${v.sentence}"`);
     if (v.cluster_id) lines.push(`  Source cluster: ${v.cluster_id} (tier: ${v.cluster_tier})`);
     lines.push(`  Rule violated: ${v.rule_violated}`);
     lines.push(`  Matched phrase: "${v.matched_phrase}"`);
 
+    const audience: VocabularyAudience = v.section === 'clinician_summary' ? 'clinician' : 'patient';
+    const licenses = audience === 'clinician' ? TIER_VOCABULARY_LICENSES_CLINICIAN : TIER_VOCABULARY_LICENSES;
+
     if (v.rule_violated === 'global_forbidden') {
       lines.push(`  Fix: Remove the phrase "${v.matched_phrase}" and rephrase using framework-voice equivalents.`);
     } else if (v.rule_violated === 'tier_forbidden_verb' && v.cluster_tier) {
-      const allowed = TIER_VOCABULARY_LICENSES[v.cluster_tier].allowed_verbs;
+      const allowed = licenses[v.cluster_tier].allowed_verbs;
       lines.push(`  Fix: Replace "${v.matched_phrase}" with one of: ${allowed.join(', ')}. The cluster's ${v.cluster_tier} tier does not license stronger language.`);
     } else if (v.rule_violated === 'tier_missing_hedging' && v.cluster_tier) {
-      const hedging = TIER_VOCABULARY_LICENSES[v.cluster_tier].required_hedging || [];
+      const hedging = licenses[v.cluster_tier].required_hedging || [];
       lines.push(`  Fix: Add at least one hedging phrase from: ${hedging.join(', ')}. The ${v.cluster_tier} tier requires explicit hedging.`);
     }
     lines.push('');

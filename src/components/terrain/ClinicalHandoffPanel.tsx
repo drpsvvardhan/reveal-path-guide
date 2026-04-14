@@ -5,6 +5,7 @@ import { Copy, Check, Share2, AlertCircle, Activity, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   attention: { color: "bg-destructive/15 text-destructive border-destructive/20", label: "Attention" },
@@ -20,9 +21,10 @@ const trafficDot: Record<string, string> = {
 };
 
 const ClinicalHandoffPanel: React.FC = () => {
-  const { activeRender } = useTerrainRender();
+  const { activeRender, regenerate } = useTerrainRender();
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const cs = activeRender?.clinician_summary;
   if (!cs) return null;
@@ -66,7 +68,19 @@ const ClinicalHandoffPanel: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-2xl text-foreground">Clinical handoff</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-serif text-2xl text-foreground">Clinical handoff</h2>
+          <VoiceValidationIndicator
+            status={activeRender?.voice_validation_status ?? null}
+            warnings={activeRender?.voice_validation_warnings ?? null}
+            onRegenerate={async () => {
+              setIsRegenerating(true);
+              await regenerate();
+              setIsRegenerating(false);
+            }}
+            isRegenerating={isRegenerating}
+          />
+        </div>
         <Button
           variant="outline"
           size="sm"
