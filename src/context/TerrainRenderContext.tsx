@@ -39,6 +39,8 @@ export interface TerrainRender {
   clinician_summary: ClinicianSummary | null;
   generated_at: string | null;
   created_at: string;
+  voice_validation_status: string | null;
+  voice_validation_warnings: any[] | null;
 }
 
 interface TerrainRenderContextValue {
@@ -80,7 +82,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       // First try to find an active render
       const { data, error: fetchErr } = await supabase
         .from("terrain_renders")
-        .select("id, version, status, patient_portrait, clinician_summary, generated_at, created_at")
+        .select("id, version, status, patient_portrait, clinician_summary, generated_at, created_at, voice_validation_status, voice_validation_warnings")
         .eq("user_id", uid)
         .eq("status", "active")
         .order("created_at", { ascending: false })
