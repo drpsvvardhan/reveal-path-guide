@@ -503,19 +503,19 @@ function stripMarkersFromPortrait(parsed: any): void {
 
 function stripMarkersFromClinicianSummary(parsed: any): void {
   if (typeof parsed.clinician_summary?.terrain_overview === "string") {
-    parsed.clinician_summary.terrain_overview = stripClusterMarkers(parsed.clinician_summary.terrain_overview);
+    parsed.clinician_summary.terrain_overview = inlineStripMarkers(parsed.clinician_summary.terrain_overview);
   }
   if (Array.isArray(parsed.clinician_summary?.axis_breakdown)) {
     for (const axis of parsed.clinician_summary.axis_breakdown) {
       if (typeof axis.interpretation === "string") {
-        axis.interpretation = stripClusterMarkers(axis.interpretation);
+        axis.interpretation = inlineStripMarkers(axis.interpretation);
       }
     }
   }
   if (Array.isArray(parsed.clinician_summary?.perception_gaps)) {
     for (const gap of parsed.clinician_summary.perception_gaps) {
       if (typeof gap.summary === "string") {
-        gap.summary = stripClusterMarkers(gap.summary);
+        gap.summary = inlineStripMarkers(gap.summary);
       }
     }
   }
