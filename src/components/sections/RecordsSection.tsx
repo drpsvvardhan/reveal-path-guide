@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useLabUploads } from "@/context/LabUploadsContext";
 import { useDocuments } from "@/context/DocumentContext";
 import { useAuth } from "@/context/AuthContext";
@@ -17,6 +17,8 @@ import BiomarkerTimeline from "@/components/visuals/BiomarkerTimeline";
 import CoherenceMap from "@/components/clusters/CoherenceMap";
 import ClusterCard from "@/components/clusters/ClusterCard";
 import { ClusterTier } from "@/types/clusters";
+import { useNavigation } from "@/context/NavigationContext";
+import { ArrowRight } from "lucide-react";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
@@ -80,6 +82,26 @@ const RecordsSection: React.FC = () => {
   const [uploadsOpen, setUploadsOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
+  const { navigateTo } = useNavigation();
+
+  /* ── Deep-link scroll-and-highlight from #cluster-{id} ── */
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.startsWith("#cluster-")) return;
+    const clusterId = hash.replace("#cluster-", "");
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`cluster-${clusterId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-secondary/60", "ring-offset-2", "ring-offset-background");
+        setTimeout(() => {
+          el.classList.remove("ring-2", "ring-secondary/60", "ring-offset-2", "ring-offset-background");
+          window.history.replaceState(null, "", window.location.pathname);
+        }, 2000);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [clusters]);
 
   const handleRegenerateClusters = useCallback(async () => {
     const uid = effectiveUserId || user?.id;
@@ -313,7 +335,20 @@ const RecordsSection: React.FC = () => {
                 )}
                 <div className="space-y-3">
                   {clustersByTier[tierInfo.tier].map((cluster) => (
-                    <ClusterCard key={cluster.id} cluster={cluster} />
+                    <div key={cluster.id} id={`cluster-${cluster.id}`} className="transition-all duration-300">
+                      <ClusterCard cluster={cluster} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.history.replaceState(null, "", `#cluster-${cluster.id}`);
+                          navigateTo("noticed");
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors mt-1.5 ml-4"
+                      >
+                        View the reading
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
