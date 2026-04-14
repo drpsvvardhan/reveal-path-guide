@@ -390,7 +390,6 @@ const AskSection: React.FC = () => {
         <ChatInputBar
           onSend={sendMessage}
           isLoading={isLoading}
-          suggestedQuestions={suggestedQuestions}
         />
       }
       reasoningTrace={
