@@ -14,6 +14,12 @@ import GateChips from "@/components/sections/journey/GateChips";
 import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
 import BaselineCards from "@/components/sections/journey/BaselineCards";
 import TappableProse from "@/components/terrain/TappableProse";
+import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
+import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import GateChips from "@/components/sections/journey/GateChips";
+import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
+import BaselineCards from "@/components/sections/journey/BaselineCards";
+import TappableProse from "@/components/terrain/TappableProse";
 
 const toDateKey = (d: string) => d.slice(0, 10);
 
@@ -29,6 +35,7 @@ interface ActionPlanAction {
 
 const JourneySection: React.FC = () => {
   const { activeRender, isLoading: renderLoading, hasFailed, regenerate } = useTerrainRender();
+  const [isRegeneratingTerrain, setIsRegeneratingTerrain] = useState(false);
   const { currentAssessment, gateScores, domainScores } = useCIEAssessment();
   const { observations, uploads } = useLabUploads();
   const { activeNarrative } = useNarrative();
@@ -231,6 +238,18 @@ const JourneySection: React.FC = () => {
       eyebrow="YOUR TERRAIN"
       title={heroTitle ?? "Your biological terrain"}
       intro={heroIntro ?? undefined}
+      headerExtra={
+        <VoiceValidationIndicator
+          status={activeRender?.voice_validation_status ?? null}
+          warnings={activeRender?.voice_validation_warnings ?? null}
+          onRegenerate={async () => {
+            setIsRegeneratingTerrain(true);
+            await regenerate();
+            setIsRegeneratingTerrain(false);
+          }}
+          isRegenerating={isRegeneratingTerrain}
+        />
+      }
     >
       {/* TODAY BLOCK — prefer action plan, fall back to terrain portrait */}
       {(topAction || portrait?.the_one_action) && (
