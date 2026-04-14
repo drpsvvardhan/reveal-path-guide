@@ -2,6 +2,9 @@ import React from "react";
 import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight } from "lucide-react";
 import PatientCognitiveText from "@/components/PatientCognitiveText";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
+import TimeSeriesBlock from "@/components/chat/TimeSeriesBlock";
+import { parseTimeSeriesBlocks, stripTimeSeriesBlocks } from "@/lib/timeSeriesParser";
+import type { ParsedTimeSeries } from "@/lib/timeSeriesParser";
 import type { VocabularyViolation } from "@/lib/voiceValidation";
 
 interface ChatMessageSection {
@@ -101,6 +104,13 @@ function renderContentWithQuotes(
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSuggestionTap }) => {
+  // Parse time series blocks from assistant messages
+  const timeSeries: ParsedTimeSeries[] = React.useMemo(() => {
+    if (message.role !== "assistant" || isStreaming) return [];
+    const raw = message.content || message.sections?.map(s => s.content).join("\n\n") || "";
+    return parseTimeSeriesBlocks(raw);
+  }, [message, isStreaming]);
+
   if (message.role === "user") {
     return (
       <div className="flex justify-end mb-6">
@@ -122,6 +132,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
       </div>
 
       <div className="flex-1 min-w-0 max-w-[calc(100%-56px)]">
+        {/* Render time series blocks if present */}
+        {timeSeries.length > 0 && (
+          <div className="mb-3">
+            {timeSeries.map((ts, i) => (
+              <TimeSeriesBlock key={i} series={ts} />
+            ))}
+          </div>
+        )}
+
         {message.sections && message.sections.length > 0 ? (
           <div className="space-y-4">
             {message.sections.map((section, idx) => {
@@ -137,6 +156,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               }
 
               const isLastSection = idx === (message.sections?.length ?? 0) - 1;
+              // Strip time series markup from section content
+              const displayContent = stripTimeSeriesBlocks(section.content);
 
               return (
                 <div
@@ -160,8 +181,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
                   </div>
                   <div className="text-[15px] text-foreground leading-relaxed">
                     {isLastSection
-                      ? renderContentWithQuotes(section.content, onSuggestionTap)
-                      : <PatientCognitiveText content={section.content} />
+                      ? renderContentWithQuotes(displayContent, onSuggestionTap)
+                      : <PatientCognitiveText content={displayContent} />
                     }
                   </div>
                 </div>
@@ -171,7 +192,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
         ) : (
           <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
             <div className="text-[15px] text-foreground leading-relaxed">
-              {renderContentWithQuotes(message.content || "", isStreaming ? undefined : onSuggestionTap)}
+              {renderContentWithQuotes(
+                stripTimeSeriesBlocks(message.content || ""),
+                isStreaming ? undefined : onSuggestionTap
+              )}
               {isStreaming && (
                 <span className="inline-block w-2 h-4 ml-1 bg-secondary animate-pulse align-middle" />
               )}

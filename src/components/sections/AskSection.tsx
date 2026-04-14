@@ -16,6 +16,11 @@ import {
   ClusterTier,
   VocabularyViolation,
 } from "@/lib/voiceValidation";
+import {
+  parseTimeSeriesBlocks,
+  stripTimeSeriesBlocks,
+  detectShapeMismatches,
+} from "@/lib/timeSeriesParser";
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/patient-chat`;
 const CONTEXT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-ask-anything-context`;
@@ -274,6 +279,22 @@ const AskSection: React.FC = () => {
         sentenceToClusterMap,
       );
 
+      // Shape mismatch check for time series blocks
+      const seriesList = parseTimeSeriesBlocks(fullText);
+      const proseWithoutBlocks = stripTimeSeriesBlocks(fullText);
+      const shapeMismatches = detectShapeMismatches(proseWithoutBlocks, seriesList);
+
+      const allWarnings: VocabularyViolation[] = [...validation.violations];
+      for (const sm of shapeMismatches) {
+        allWarnings.push({
+          sentence: `Shape claim "${sm.matchedPhrase}" for ${sm.marker}`,
+          cluster_id: null,
+          cluster_tier: null,
+          rule_violated: 'global_forbidden',
+          matched_phrase: `shape_mismatch: claimed "${sm.claimedShape}" but actual shape is ${sm.actualShape}`,
+        });
+      }
+
       const cleanText = stripClusterMarkers(fullText);
       const sections = parseAssistantResponse(cleanText);
 
@@ -284,8 +305,8 @@ const AskSection: React.FC = () => {
                 ...m,
                 content: cleanText,
                 sections,
-                voiceValidationStatus: validation.valid ? 'passed' : 'failed_with_warnings',
-                voiceValidationWarnings: validation.violations,
+                voiceValidationStatus: allWarnings.length === 0 ? 'passed' : 'failed_with_warnings',
+                voiceValidationWarnings: allWarnings,
               }
             : m
         )
