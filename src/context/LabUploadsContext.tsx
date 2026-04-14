@@ -100,6 +100,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const uploadAndProcess = useCallback(
     async (file: File): Promise<LabUploadProcessResult> => {
       if (!user) return { success: false, error: "Not authenticated" };
+      const targetUserId = effectiveUserId || user.id;
       if (!SUPPORTED_TYPES.includes(file.type)) {
         return { success: false, error: "Unsupported file type. Upload a PDF, JPEG, PNG, or WebP." };
       }
@@ -115,7 +116,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const { data: uploadRow, error: insertError } = await supabase
           .from("patient_lab_uploads")
           .insert({
-            user_id: user.id,
+            user_id: targetUserId,
             original_filename: file.name,
             storage_path: "pending",
             file_size_bytes: file.size,
@@ -130,7 +131,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         // Step 2: Upload file to storage at {user_id}/{upload_id}{ext}
         const ext = getFileExtension(file.type);
-        const storagePath = `${user.id}/${uploadRow.id}${ext}`;
+        const storagePath = `${targetUserId}/${uploadRow.id}${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
           .upload(storagePath, file, {
@@ -195,7 +196,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
                 },
-                body: JSON.stringify({ patient_id: user.id }),
+                body: JSON.stringify({ patient_id: targetUserId }),
               }).catch((err) => console.warn("[auto-clusters] fire-and-forget failed:", err));
               console.log("[auto-clusters] Triggered cluster generation after lab upload");
             } catch (clusterErr) {
@@ -231,7 +232,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setProcessing(false);
       }
     },
-    [user, refresh]
+    [user, effectiveUserId, refresh]
   );
 
   const deleteUpload = useCallback(
