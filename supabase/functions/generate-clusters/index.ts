@@ -24,10 +24,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GENERATOR_MODEL = "claude-sonnet-4-20250514";
-const CRITIC_MODEL = "claude-sonnet-4-20250514";
-const RECONCILER_MODEL = "claude-sonnet-4-20250514";
-const MAX_TOKENS = 16000;
+// Using Lovable AI Gateway with strong reasoning models
+const GENERATOR_MODEL = "google/gemini-2.5-pro";
+const CRITIC_MODEL = "google/gemini-2.5-flash";
+const RECONCILER_MODEL = "google/gemini-2.5-pro";
 
 function stripJsonFences(text: string): string {
   return text
@@ -36,7 +36,7 @@ function stripJsonFences(text: string): string {
     .trim();
 }
 
-async function callClaude(
+async function callLLM(
   apiKey: string,
   model: string,
   system: string,
@@ -44,24 +44,24 @@ async function callClaude(
   maxRetries = 3
 ): Promise<string> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model,
-        max_tokens: MAX_TOKENS,
-        system,
-        messages: [{ role: "user", content: user }],
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0.3,
       }),
     });
 
     if (response.status === 429 && attempt < maxRetries) {
-      const retryAfter = parseInt(response.headers.get("retry-after") || "60", 10);
-      const waitMs = Math.max(retryAfter * 1000, 30_000 * (attempt + 1));
+      const waitMs = 10_000 * (attempt + 1);
       console.log(`[generate-clusters] Rate limited (429). Waiting ${waitMs / 1000}s before retry ${attempt + 1}/${maxRetries}`);
       await response.text();
       await new Promise((r) => setTimeout(r, waitMs));
@@ -70,23 +70,23 @@ async function callClaude(
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Anthropic API error ${response.status}: ${errText}`);
+      throw new Error(`AI Gateway error ${response.status}: ${errText}`);
     }
 
     const data = await response.json();
-    const textBlock = data.content?.find((b: any) => b.type === "text");
-    if (!textBlock) {
-      throw new Error("Claude returned no text content");
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("AI Gateway returned no content");
     }
-    return stripJsonFences(textBlock.text);
+    return stripJsonFences(content);
   }
-  throw new Error("Max retries exceeded for Claude API call");
+  throw new Error("Max retries exceeded for AI Gateway call");
 }
 
 async function runTriangulationPipeline(patientId: string) {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   try {
@@ -98,13 +98,11 @@ async function runTriangulationPipeline(patientId: string) {
     const generationRunId = crypto.randomUUID();
 
     // ── Pass 1 — Generator ──────────────────────────────────────────────
-    const generatorInputChars = generatorSystemPrompt(FRAMEWORK_V2).length + contextJson.length + 200;
-    console.log(`[generate-clusters] Pass 1 estimated input tokens: ~${Math.round(generatorInputChars / 3.5)}`);
     console.log(`[generate-clusters] Pass 1 (generator) starting for patient ${patientId}`);
-    const generatorRaw = await callClaude(
-      ANTHROPIC_API_KEY, GENERATOR_MODEL,
+    const generatorRaw = await callLLM(
+      LOVABLE_API_KEY, GENERATOR_MODEL,
       generatorSystemPrompt(FRAMEWORK_V2),
-      `PATIENT CONTEXT:\n\n${contextJson}\n\nProduce the cluster set following the framework and the four reasoning principles.`
+      `PATIENT CONTEXT:\n\n${contextJson}\n\nProduce the cluster set following the framework and the four reasoning principles. Respond with valid JSON only, no markdown fences.`
     );
     let generatorOutput: any;
     try { generatorOutput = JSON.parse(generatorRaw); }
@@ -112,31 +110,23 @@ async function runTriangulationPipeline(patientId: string) {
     console.log(`[generate-clusters] Pass 1 complete: ${generatorOutput.clusters?.length ?? 0} candidates`);
 
     // ── Pass 2 — Critic (compressed context) ────────────────────────────
-    const criticInputChars = criticSystemPrompt(FRAMEWORK_V2).length + contextCompressed.length + JSON.stringify(generatorOutput).length + 300;
-    console.log(`[generate-clusters] Pass 2 estimated input tokens: ~${Math.round(criticInputChars / 3.5)}`);
     console.log(`[generate-clusters] Pass 2 (critic) starting`);
-    const criticRaw = await callClaude(
-      ANTHROPIC_API_KEY, CRITIC_MODEL,
+    const criticRaw = await callLLM(
+      LOVABLE_API_KEY, CRITIC_MODEL,
       criticSystemPrompt(FRAMEWORK_V2),
-      `PATIENT CONTEXT (compressed terrain summary — use this to verify that evidence ids referenced by the generator actually exist and that the values match):\n\n${contextCompressed}\n\nGENERATOR OUTPUT:\n\n${JSON.stringify(generatorOutput, null, 2)}\n\nCritique the cluster set against Framework v2.`
+      `PATIENT CONTEXT (compressed terrain summary — use this to verify that evidence ids referenced by the generator actually exist and that the values match):\n\n${contextCompressed}\n\nGENERATOR OUTPUT:\n\n${JSON.stringify(generatorOutput, null, 2)}\n\nCritique the cluster set against Framework v2. Respond with valid JSON only, no markdown fences.`
     );
     let criticOutput: any;
     try { criticOutput = JSON.parse(criticRaw); }
     catch (e) { throw new Error(`Critic invalid JSON: ${(e as Error).message}\n${criticRaw.slice(0, 500)}`); }
     console.log(`[generate-clusters] Pass 2 complete: ${criticOutput.critiques?.length ?? 0} critiques`);
 
-    // ── Sleep before reconciler to clear rate limit window ───────────────
-    console.log(`[generate-clusters] Sleeping 15s before reconciler pass to clear rate limit window`);
-    await new Promise((r) => setTimeout(r, 15_000));
-
     // ── Pass 3 — Reconciler (compressed context) ────────────────────────
-    const reconcilerInputChars = reconcilerSystemPrompt(FRAMEWORK_V2).length + contextCompressed.length + JSON.stringify(generatorOutput).length + JSON.stringify(criticOutput).length + 400;
-    console.log(`[generate-clusters] Pass 3 estimated input tokens: ~${Math.round(reconcilerInputChars / 3.5)}`);
     console.log(`[generate-clusters] Pass 3 (reconciler) starting`);
-    const reconcilerRaw = await callClaude(
-      ANTHROPIC_API_KEY, RECONCILER_MODEL,
+    const reconcilerRaw = await callLLM(
+      LOVABLE_API_KEY, RECONCILER_MODEL,
       reconcilerSystemPrompt(FRAMEWORK_V2),
-      `PATIENT CONTEXT (compressed terrain summary — use this to verify that evidence ids referenced by the generator and critic actually exist):\n\n${contextCompressed}\n\nGENERATOR OUTPUT:\n\n${JSON.stringify(generatorOutput, null, 2)}\n\nCRITIC CRITIQUE:\n\n${JSON.stringify(criticOutput, null, 2)}\n\nProduce the final repaired cluster set.`
+      `PATIENT CONTEXT (compressed terrain summary — use this to verify that evidence ids referenced by the generator and critic actually exist):\n\n${contextCompressed}\n\nGENERATOR OUTPUT:\n\n${JSON.stringify(generatorOutput, null, 2)}\n\nCRITIC CRITIQUE:\n\n${JSON.stringify(criticOutput, null, 2)}\n\nProduce the final repaired cluster set. Respond with valid JSON only, no markdown fences.`
     );
     let reconcilerOutput: any;
     try { reconcilerOutput = JSON.parse(reconcilerRaw); }
@@ -179,9 +169,9 @@ serve(async (req) => {
   }
 
   try {
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not configured.");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured.");
     }
 
     const { patient_id } = await req.json();
