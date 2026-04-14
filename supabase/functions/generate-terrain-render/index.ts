@@ -668,8 +668,13 @@ serve(async (req) => {
           const clinicianResult = validateProseAgainstClustersWithAudience(clinicianProse, clusterTierMap, clinicianMap, 'clinician');
 
           if (patientResult.valid && clinicianResult.valid) {
+            const overviewBefore = parsed.clinician_summary?.terrain_overview?.substring(0, 60) || 'N/A';
             stripMarkersFromPortrait(parsed);
             stripMarkersFromClinicianSummary(parsed);
+            const overviewAfter = parsed.clinician_summary?.terrain_overview?.substring(0, 60) || 'N/A';
+            console.log(`[STRIP-CHECK] before: ${overviewBefore}`);
+            console.log(`[STRIP-CHECK] after: ${overviewAfter}`);
+            console.log(`[STRIP-CHECK] stripClusterMarkers type: ${typeof stripClusterMarkers}`);
             voiceValidationStatus = "passed";
             lastViolations = [];
             break;
