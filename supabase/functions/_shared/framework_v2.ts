@@ -442,9 +442,9 @@ export function parseProseAndCitations(rawProse: string): {
   const sentences = rawProse.split(/(?<=[.!?])\s+/);
 
   for (const raw of sentences) {
-    const markerMatch = raw.match(/\{cluster:([^}]+)\}\s*$/);
+    const markerMatch = raw.match(/\{cluster:([^}]+)\}[.!?]?\s*$/);
     const clusterId = markerMatch ? (markerMatch[1] === 'none' ? null : markerMatch[1]) : null;
-    const cleanSentence = raw.replace(/\s*\{cluster:[^}]+\}\s*$/, '').trim();
+    const cleanSentence = raw.replace(/\s*\{cluster:[^}]+\}[.!?]?\s*$/, '').trim();
     if (cleanSentence.length > 0) {
       sentenceToClusterMap.set(cleanSentence, clusterId);
     }

@@ -1,5 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  TIER_VOCABULARY_LICENSES,
+  FORBIDDEN_VOCABULARY_GLOBAL,
+  parseProseAndCitations,
+  validateProseAgainstClusters,
+  stripClusterMarkers,
+  buildRetryFeedback,
+} from "../_shared/framework_v2.ts";
+import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -181,7 +190,6 @@ const INTERVENTION_LIBRARY: Intervention[] = [
     coordinates: ["R"], gates: ["BRI"], retest_weeks: 3, retest_markers: ["sleep quality"],
     contraindications: [], category: "sleep", sequence_priority: 2,
   },
-  // ── Optimization-tier interventions (for patients with good markers) ──
   {
     id: "opt_apob_tracking",
     trigger: { biomarker_conditions: [{ name: "apolipoprotein_b", operator: ">", value: 80 }] },
@@ -288,7 +296,6 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
     let hits = 0;
     let total = 0;
 
-    // Check biomarker conditions
     if (iv.trigger.biomarker_conditions) {
       for (const bc of iv.trigger.biomarker_conditions) {
         total++;
@@ -297,13 +304,11 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
       }
     }
 
-    // Check gate conditions
     if (iv.trigger.gate_conditions) {
       for (const gc of iv.trigger.gate_conditions) {
         total++;
         const gate = data.gateScores[gc.gate];
         if (gate) {
-          // Match if traffic light is the specified level OR worse
           const severity = ["GREEN", "YELLOW", "ORANGE", "RED"];
           const gateIdx = severity.indexOf(gate.traffic_light);
           const condIdx = severity.indexOf(gc.traffic_light);
@@ -312,7 +317,6 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
       }
     }
 
-    // Check domain conditions
     if (iv.trigger.domain_conditions) {
       for (const dc of iv.trigger.domain_conditions) {
         total++;
@@ -321,7 +325,6 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
       }
     }
 
-    // Check rule IDs
     if (iv.trigger.rule_ids) {
       for (const rid of iv.trigger.rule_ids) {
         total++;
@@ -329,7 +332,6 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
       }
     }
 
-    // Need at least one condition matched, and at least half of all conditions
     if (total > 0 && hits > 0 && hits >= total * 0.5) {
       matched.push({ ...iv, match_score: hits / total });
     }
@@ -340,27 +342,23 @@ function matchInterventions(data: PatientData): Array<Intervention & { match_sco
 
 function templateWhy(template: string, data: PatientData): string {
   return template.replace(/\{(\w+)\}/g, (match, key) => {
-    // Check biomarkers
     if (data.biomarkers[key]) return String(data.biomarkers[key].value);
-    // Check domain scores (e.g., {E13_score})
     const domainMatch = key.match(/^([A-Z]\d+)_score$/);
     if (domainMatch) {
       const dom = data.domainScores[domainMatch[1]];
       if (dom) return String(Math.round(dom.final_score));
     }
-    // Check gate status (e.g., {BRI_status})
     const gateMatch = key.match(/^(\w+)_status$/);
     if (gateMatch) {
       const gate = data.gateScores[gateMatch[1]];
       if (gate) return gate.traffic_light;
     }
-    return match; // Leave placeholder if no data
+    return match;
   });
 }
 
 // ── Coordinate impact scoring ──
 function coordinateImpactScore(iv: Intervention, data: PatientData): number {
-  // Higher score = addresses more compromised coordinates
   const coordMap: Record<string, string[]> = {
     E: ["A1", "A2", "A3", "C8", "G21", "H23"],
     I: ["B6", "D10", "D11", "D12", "F17"],
@@ -380,7 +378,7 @@ function coordinateImpactScore(iv: Intervention, data: PatientData): number {
     }
     if (count > 0) {
       const avg = avgScore / count;
-      impact += (100 - avg); // Lower score = higher impact
+      impact += (100 - avg);
     }
   }
   return impact;
@@ -399,12 +397,21 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Fetch patient data
-    const [gateRes, domainRes, obsRes, patternRes] = await Promise.all([
+    // 1. Fetch patient data + profile (for clusters) + clusters
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("user_id", user_id)
+      .maybeSingle();
+
+    const [gateRes, domainRes, obsRes, patternRes, clusterRes] = await Promise.all([
       supabase.from("cie_gate_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(50),
       supabase.from("cie_domain_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(100),
       supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(1000),
       supabase.from("derived_patterns").select("rule_id, severity").eq("user_id", user_id).eq("status", "active"),
+      profileData
+        ? supabase.from("clusters").select("id, claim, cluster_kind, confidence_tier, confidence_score").eq("patient_id", profileData.id).eq("status", "active").order("confidence_score", { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]);
 
     // Build gate scores map (latest per gate)
@@ -433,16 +440,24 @@ serve(async (req) => {
       patterns: patternRes.data || [],
     };
 
-    // 2. Match interventions
+    const clusters = clusterRes.data || [];
+
+    // Build cluster tier map for voice validation
+    const clusterTierMap = new Map<string, ClusterTier>();
+    for (const c of clusters) {
+      clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
+    }
+
+    // 2. Match interventions (DETERMINISTIC — unchanged)
     let matched = matchInterventions(patientData);
 
-    // 3. Rank: priority first, then coordinate impact
+    // 3. Rank
     matched.sort((a, b) => {
       if (a.sequence_priority !== b.sequence_priority) return a.sequence_priority - b.sequence_priority;
       return coordinateImpactScore(b, patientData) - coordinateImpactScore(a, patientData);
     });
 
-    // 4. Deduplicate by category — max 2 per category to ensure diversity
+    // 4. Deduplicate
     const categoryCounts: Record<string, number> = {};
     const selected: typeof matched = [];
     for (const iv of matched) {
@@ -453,7 +468,6 @@ serve(async (req) => {
       if (selected.length >= 5) break;
     }
 
-    // If fewer than 5, fill from remaining
     if (selected.length < 5) {
       for (const iv of matched) {
         if (selected.some((s) => s.id === iv.id)) continue;
@@ -462,7 +476,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Template the why for each
+    // 5. Template the why
     const todayActions = selected.map((iv) => ({
       id: iv.id,
       what: iv.what,
@@ -490,33 +504,91 @@ serve(async (req) => {
         rationale: `Retest at ${weeks} weeks to confirm whether interventions are shifting the terrain. The measurement is how we know — not a promise.`,
       }));
 
-    // 7. Generate sequence explanation using LLM (lightweight call)
+    // 7. Generate sequence explanation using LLM with cluster context + voice validation
     let sequenceExplanation = "These actions are ordered by leverage — the first ones stabilize the foundation that makes later ones effective. Start with the top action. As it becomes habit, add the next.";
+    let voiceValidationStatus: string | null = null;
+    let voiceValidationWarnings: VocabularyViolation[] | null = null;
 
     try {
       const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
       if (apiKey && todayActions.length > 0) {
         const actionSummary = todayActions.map((a, i) => `${i + 1}. [${a.category}] ${a.what} (coordinates: ${a.coordinates.join(",")})`).join("\n");
-        const llmRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 200,
-            messages: [{
-              role: "user",
-              content: `You are explaining to a patient why these 5 actions are ordered this way. Write ONE paragraph (3-4 sentences). Use second-person voice. No predictions. No wellness language. No "will improve." Explain what each action stabilizes that makes the next one more effective. Actions:\n${actionSummary}`,
-            }],
-          }),
-        });
-        if (llmRes.ok) {
+
+        // Build cluster context for the LLM call
+        const clusterContext = clusters.length > 0
+          ? `\n\nActive clusters for this patient:\n${clusters.map(c => `- ${c.claim} (tier: ${c.confidence_tier}, score: ${c.confidence_score})`).join('\n')}`
+          : '';
+
+        const tierVocabSummary = Object.entries(TIER_VOCABULARY_LICENSES)
+          .map(([tier, l]) => `${tier}: use ${l.allowed_verbs.slice(0, 3).join('/')}, avoid ${l.forbidden_verbs.slice(0, 3).join('/')}`)
+          .join('; ');
+
+        const MAX_RETRIES = 3;
+        let lastViolations: VocabularyViolation[] = [];
+
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+          const prompt = attempt === 0
+            ? `You are explaining to a patient why these actions are ordered this way. Write ONE paragraph (3-4 sentences). Use second-person voice. No predictions. No wellness language. No "will improve." Explain what each action stabilizes that makes the next one more effective.
+
+Each sentence must end with a cluster citation marker like {cluster:<cluster_id>} or {cluster:none} for general framing.
+
+Tier-licensed vocabulary rules: ${tierVocabSummary}
+
+Globally forbidden phrases: ${FORBIDDEN_VOCABULARY_GLOBAL.slice(0, 10).join(', ')}...
+
+Actions:\n${actionSummary}${clusterContext}`
+            : `Your previous attempt had vocabulary violations. Fix them and regenerate.\n\n${buildRetryFeedback(lastViolations)}\n\nActions:\n${actionSummary}${clusterContext}`;
+
+          const llmRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 300,
+              messages: [{ role: "user", content: prompt }],
+            }),
+          });
+
+          if (!llmRes.ok) {
+            const errText = await llmRes.text();
+            console.warn("LLM sequence explanation failed:", errText);
+            break;
+          }
+
           const llmData = await llmRes.json();
           const text = llmData?.content?.[0]?.text;
-          if (text && text.length > 20) sequenceExplanation = text;
+          if (!text || text.length < 20) break;
+
+          // Voice validate
+          if (clusters.length > 0) {
+            const { sentenceToClusterMap } = parseProseAndCitations(text);
+            const voiceResult = validateProseAgainstClusters(text, clusterTierMap, sentenceToClusterMap);
+
+            if (voiceResult.valid) {
+              sequenceExplanation = stripClusterMarkers(text);
+              voiceValidationStatus = "passed";
+              lastViolations = [];
+              break;
+            }
+
+            lastViolations = voiceResult.violations;
+            console.log(`Sequence explanation attempt ${attempt + 1} voice validation failed: ${voiceResult.violations.length} violations`);
+
+            // On last attempt, use it anyway
+            if (attempt === MAX_RETRIES - 1) {
+              sequenceExplanation = stripClusterMarkers(text);
+              voiceValidationStatus = "failed_with_warnings";
+              voiceValidationWarnings = lastViolations;
+            }
+          } else {
+            sequenceExplanation = text;
+            voiceValidationStatus = "passed";
+            break;
+          }
         }
       }
     } catch (e) {
@@ -535,6 +607,8 @@ serve(async (req) => {
       sequence_explanation: sequenceExplanation,
       retest_schedule: retestSchedule,
       status: "active",
+      voice_validation_status: voiceValidationStatus,
+      voice_validation_warnings: voiceValidationWarnings,
     });
 
     if (insertError) {
@@ -550,6 +624,7 @@ serve(async (req) => {
         retest_schedule: retestSchedule,
         matched_count: matched.length,
         selected_count: selected.length,
+        voice_validation_status: voiceValidationStatus,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

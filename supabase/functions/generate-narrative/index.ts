@@ -1,5 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  FRAMEWORK_V2,
+  TIER_VOCABULARY_LICENSES,
+  FORBIDDEN_VOCABULARY_GLOBAL,
+  parseProseAndCitations,
+  validateProseAgainstClusters,
+  stripClusterMarkers,
+  buildRetryFeedback,
+} from "../_shared/framework_v2.ts";
+import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,143 +17,110 @@ const corsHeaders = {
 };
 
 // ============================================================================
-// THE GENERATION SYSTEM PROMPT
+// THE GENERATION SYSTEM PROMPT — Framework v2 with cluster sourcing
 // ============================================================================
 
-const NARRATIVE_SYSTEM_PROMPT = `You are the Vizzhy Narrative Composer. Your job is to translate structured patient health data into a complete patient-facing narrative that respects the patient's intelligence, explains what the data shows, and points toward agency.
+function buildNarrativeSystemPrompt(clusters: any[]): string {
+  const tierVocabLines: string[] = [];
+  for (const [tier, license] of Object.entries(TIER_VOCABULARY_LICENSES)) {
+    tierVocabLines.push(`- ${tier} tier: Allowed verbs: ${license.allowed_verbs.join(', ')}. Forbidden verbs: ${license.forbidden_verbs.join(', ')}.${license.required_hedging ? ` Required hedging: ${license.required_hedging.join(', ')}.` : ''}`);
+  }
 
-You are NOT a medical advisor. You are NOT making clinical decisions. You are translating structured facts (raw biomarker values, sensor data, computed patterns) into patient-facing prose. The facts have already been computed deterministically by the rule engine. Your job is narrative synthesis, not clinical judgment.
+  const forbiddenList = FORBIDDEN_VOCABULARY_GLOBAL.map(p => `"${p}"`).join(', ');
 
-═══════════════════════════════════════════════════════════════════════════
-THE CORE PRINCIPLE
-═══════════════════════════════════════════════════════════════════════════
+  return `You are the Vizzhy Narrative Composer. Your job is to translate structured patient health data into a complete patient-facing narrative that respects the patient's intelligence, explains what the data shows, and points toward agency.
 
-You produce a single JSON object that matches the exact schema specified below. No preamble, no apology, no markdown formatting around the JSON. Just the JSON object, starting with { and ending with }.
+You are NOT a medical advisor. You are NOT making clinical decisions. You are translating structured facts into patient-facing prose. The facts have already been computed deterministically by the rule engine. Your job is narrative synthesis, not clinical judgment.
 
-The JSON must validate against the schema. If you produce invalid JSON, the pipeline will retry and tell you what was wrong.
+${FRAMEWORK_V2}
 
-═══════════════════════════════════════════════════════════════════════════
-INPUTS YOU WILL RECEIVE
-═══════════════════════════════════════════════════════════════════════════
+## Cluster sourcing rules
 
-You will receive the following inputs in the user message:
+You are writing prose for the patient based on their active cluster set. Each sentence you write in every prose field must be drawn from a specific cluster. At the end of each sentence, append a marker in the form {cluster:<cluster_id>} to indicate the source cluster.
 
-1. PATIENT_CONTEXT: basic patient identity (name, age, sex)
-2. STUDY_OVERVIEW: what data layers were analyzed
-3. RAW_DATA: biomarker timeline, vital signs, sensor streams, symptoms journal, food log
-4. DERIVED_PATTERNS: structured patterns already detected by the rule engine
-5. CURRENT_MEDICATIONS: what the patient is already taking
+Sentences that do not draw from a single cluster (general framing, transitions, conclusions) may use {cluster:none}. Use {cluster:none} sparingly — most sentences should cite a cluster.
 
-You must ground EVERY statement in your output in one of these inputs. Never invent a fact the inputs don't contain. Never extrapolate beyond what the data shows.
+## Active clusters for this patient
 
-═══════════════════════════════════════════════════════════════════════════
-OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
-═══════════════════════════════════════════════════════════════════════════
+${clusters.length > 0 ? JSON.stringify(clusters.map(c => ({
+  id: c.id,
+  claim: c.claim,
+  cluster_kind: c.cluster_kind,
+  confidence_tier: c.confidence_tier,
+  confidence_score: c.confidence_score,
+  coherence_signals: c.coherence_signals,
+  missing_evidence: c.missing_evidence,
+  tensions_held: c.tensions_held,
+})), null, 2) : '(no clusters available — use manifest data directly)'}
 
-Your output must be a single JSON object with EXACTLY these fields and types:
+## Tier-licensed vocabulary
+
+${tierVocabLines.join('\n')}
+
+## Globally forbidden vocabulary
+
+The following phrases are forbidden regardless of tier: ${forbiddenList}
+
+## Output schema
+
+Your output must be a single JSON object with EXACTLY these fields:
 
 {
   "patientThesis": {
-    "title": "string — one sentence, max 100 chars, the core story in plain language",
-    "body": "string — 3-4 sentences expanding the thesis, ending with something hopeful grounded in what can change"
+    "title": "string — one sentence, max 100 chars",
+    "body": "string — 3-4 sentences expanding the thesis"
   },
   "layerFindings": {
-    "blood": "string — one sentence about what the blood work showed",
-    "sensors": "string — one sentence about what the wearable/sensor data showed",
-    "food_log": "string — one sentence about what the food log revealed (omit if no food log data)",
-    "symptoms": "string — one sentence about what the symptom journal showed (omit if no symptoms data)",
-    "vitals": "string — one sentence about what the blood pressure / weight / BMI showed (omit if no vitals)"
+    "blood": "string",
+    "sensors": "string",
+    "food_log": "string (omit if no data)",
+    "symptoms": "string (omit if no data)",
+    "vitals": "string (omit if no data)"
   },
   "helpingVsFeeding": {
-    "helping": [
-      {
-        "label": "string — name of the intervention",
-        "mechanism": "string — one sentence explaining what it's doing"
-      }
-    ],
-    "feeding": [
-      {
-        "label": "string — name of the driver (behavior, situation, untreated factor)",
-        "mechanism": "string — one sentence explaining how it drives the problem, using lever/mechanism language NOT blame language"
-      }
-    ]
+    "helping": [{ "label": "string", "mechanism": "string" }],
+    "feeding": [{ "label": "string", "mechanism": "string" }]
   },
-  "symptomBridges": [
-    "string — one sentence connecting a feeling/symptom to what the data shows, format: 'The [symptom] you mentioned is likely connected to [finding from data]'"
-  ],
+  "symptomBridges": ["string"],
   "reversibility": {
-    "weeks": ["string — thing that can improve in weeks"],
-    "months": ["string — thing that can improve in months"],
-    "slow": ["string — thing that changes slowly but is worth the effort"],
-    "permanent": ["string — thing we work around because it's harder to reverse"],
-    "closingLine": "string — optional one-sentence summary of reversibility"
+    "weeks": ["string"],
+    "months": ["string"],
+    "slow": ["string"],
+    "permanent": ["string"],
+    "closingLine": "string"
   },
   "sequencedActions": {
-    "startHere": {
-      "title": "string — the single most important action",
-      "description": "string — one sentence explaining why this one first",
-      "whyFirst": "string — optional, deeper explanation of why this action unlocks others"
-    },
-    "thenAdd": [
-      {
-        "title": "string",
-        "description": "string"
-      }
-    ],
-    "notYet": [
-      {
-        "title": "string",
-        "description": "string",
-        "why": "string — why this is on hold (framed as protection, not denial)",
-        "unlockedWhen": "string — what condition unlocks this",
-        "unlockedBy": "string — 'patient' or 'doctor'"
-      }
-    ]
+    "startHere": { "title": "string", "description": "string", "whyFirst": "string" },
+    "thenAdd": [{ "title": "string", "description": "string" }],
+    "notYet": [{ "title": "string", "description": "string", "why": "string", "unlockedWhen": "string", "unlockedBy": "string" }]
   },
   "expectedProgress": {
-    "weeks2": "string — what should improve in the first 2 weeks",
-    "months3": "string — what should improve by 3 months",
-    "months6": "string — what should improve by 6 months",
-    "months12": "string — what should improve by 12 months"
+    "weeks2": "string",
+    "months3": "string",
+    "months6": "string",
+    "months12": "string"
   },
   "confidenceBreakdown": {
-    "confident": ["string — thing we're confident about"],
-    "investigating": ["string — thing we're still investigating"],
-    "retest": ["string — thing we're watching more closely"]
+    "confident": ["string"],
+    "investigating": ["string"],
+    "retest": ["string"]
   }
 }
 
-═══════════════════════════════════════════════════════════════════════════
-WRITING RULES
-═══════════════════════════════════════════════════════════════════════════
+Every prose sentence must end with a {cluster:...} marker. Structured labels (intervention names, axis names, gate identifiers) do NOT need markers.
 
-RULE 1 — PLAIN LANGUAGE. 8th-grade reading level. Short sentences. No jargon without immediate definition.
-
-RULE 2 — GROUND EVERY STATEMENT. Every claim in your output must trace back to either the raw data, a derived pattern, or a medication. Don't invent. Don't extrapolate. If the data doesn't show something, don't say it.
-
-RULE 3 — NEVER MORALIZE. When describing behaviors that feed the problem (sugar, late meals, alcohol, sedentary patterns), use mechanism language, not judgment. Never use: excessive, poor, unhealthy, bad, failing to. Instead use: pattern of, feeding, lever, working against, opportunity.
-
-RULE 4 — PAIR HARD TRUTHS WITH HOPE. The thesis body must end with something grounded in what can change. The confidence breakdown frames uncertainty as active attention, not as doubt.
-
-RULE 5 — HELPING VS FEEDING MUST USE ALL AVAILABLE DATA. The "feeding" list should be populated from the correlation and contradiction patterns in the derived_patterns input, capped at the top 4-5 most impactful. The "helping" list MUST NEVER be empty for a patient with data. Populate helping from: (a) current medications/supplements, (b) CIE domains scored 80 or above — these are axes the patient is maintaining well, (c) lab biomarkers in healthy range (good HDL, good fasting glucose, good hs-CRP, etc.), (d) InBody findings in healthy range (phase angle, ECW/TBW, BMR). Frame helping factors using state vector language: "Your [axis/biomarker] supports your [coordinate]." If you cannot find ANY helping factor, that is a data extraction failure — log a placeholder and note the gap.
-
-RULE 6 — SYMPTOM BRIDGES MUST CONNECT TO DATA. Only include bridges where the symptoms journal has an entry AND the data has a finding that connects to it. Don't fabricate symptoms the patient didn't report.
-
-RULE 7 — REVERSIBILITY TIERS MUST BE REALISTIC. "Weeks" tier is things that respond to immediate behavioral change (sleep quality, glucose spikes, HRV). "Months" tier is deeper biology (inflammation markers, HbA1c, gut balance). "Slow" tier is 6-12 month changes (epigenetics, muscle mass, cardiovascular remodeling). "Permanent" is things like old surgical changes, genetic variants, prior structural damage.
-
-RULE 8 — SEQUENCED ACTIONS MUST REFLECT THE DERIVED PATTERNS. The "startHere" action should address the highest-severity pattern or the pattern with the strongest behavioral lever. "Not yet" items should be framed as protection (waiting for a test, waiting for a baseline, waiting for another factor to stabilize) not as denial.
-
-RULE 9 — EXPECTED PROGRESS MUST BE CALIBRATED. Don't promise changes the data doesn't support. If the patient has a stubborn pattern, the progress timeline should reflect that realistically. Better to under-promise and over-deliver than the reverse.
-
-RULE 10 — NO JSON IN THE OUTPUT OUTSIDE THE SCHEMA. Do not include explanations, commentary, or preamble. The output is a single JSON object and nothing else.
-
-═══════════════════════════════════════════════════════════════════════════
-OUTPUT FORMAT — ABSOLUTELY CRITICAL
-═══════════════════════════════════════════════════════════════════════════
-
-Your entire response must be a single valid JSON object. It must start with { and end with }. No markdown code fences. No "Here is the narrative:" preamble. No explanations. Just the JSON.
-
-If you cannot produce valid JSON that matches the schema, produce the most faithful approximation you can — the validator will tell you what's wrong and give you another chance.`;
+WRITING RULES:
+1. PLAIN LANGUAGE — 8th-grade reading level. Short sentences.
+2. GROUND EVERY STATEMENT — trace to data, pattern, or cluster.
+3. NEVER MORALIZE — mechanism language, not judgment.
+4. PAIR HARD TRUTHS WITH HOPE.
+5. HELPING VS FEEDING MUST USE ALL AVAILABLE DATA.
+6. SYMPTOM BRIDGES MUST CONNECT TO DATA.
+7. REVERSIBILITY TIERS MUST BE REALISTIC.
+8. SEQUENCED ACTIONS MUST REFLECT THE DERIVED PATTERNS.
+9. EXPECTED PROGRESS MUST BE CALIBRATED.
+10. Output only the JSON. No preamble. No markdown code fences.`;
+}
 
 // ============================================================================
 // VALIDATION
@@ -161,7 +138,6 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
     return { valid: false, errors: [{ field: "root", message: "Output is not a JSON object" }] };
   }
 
-  // patientThesis
   if (!obj.patientThesis || typeof obj.patientThesis !== "object") {
     errors.push({ field: "patientThesis", message: "Missing or not an object" });
   } else {
@@ -173,12 +149,10 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
     }
   }
 
-  // layerFindings
   if (!obj.layerFindings || typeof obj.layerFindings !== "object") {
     errors.push({ field: "layerFindings", message: "Missing or not an object" });
   }
 
-  // helpingVsFeeding
   if (!obj.helpingVsFeeding || typeof obj.helpingVsFeeding !== "object") {
     errors.push({ field: "helpingVsFeeding", message: "Missing or not an object" });
   } else {
@@ -190,36 +164,25 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
     }
   }
 
-  // symptomBridges
   if (!Array.isArray(obj.symptomBridges)) {
     errors.push({ field: "symptomBridges", message: "Not an array" });
   }
 
-  // reversibility
   if (!obj.reversibility || typeof obj.reversibility !== "object") {
     errors.push({ field: "reversibility", message: "Missing or not an object" });
   } else {
-    const tiers = ["weeks", "months", "slow", "permanent"];
-    for (const tier of tiers) {
+    for (const tier of ["weeks", "months", "slow", "permanent"]) {
       if (!Array.isArray(obj.reversibility[tier])) {
         errors.push({ field: `reversibility.${tier}`, message: "Not an array" });
       }
     }
   }
 
-  // sequencedActions
   if (!obj.sequencedActions || typeof obj.sequencedActions !== "object") {
     errors.push({ field: "sequencedActions", message: "Missing or not an object" });
   } else {
     if (!obj.sequencedActions.startHere || typeof obj.sequencedActions.startHere !== "object") {
       errors.push({ field: "sequencedActions.startHere", message: "Missing or not an object" });
-    } else {
-      if (typeof obj.sequencedActions.startHere.title !== "string") {
-        errors.push({ field: "sequencedActions.startHere.title", message: "Missing or not a string" });
-      }
-      if (typeof obj.sequencedActions.startHere.description !== "string") {
-        errors.push({ field: "sequencedActions.startHere.description", message: "Missing or not a string" });
-      }
     }
     if (!Array.isArray(obj.sequencedActions.thenAdd)) {
       errors.push({ field: "sequencedActions.thenAdd", message: "Not an array" });
@@ -229,24 +192,20 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
     }
   }
 
-  // expectedProgress
   if (!obj.expectedProgress || typeof obj.expectedProgress !== "object") {
     errors.push({ field: "expectedProgress", message: "Missing or not an object" });
   } else {
-    const windows = ["weeks2", "months3", "months6", "months12"];
-    for (const w of windows) {
+    for (const w of ["weeks2", "months3", "months6", "months12"]) {
       if (typeof obj.expectedProgress[w] !== "string") {
         errors.push({ field: `expectedProgress.${w}`, message: "Missing or not a string" });
       }
     }
   }
 
-  // confidenceBreakdown
   if (!obj.confidenceBreakdown || typeof obj.confidenceBreakdown !== "object") {
     errors.push({ field: "confidenceBreakdown", message: "Missing or not an object" });
   } else {
-    const cats = ["confident", "investigating", "retest"];
-    for (const c of cats) {
+    for (const c of ["confident", "investigating", "retest"]) {
       if (!Array.isArray(obj.confidenceBreakdown[c])) {
         errors.push({ field: `confidenceBreakdown.${c}`, message: "Not an array" });
       }
@@ -263,13 +222,11 @@ function validateNarrative(obj: any): { valid: boolean; errors: ValidationError[
 function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]): string {
   const sections: string[] = [];
 
-  // Patient context
   sections.push("PATIENT_CONTEXT:");
   sections.push(
     `Name: ${manifest.patient?.firstName || "unknown"}, Age: ${manifest.patient?.age || "?"}, Sex: ${manifest.patient?.sex || "?"}`
   );
 
-  // Study overview
   sections.push("\nSTUDY_OVERVIEW:");
   if (manifest.studyOverview) {
     sections.push(manifest.studyOverview.summary || "");
@@ -282,7 +239,6 @@ function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]):
     }
   }
 
-  // Raw data
   const raw = manifest.rawData || {};
   sections.push("\nRAW_DATA:");
 
@@ -336,7 +292,6 @@ function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]):
     }
   }
 
-  // Derived patterns
   sections.push("\nDERIVED_PATTERNS:");
   if (patterns.length === 0) {
     sections.push("(no patterns detected yet)");
@@ -350,16 +305,13 @@ function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]):
     }
   }
 
-  // CIE gate scores (injected separately for narrative weaving)
   if (gateScores && gateScores.length > 0) {
     sections.push("\nINTAKE GATE SCORES:");
     for (const g of gateScores) {
       sections.push(`- ${g.gate_id} (${g.gate_name}): ${Math.round(g.score)}/100 [${g.traffic_light}] — domains: ${(g.contributing_domains || []).join(", ")}`);
     }
-    sections.push("(Weave gate-derived findings into the thesis and terrain analysis when these scores are present.)");
   }
 
-  // Current medications
   sections.push("\nCURRENT_MEDICATIONS:");
   const meds = manifest.careMap?.medications || [];
   if (meds.length === 0) {
@@ -382,22 +334,16 @@ function composeUserMessage(manifest: any, patterns: any[], gateScores?: any[]):
 async function callAnthropicForJson(
   userMessage: string,
   systemPrompt: string,
-  previousError?: string
+  feedbackMessage?: string
 ): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
   const messages: any[] = [{ role: "user", content: userMessage }];
 
-  if (previousError) {
-    messages.push({
-      role: "assistant",
-      content: "{ /* previous attempt had errors */ }",
-    });
-    messages.push({
-      role: "user",
-      content: `Your previous output had the following validation errors:\n\n${previousError}\n\nPlease produce a new JSON object that fixes these errors. Output only the JSON, nothing else.`,
-    });
+  if (feedbackMessage) {
+    messages.push({ role: "assistant", content: "{ /* previous attempt */ }" });
+    messages.push({ role: "user", content: feedbackMessage });
   }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -421,82 +367,94 @@ async function callAnthropicForJson(
   }
 
   const data = await response.json();
-  const text = data.content?.[0]?.text || "";
-  return text;
+  return data.content?.[0]?.text || "";
 }
 
 function extractJsonFromText(text: string): any {
-  // Try direct parse first
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Try extracting from markdown code fences if present
-    const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-    if (fenceMatch) {
-      try {
-        return JSON.parse(fenceMatch[1]);
-      } catch {
-        // fall through
-      }
-    }
-    // Try finding the first { and last } and parsing between
-    const firstBrace = text.indexOf("{");
-    const lastBrace = text.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      try {
-        return JSON.parse(text.slice(firstBrace, lastBrace + 1));
-      } catch {
-        // fall through
-      }
-    }
-    throw new Error("Could not extract valid JSON from LLM output");
+  try { return JSON.parse(text); } catch { /* continue */ }
+  const fenceMatch = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1]); } catch { /* continue */ }
   }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)); } catch { /* continue */ }
+  }
+  throw new Error("Could not extract valid JSON from LLM output");
 }
 
-async function generateWithRetry(
-  manifest: any,
-  patterns: any[],
-  maxRetries: number = 2,
-  gateScores?: any[]
-): Promise<{ narrative: any; retryCount: number; model: string; generationMs: number; error?: string }> {
-  const startTime = Date.now();
-  const userMessage = composeUserMessage(manifest, patterns, gateScores);
-  let previousError: string | undefined = undefined;
+// ============================================================================
+// VOICE VALIDATION HELPERS
+// ============================================================================
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const rawOutput = await callAnthropicForJson(userMessage, NARRATIVE_SYSTEM_PROMPT, previousError);
-      const parsed = extractJsonFromText(rawOutput);
-      const validation = validateNarrative(parsed);
+function extractNarrativeProse(parsed: any): string {
+  const parts: string[] = [];
 
-      if (validation.valid) {
-        return {
-          narrative: parsed,
-          retryCount: attempt,
-          model: "claude-sonnet-4-20250514",
-          generationMs: Date.now() - startTime,
-        };
-      }
+  // patientThesis.body
+  if (parsed.patientThesis?.body) parts.push(parsed.patientThesis.body);
 
-      // Validation failed — compose error message for next retry
-      previousError = validation.errors
-        .map((e) => `  - ${e.field}: ${e.message}`)
-        .join("\n");
-      console.log(`Attempt ${attempt + 1} failed validation:\n${previousError}`);
-    } catch (e) {
-      previousError = e instanceof Error ? e.message : String(e);
-      console.error(`Attempt ${attempt + 1} threw:`, previousError);
+  // layerFindings
+  if (parsed.layerFindings) {
+    for (const val of Object.values(parsed.layerFindings)) {
+      if (typeof val === "string" && val.length > 0) parts.push(val);
     }
   }
 
-  // All retries exhausted
-  return {
-    narrative: null,
-    retryCount: maxRetries + 1,
-    model: "claude-sonnet-4-20250514",
-    generationMs: Date.now() - startTime,
-    error: previousError || "Generation failed after all retries",
+  // helpingVsFeeding mechanisms
+  if (parsed.helpingVsFeeding?.helping) {
+    for (const h of parsed.helpingVsFeeding.helping) {
+      if (h.mechanism) parts.push(h.mechanism);
+    }
+  }
+  if (parsed.helpingVsFeeding?.feeding) {
+    for (const f of parsed.helpingVsFeeding.feeding) {
+      if (f.mechanism) parts.push(f.mechanism);
+    }
+  }
+
+  // symptomBridges
+  if (Array.isArray(parsed.symptomBridges)) {
+    for (const s of parsed.symptomBridges) {
+      if (typeof s === "string" && s.length > 0) parts.push(s);
+    }
+  }
+
+  // reversibility.closingLine
+  if (parsed.reversibility?.closingLine) parts.push(parsed.reversibility.closingLine);
+
+  // expectedProgress
+  if (parsed.expectedProgress) {
+    for (const val of Object.values(parsed.expectedProgress)) {
+      if (typeof val === "string" && val.length > 0) parts.push(val);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+function stripMarkersFromNarrative(parsed: any): void {
+  // Strip from all string fields recursively
+  const stripObj = (obj: any): any => {
+    if (typeof obj === "string") return stripClusterMarkers(obj);
+    if (Array.isArray(obj)) return obj.map(stripObj);
+    if (obj && typeof obj === "object") {
+      const result: any = {};
+      for (const [k, v] of Object.entries(obj)) {
+        result[k] = stripObj(v);
+      }
+      return result;
+    }
+    return obj;
   };
+
+  // Apply to all prose-bearing sections
+  const proseKeys = ["patientThesis", "layerFindings", "helpingVsFeeding", "symptomBridges", "reversibility", "sequencedActions", "expectedProgress", "confidenceBreakdown"];
+  for (const key of proseKeys) {
+    if (parsed[key]) {
+      parsed[key] = stripObj(parsed[key]);
+    }
+  }
 }
 
 // ============================================================================
@@ -506,11 +464,16 @@ async function generateWithRetry(
 async function persistNarrative(
   supabase: any,
   userId: string,
-  result: Awaited<ReturnType<typeof generateWithRetry>>,
+  narrative: any,
+  retryCount: number,
+  model: string,
+  generationMs: number,
   patternCount: number,
-  biomarkerCount: number
+  biomarkerCount: number,
+  voiceValidationStatus: string | null,
+  voiceValidationWarnings: any[] | null,
+  error?: string,
 ): Promise<{ version: number; id: string } | null> {
-  // Get next version number atomically
   const { data: versionData, error: versionError } = await supabase.rpc("next_narrative_version", {
     p_user_id: userId,
   });
@@ -521,21 +484,23 @@ async function persistNarrative(
   }
 
   const version = versionData as number;
-  const isSuccess = result.narrative !== null && !result.error;
+  const isSuccess = narrative !== null && !error;
 
   const { data: inserted, error: insertError } = await supabase
     .from("patient_narratives")
     .insert({
       user_id: userId,
       version,
-      narrative: result.narrative || {},
-      model_used: result.model,
-      generation_ms: result.generationMs,
+      narrative: narrative || {},
+      model_used: model,
+      generation_ms: generationMs,
       input_pattern_count: patternCount,
       input_biomarker_count: biomarkerCount,
       status: isSuccess ? "active" : "failed",
-      validation_error: result.error || null,
-      retry_count: result.retryCount,
+      validation_error: error || null,
+      retry_count: retryCount,
+      voice_validation_status: voiceValidationStatus,
+      voice_validation_warnings: voiceValidationWarnings,
     })
     .select("id, version")
     .single();
@@ -579,10 +544,10 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Always fetch patient context from DB to prevent client-side data leaks
+    // Fetch profile (need profile.id for cluster fetch)
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("first_name, age, sex")
+      .select("id, first_name, age, sex")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -595,49 +560,123 @@ serve(async (req) => {
       };
     }
 
-    // Fetch the patient's active derived patterns
-    const { data: patterns, error: patternError } = await supabase
-      .from("derived_patterns")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("status", "active")
-      .order("severity", { ascending: true });
+    // Fetch patterns, gate scores, AND clusters in parallel
+    const [patternRes, cieAssessmentRes, clusterRes] = await Promise.all([
+      supabase.from("derived_patterns").select("*").eq("user_id", userId).eq("status", "active").order("severity", { ascending: true }),
+      supabase.from("cie_assessments").select("id").eq("user_id", userId).eq("status", "complete").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      profileData
+        ? supabase.from("clusters").select("*").eq("patient_id", profileData.id).eq("status", "active").order("confidence_score", { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ]);
 
-    if (patternError) {
-      console.error("Failed to fetch patterns:", patternError);
+    if (patternRes.error) {
+      console.error("Failed to fetch patterns:", patternRes.error);
       return new Response(JSON.stringify({ error: "Could not fetch derived patterns" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const patternList = patterns || [];
+    const patternList = patternRes.data || [];
     const biomarkerCount = manifest.rawData?.biomarkerTimeline?.length || 0;
+    const clusters = clusterRes.data || [];
 
-    // Fetch CIE gate scores for the most recent completed assessment
+    // Build cluster tier map
+    const clusterTierMap = new Map<string, ClusterTier>();
+    for (const c of clusters) {
+      clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
+    }
+
+    // Fetch gate scores
     let gateScoresList: any[] = [];
-    const { data: cieAssessment } = await supabase
-      .from("cie_assessments")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("status", "complete")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (cieAssessment) {
+    if (cieAssessmentRes.data) {
       const { data: gs } = await supabase
         .from("cie_gate_scores")
         .select("gate_id, gate_name, score, traffic_light, contributing_domains")
-        .eq("assessment_id", cieAssessment.id);
+        .eq("assessment_id", cieAssessmentRes.data.id);
       if (gs) gateScoresList = gs;
     }
 
-    // Run generation with retry
-    const result = await generateWithRetry(manifest, patternList, 2, gateScoresList);
+    // Build system prompt with cluster context
+    const systemPrompt = buildNarrativeSystemPrompt(clusters);
+    const userMessage = composeUserMessage(manifest, patternList, gateScoresList);
 
-    // Persist the result (success or failure)
-    const persisted = await persistNarrative(supabase, userId, result, patternList.length, biomarkerCount);
+    // Generation with voice validation
+    const MAX_RETRIES = 3;
+    const startTime = Date.now();
+    let parsed: any = null;
+    let lastStructuralError: string | undefined;
+    let lastViolations: VocabularyViolation[] = [];
+    let feedbackMessage: string | undefined;
+    let voiceValidationStatus: string | null = null;
+    let retryCount = 0;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      retryCount = attempt;
+      try {
+        const rawOutput = await callAnthropicForJson(userMessage, systemPrompt, feedbackMessage);
+        parsed = extractJsonFromText(rawOutput);
+
+        // Structural validation
+        const structValidation = validateNarrative(parsed);
+        if (!structValidation.valid) {
+          lastStructuralError = structValidation.errors.map(e => `${e.field}: ${e.message}`).join("; ");
+          feedbackMessage = `Your previous output had structural validation errors:\n\n${lastStructuralError}\n\nPlease produce a new JSON object that fixes these errors. Output only the JSON.`;
+          parsed = null;
+          console.log(`Attempt ${attempt + 1} structural validation failed: ${lastStructuralError}`);
+          continue;
+        }
+
+        // Voice validation
+        if (clusters.length > 0) {
+          const narrativeProse = extractNarrativeProse(parsed);
+          const { sentenceToClusterMap } = parseProseAndCitations(narrativeProse);
+          const voiceResult = validateProseAgainstClusters(narrativeProse, clusterTierMap, sentenceToClusterMap);
+
+          if (voiceResult.valid) {
+            stripMarkersFromNarrative(parsed);
+            voiceValidationStatus = "passed";
+            lastViolations = [];
+            break;
+          }
+
+          lastViolations = voiceResult.violations;
+          feedbackMessage = buildRetryFeedback(voiceResult.violations);
+          console.log(`Attempt ${attempt + 1} voice validation failed: ${voiceResult.violations.length} violations`);
+        } else {
+          voiceValidationStatus = "passed";
+          break;
+        }
+      } catch (e) {
+        lastStructuralError = e instanceof Error ? e.message : String(e);
+        feedbackMessage = `Your previous output had errors:\n\n${lastStructuralError}\n\nPlease produce a corrected JSON object.`;
+        parsed = null;
+        console.error(`Attempt ${attempt + 1} threw:`, lastStructuralError);
+      }
+    }
+
+    const generationMs = Date.now() - startTime;
+
+    // If we have a valid parse but voice validation failed
+    if (parsed && !voiceValidationStatus && lastViolations.length > 0) {
+      stripMarkersFromNarrative(parsed);
+      voiceValidationStatus = "failed_with_warnings";
+    }
+
+    // Persist
+    const persisted = await persistNarrative(
+      supabase,
+      userId,
+      parsed,
+      retryCount,
+      "claude-sonnet-4-20250514",
+      generationMs,
+      patternList.length,
+      biomarkerCount,
+      voiceValidationStatus,
+      lastViolations.length > 0 ? lastViolations : null,
+      parsed ? undefined : (lastStructuralError || "Generation failed after all retries"),
+    );
 
     if (!persisted) {
       return new Response(
@@ -646,13 +685,13 @@ serve(async (req) => {
       );
     }
 
-    if (result.error) {
+    if (!parsed) {
       return new Response(
         JSON.stringify({
           success: false,
           version: persisted.version,
-          validation_error: result.error,
-          retry_count: result.retryCount,
+          validation_error: lastStructuralError,
+          retry_count: retryCount,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -662,8 +701,9 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         version: persisted.version,
-        generation_ms: result.generationMs,
-        retry_count: result.retryCount,
+        generation_ms: generationMs,
+        retry_count: retryCount,
+        voice_validation_status: voiceValidationStatus,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
