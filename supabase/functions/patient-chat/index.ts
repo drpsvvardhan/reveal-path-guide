@@ -636,8 +636,9 @@ serve(async (req) => {
       );
     }
 
-    // Override patient context from DB to prevent client-side data leaks + fetch clusters
+    // Override patient context from DB to prevent client-side data leaks + fetch clusters + full lab history
     let clusters: any[] = [];
+    let labHistory: any[] = [];
     if (userId) {
       const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
       const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -657,19 +658,29 @@ serve(async (req) => {
           sex: profileData.sex || manifest.patient?.sex || "unknown",
         };
 
-        // Fetch active clusters using profile.id as patient_id
-        const { data: clusterData } = await supabaseAdmin
-          .from("clusters")
-          .select("id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held")
-          .eq("patient_id", profileData.id)
-          .eq("status", "active")
-          .order("confidence_score", { ascending: false });
-        clusters = clusterData || [];
+        // Parallel fetch: clusters + full lab history
+        const [clusterResult, labResult] = await Promise.all([
+          supabaseAdmin
+            .from("clusters")
+            .select("id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held")
+            .eq("patient_id", profileData.id)
+            .eq("status", "active")
+            .order("confidence_score", { ascending: false }),
+          supabaseAdmin
+            .from("patient_lab_observations")
+            .select("collection_date, canonical_name, display_name, value, unit, flag, source")
+            .eq("user_id", userId)
+            .order("collection_date", { ascending: true })
+            .limit(500),
+        ]);
+        clusters = clusterResult.data || [];
+        labHistory = labResult.data || [];
       }
     }
 
     const clusterBlock = buildClusterContextBlock(clusters);
-    const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock);
+    const labHistoryBlock = buildLabHistoryBlock(labHistory);
+    const systemPrompt = buildPatientSystemPrompt(manifest, documents, clusterBlock, labHistoryBlock);
 
     const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
