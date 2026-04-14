@@ -335,7 +335,20 @@ const RecordsSection: React.FC = () => {
                 )}
                 <div className="space-y-3">
                   {clustersByTier[tierInfo.tier].map((cluster) => (
-                    <ClusterCard key={cluster.id} cluster={cluster} />
+                    <div key={cluster.id} id={`cluster-${cluster.id}`} className="transition-all duration-300">
+                      <ClusterCard cluster={cluster} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.history.replaceState(null, "", `#cluster-${cluster.id}`);
+                          navigateTo("noticed");
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-secondary transition-colors mt-1.5 ml-4"
+                      >
+                        View the reading
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
