@@ -2,7 +2,9 @@
  * Parser and shape analysis for structured time series blocks
  * emitted by patient-chat LLM responses.
  *
- * Format:
+ * Handles both multi-line and single-line formats:
+ *
+ * Multi-line:
  *   {time_series:start}
  *   marker: HbA1c
  *   unit: %
@@ -10,6 +12,9 @@
  *     2020-05-27 | 5.3
  *     2020-11-06 | 5.7
  *   {time_series:end}
+ *
+ * Single-line (LLM sometimes compacts):
+ *   {time_series:start} marker: HbA1c unit: % points: 2020-05-27 | 5.3 2020-11-06 | 5.7 {time_series:end}
  */
 
 export interface TimeSeriesPoint {
@@ -37,25 +42,29 @@ const BLOCK_RE = /\{time_series:start\}([\s\S]*?)\{time_series:end\}/g;
 /** Parse all time series blocks from raw LLM text */
 export function parseTimeSeriesBlocks(text: string): ParsedTimeSeries[] {
   const results: ParsedTimeSeries[] = [];
+  // Reset lastIndex for global regex
+  BLOCK_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   // eslint-disable-next-line no-cond-assign
   while ((match = BLOCK_RE.exec(text)) !== null) {
     const inner = match[1];
-    const markerMatch = inner.match(/marker:\s*(.+)/i);
-    const unitMatch = inner.match(/unit:\s*(.+)/i);
+
+    // Extract marker name
+    const markerMatch = inner.match(/marker:\s*([^\n]+?)(?:\s+unit:|\s+points:|\s*$)/i);
     if (!markerMatch) continue;
-
     const marker = markerMatch[1].trim();
-    const unit = unitMatch ? unitMatch[1].trim() : '';
-    const points: TimeSeriesPoint[] = [];
 
-    const pointLines = inner.split('\n');
-    for (const line of pointLines) {
-      const trimmed = line.trim();
-      const pm = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s*\|\s*([\d.]+)$/);
-      if (pm) {
-        points.push({ date: pm[1], value: parseFloat(pm[2]) });
-      }
+    // Extract unit
+    const unitMatch = inner.match(/unit:\s*([^\n]+?)(?:\s+points:|\s+\d{4}-\d{2}-\d{2}|\s*$)/i);
+    const unit = unitMatch ? unitMatch[1].trim() : '';
+
+    // Extract data points — handle both newline-separated and space-separated
+    const points: TimeSeriesPoint[] = [];
+    const pointRe = /(\d{4}-\d{2}-\d{2})\s*\|\s*([\d.]+)/g;
+    let pm: RegExpExecArray | null;
+    // eslint-disable-next-line no-cond-assign
+    while ((pm = pointRe.exec(inner)) !== null) {
+      points.push({ date: pm[1], value: parseFloat(pm[2]) });
     }
 
     if (points.length > 0) {
@@ -67,7 +76,7 @@ export function parseTimeSeriesBlocks(text: string): ParsedTimeSeries[] {
 
 /** Strip time series block markup from text */
 export function stripTimeSeriesBlocks(text: string): string {
-  return text.replace(BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trim();
+  return text.replace(/\{time_series:start\}[\s\S]*?\{time_series:end\}/g, '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** Compute the trajectory shape of a series of values */
