@@ -25,7 +25,11 @@ interface ClusterEvidenceInput {
   direction: ClusterEvidenceDirection;
   weight?: number;
   time_point?: string | Date | null;
+  text_for_matching?: string;
 }
+
+const matchText = (e: ClusterEvidenceInput): string =>
+  (e.text_for_matching ?? e.evidence_id ?? "").toLowerCase();
 
 interface ClusterConfidenceDimensions {
   breadth: number;
@@ -68,69 +72,69 @@ interface ClusterConfidenceResult {
 
 const PLATONIC_EVIDENCE_SETS: Record<string, Array<{ id: string; description: string; match: (e: ClusterEvidenceInput) => boolean }>> = {
   cardiovascular_particle: [
-    { id: 'apob', description: 'ApoB measurement', match: (e) => /apob/i.test(e.evidence_id) },
-    { id: 'ldl_p', description: 'LDL particle count (LDL-P)', match: (e) => /ldl[\s_-]*p(?:[_\s-]|$)|ldl[\s_-]*particle/i.test(e.evidence_id) },
-    { id: 'ldl_small', description: 'LDL small dense fraction', match: (e) => /ldl.*small|small.*ldl/i.test(e.evidence_id) },
-    { id: 'apoa1', description: 'Apo A1', match: (e) => /apoa1|apo[\s_-]*a[\s_-]*1/i.test(e.evidence_id) },
-    { id: 'hdl_p', description: 'HDL particle count', match: (e) => /hdl[\s_-]*p(?:[_\s-]|$)|hdl[\s_-]*particle/i.test(e.evidence_id) },
-    { id: 'lpa', description: 'Lp(a)', match: (e) => /\blpa(?:[_\s-]|$)|lp\(a\)|lipoprotein.*a/i.test(e.evidence_id) },
-    { id: 'hs_crp', description: 'high-sensitivity CRP', match: (e) => /hs[\s_-]*crp|hscrp/i.test(e.evidence_id) },
-    { id: 'tmao', description: 'TMAO', match: (e) => /tmao/i.test(e.evidence_id) },
-    { id: 'cac', description: 'coronary artery calcium score', match: (e) => /\bcac(?:[_\s-]|$)|calcium.*score|coronary.*calcium/i.test(e.evidence_id) },
+    { id: 'apob', description: 'ApoB measurement', match: (e) => /apob/i.test(matchText(e)) },
+    { id: 'ldl_p', description: 'LDL particle count (LDL-P)', match: (e) => /ldl[\s_-]*p(?:[_\s-]|$)|ldl[\s_-]*particle/i.test(matchText(e)) },
+    { id: 'ldl_small', description: 'LDL small dense fraction', match: (e) => /ldl.*small|small.*ldl/i.test(matchText(e)) },
+    { id: 'apoa1', description: 'Apo A1', match: (e) => /apoa1|apo[\s_-]*a[\s_-]*1/i.test(matchText(e)) },
+    { id: 'hdl_p', description: 'HDL particle count', match: (e) => /hdl[\s_-]*p(?:[_\s-]|$)|hdl[\s_-]*particle/i.test(matchText(e)) },
+    { id: 'lpa', description: 'Lp(a)', match: (e) => /\blpa(?:[_\s-]|$)|lp\(a\)|lipoprotein.*a/i.test(matchText(e)) },
+    { id: 'hs_crp', description: 'high-sensitivity CRP', match: (e) => /hs[\s_-]*crp|hscrp/i.test(matchText(e)) },
+    { id: 'tmao', description: 'TMAO', match: (e) => /tmao/i.test(matchText(e)) },
+    { id: 'cac', description: 'coronary artery calcium score', match: (e) => /\bcac(?:[_\s-]|$)|calcium.*score|coronary.*calcium/i.test(matchText(e)) },
   ],
   hepatic_lipid_handling: [
-    { id: 'alt', description: 'ALT', match: (e) => /\balt\b/i.test(e.evidence_id) },
-    { id: 'ast', description: 'AST', match: (e) => /\bast\b/i.test(e.evidence_id) },
-    { id: 'ggt', description: 'GGT', match: (e) => /\bggt\b/i.test(e.evidence_id) },
-    { id: 'tg', description: 'triglycerides', match: (e) => /trig|\btg\b/i.test(e.evidence_id) },
-    { id: 'fib4', description: 'FIB-4 score', match: (e) => /fib[\s_-]*4/i.test(e.evidence_id) },
-    { id: 'fibroscan', description: 'FibroScan elastography', match: (e) => /fibroscan|elastography/i.test(e.evidence_id) },
-    { id: 'cie_liver', description: 'CIE A1 liver domain score', match: (e) => e.layer_type === 'cie' && /\ba1\b|liver|hepatic/i.test(e.evidence_id) },
-    { id: 'inbody_visceral', description: 'visceral fat area', match: (e) => e.layer_type === 'inbody' && /visceral/i.test(e.evidence_id) },
+    { id: 'alt', description: 'ALT', match: (e) => /\balt\b/i.test(matchText(e)) },
+    { id: 'ast', description: 'AST', match: (e) => /\bast\b/i.test(matchText(e)) },
+    { id: 'ggt', description: 'GGT', match: (e) => /\bggt\b/i.test(matchText(e)) },
+    { id: 'tg', description: 'triglycerides', match: (e) => /trig|\btg\b/i.test(matchText(e)) },
+    { id: 'fib4', description: 'FIB-4 score', match: (e) => /fib[\s_-]*4/i.test(matchText(e)) },
+    { id: 'fibroscan', description: 'FibroScan elastography', match: (e) => /fibroscan|elastography/i.test(matchText(e)) },
+    { id: 'cie_liver', description: 'CIE A1 liver domain score', match: (e) => e.layer_type === 'cie' && /\ba1\b|liver|hepatic/i.test(matchText(e)) },
+    { id: 'inbody_visceral', description: 'visceral fat area', match: (e) => e.layer_type === 'inbody' && /visceral/i.test(matchText(e)) },
   ],
   glucose_dynamics: [
-    { id: 'hba1c', description: 'HbA1c', match: (e) => /hba1c|\ba1c\b/i.test(e.evidence_id) },
-    { id: 'fasting_glucose', description: 'fasting glucose', match: (e) => /fasting.*gluc|gluc.*fasting/i.test(e.evidence_id) },
-    { id: 'fasting_insulin', description: 'fasting insulin', match: (e) => /fasting.*insulin|insulin.*fasting/i.test(e.evidence_id) },
-    { id: 'homa_ir', description: 'HOMA-IR', match: (e) => /homa/i.test(e.evidence_id) },
-    { id: 'cgm_tir', description: 'CGM time in range', match: (e) => /\bcgm\b|\btir\b|time.*in.*range/i.test(e.evidence_id) || (e.layer_type === 'sensor' && /gluc/i.test(e.evidence_id)) },
-    { id: 'cgm_variability', description: 'CGM glucose variability', match: (e) => /variability|sd.*gluc|cv.*gluc/i.test(e.evidence_id) },
-    { id: 'cie_pancreas', description: 'CIE A2 pancreas domain', match: (e) => e.layer_type === 'cie' && /\ba2\b|pancreas|insulin.*rhythm/i.test(e.evidence_id) },
+    { id: 'hba1c', description: 'HbA1c', match: (e) => /hba1c|\ba1c\b/i.test(matchText(e)) },
+    { id: 'fasting_glucose', description: 'fasting glucose', match: (e) => /fasting.*gluc|gluc.*fasting/i.test(matchText(e)) },
+    { id: 'fasting_insulin', description: 'fasting insulin', match: (e) => /fasting.*insulin|insulin.*fasting/i.test(matchText(e)) },
+    { id: 'homa_ir', description: 'HOMA-IR', match: (e) => /homa/i.test(matchText(e)) },
+    { id: 'cgm_tir', description: 'CGM time in range', match: (e) => /\bcgm\b|\btir\b|time.*in.*range/i.test(matchText(e)) || (e.layer_type === 'sensor' && /gluc/i.test(matchText(e))) },
+    { id: 'cgm_variability', description: 'CGM glucose variability', match: (e) => /variability|sd.*gluc|cv.*gluc/i.test(matchText(e)) },
+    { id: 'cie_pancreas', description: 'CIE A2 pancreas domain', match: (e) => e.layer_type === 'cie' && /\ba2\b|pancreas|insulin.*rhythm/i.test(matchText(e)) },
   ],
   inflammation_buffered: [
-    { id: 'hs_crp', description: 'high-sensitivity CRP', match: (e) => /hs[\s_-]*crp|hscrp/i.test(e.evidence_id) },
-    { id: 'il6', description: 'IL-6', match: (e) => /il[\s_-]*6\b/i.test(e.evidence_id) },
-    { id: 'tnf', description: 'TNF-alpha', match: (e) => /\btnf\b/i.test(e.evidence_id) },
-    { id: 'vcam1', description: 'VCAM-1 (proteomics)', match: (e) => /vcam/i.test(e.evidence_id) },
-    { id: 'ccl2', description: 'CCL2 / MCP-1 (proteomics)', match: (e) => /ccl2|mcp[\s_-]*1/i.test(e.evidence_id) },
-    { id: 'microbiome_diversity', description: 'gut microbiome alpha diversity', match: (e) => e.layer_type === 'omics' && /microbiom|diversity/i.test(e.evidence_id) },
-    { id: 'scfa', description: 'short-chain fatty acid panel', match: (e) => /scfa|butyrate|propionate|acetate/i.test(e.evidence_id) },
-    { id: 'cie_immune', description: 'CIE D11 immune tolerance', match: (e) => e.layer_type === 'cie' && /\bd11\b|immune.*tolerance/i.test(e.evidence_id) },
+    { id: 'hs_crp', description: 'high-sensitivity CRP', match: (e) => /hs[\s_-]*crp|hscrp/i.test(matchText(e)) },
+    { id: 'il6', description: 'IL-6', match: (e) => /il[\s_-]*6\b/i.test(matchText(e)) },
+    { id: 'tnf', description: 'TNF-alpha', match: (e) => /\btnf\b/i.test(matchText(e)) },
+    { id: 'vcam1', description: 'VCAM-1 (proteomics)', match: (e) => /vcam/i.test(matchText(e)) },
+    { id: 'ccl2', description: 'CCL2 / MCP-1 (proteomics)', match: (e) => /ccl2|mcp[\s_-]*1/i.test(matchText(e)) },
+    { id: 'microbiome_diversity', description: 'gut microbiome alpha diversity', match: (e) => e.layer_type === 'omics' && /microbiom|diversity/i.test(matchText(e)) },
+    { id: 'scfa', description: 'short-chain fatty acid panel', match: (e) => /scfa|butyrate|propionate|acetate/i.test(matchText(e)) },
+    { id: 'cie_immune', description: 'CIE D11 immune tolerance', match: (e) => e.layer_type === 'cie' && /\bd11\b|immune.*tolerance/i.test(matchText(e)) },
   ],
   autonomic_balance: [
-    { id: 'hrv', description: 'heart rate variability', match: (e) => /\bhrv\b/i.test(e.evidence_id) || (e.layer_type === 'sensor' && /heart.*rate.*var/i.test(e.evidence_id)) },
-    { id: 'resting_hr', description: 'resting heart rate', match: (e) => /\brhr\b|resting.*heart.*rate/i.test(e.evidence_id) },
-    { id: 'recovery_score', description: 'recovery score (WHOOP / Oura)', match: (e) => /recovery.*score|\brecovery\b/i.test(e.evidence_id) },
-    { id: 'sleep_architecture', description: 'sleep architecture (deep, REM)', match: (e) => /sleep.*arch|\brem\b|deep.*sleep/i.test(e.evidence_id) },
-    { id: 'cie_autonomic', description: 'CIE C9 autonomic balance', match: (e) => e.layer_type === 'cie' && /\bc9\b|autonomic/i.test(e.evidence_id) },
-    { id: 'cie_stress', description: 'CIE C7 adrenal/stress', match: (e) => e.layer_type === 'cie' && /\bc7\b|adrenal|stress.*response/i.test(e.evidence_id) },
+    { id: 'hrv', description: 'heart rate variability', match: (e) => /\bhrv\b/i.test(matchText(e)) || (e.layer_type === 'sensor' && /heart.*rate.*var/i.test(matchText(e))) },
+    { id: 'resting_hr', description: 'resting heart rate', match: (e) => /\brhr\b|resting.*heart.*rate/i.test(matchText(e)) },
+    { id: 'recovery_score', description: 'recovery score (WHOOP / Oura)', match: (e) => /recovery.*score|\brecovery\b/i.test(matchText(e)) },
+    { id: 'sleep_architecture', description: 'sleep architecture (deep, REM)', match: (e) => /sleep.*arch|\brem\b|deep.*sleep/i.test(matchText(e)) },
+    { id: 'cie_autonomic', description: 'CIE C9 autonomic balance', match: (e) => e.layer_type === 'cie' && /\bc9\b|autonomic/i.test(matchText(e)) },
+    { id: 'cie_stress', description: 'CIE C7 adrenal/stress', match: (e) => e.layer_type === 'cie' && /\bc7\b|adrenal|stress.*response/i.test(matchText(e)) },
   ],
   mitochondrial_capacity: [
-    { id: 'vo2', description: 'VO2 max or estimate', match: (e) => /vo2/i.test(e.evidence_id) },
-    { id: 'lactate', description: 'lactate', match: (e) => /lactate/i.test(e.evidence_id) },
-    { id: 'acylcarnitines', description: 'acylcarnitine panel (metabolomics)', match: (e) => /acylcarnitine/i.test(e.evidence_id) },
-    { id: 'phase_angle', description: 'phase angle (InBody)', match: (e) => e.layer_type === 'inbody' && /phase.*angle/i.test(e.evidence_id) },
-    { id: 'smm', description: 'skeletal muscle mass', match: (e) => /\bsmm\b|skeletal.*muscle/i.test(e.evidence_id) },
-    { id: 'cie_mito', description: 'CIE C8 mitochondrial energy', match: (e) => e.layer_type === 'cie' && /\bc8\b|mitochondri/i.test(e.evidence_id) },
+    { id: 'vo2', description: 'VO2 max or estimate', match: (e) => /vo2/i.test(matchText(e)) },
+    { id: 'lactate', description: 'lactate', match: (e) => /lactate/i.test(matchText(e)) },
+    { id: 'acylcarnitines', description: 'acylcarnitine panel (metabolomics)', match: (e) => /acylcarnitine/i.test(matchText(e)) },
+    { id: 'phase_angle', description: 'phase angle (InBody)', match: (e) => e.layer_type === 'inbody' && /phase.*angle/i.test(matchText(e)) },
+    { id: 'smm', description: 'skeletal muscle mass', match: (e) => /\bsmm\b|skeletal.*muscle/i.test(matchText(e)) },
+    { id: 'cie_mito', description: 'CIE C8 mitochondrial energy', match: (e) => e.layer_type === 'cie' && /\bc8\b|mitochondri/i.test(matchText(e)) },
   ],
   regulatory_axis: [
-    { id: 'tsh', description: 'TSH', match: (e) => /\btsh\b/i.test(e.evidence_id) },
-    { id: 'free_t3', description: 'free T3', match: (e) => /free.*t3|\bft3\b/i.test(e.evidence_id) },
-    { id: 'free_t4', description: 'free T4', match: (e) => /free.*t4|\bft4\b/i.test(e.evidence_id) },
-    { id: 'cortisol_morning', description: 'morning cortisol', match: (e) => /cortisol/i.test(e.evidence_id) },
-    { id: 'dhea', description: 'DHEA-S', match: (e) => /dhea/i.test(e.evidence_id) },
-    { id: 'cie_thyroid', description: 'CIE G19 thyroid', match: (e) => e.layer_type === 'cie' && /\bg19\b|thyroid/i.test(e.evidence_id) },
-    { id: 'cie_sleep', description: 'CIE E13 sleep/circadian', match: (e) => e.layer_type === 'cie' && /\be13\b|sleep|circadian/i.test(e.evidence_id) },
+    { id: 'tsh', description: 'TSH', match: (e) => /\btsh\b/i.test(matchText(e)) },
+    { id: 'free_t3', description: 'free T3', match: (e) => /free.*t3|\bft3\b/i.test(matchText(e)) },
+    { id: 'free_t4', description: 'free T4', match: (e) => /free.*t4|\bft4\b/i.test(matchText(e)) },
+    { id: 'cortisol_morning', description: 'morning cortisol', match: (e) => /cortisol/i.test(matchText(e)) },
+    { id: 'dhea', description: 'DHEA-S', match: (e) => /dhea/i.test(matchText(e)) },
+    { id: 'cie_thyroid', description: 'CIE G19 thyroid', match: (e) => e.layer_type === 'cie' && /\bg19\b|thyroid/i.test(matchText(e)) },
+    { id: 'cie_sleep', description: 'CIE E13 sleep/circadian', match: (e) => e.layer_type === 'cie' && /\be13\b|sleep|circadian/i.test(matchText(e)) },
   ],
 };
 
@@ -382,6 +386,7 @@ export function validateReconcilerOutput(
           layer_type: layer,
           direction,
           time_point: e.time_point,
+          text_for_matching: e.value_summary,
         };
       })
       .filter((e): e is ClusterEvidenceInput => e !== null);
@@ -394,19 +399,15 @@ export function validateReconcilerOutput(
 
     const coherenceSignals = cluster.constituent_evidence.filter((e) => e.direction === "convergent");
 
-    const platonicMissing = listMissingPlatonicItems(cluster.cluster_kind, normalizedEvidence);
-    const augmentedMissing = [
-      ...cluster.missing_evidence,
-      ...platonicMissing
-        .filter((p) => !cluster.missing_evidence.some((m) =>
-          m.item.toLowerCase().includes(p.id) ||
-          m.item.toLowerCase().includes(p.description.toLowerCase().slice(0, 10))
-        ))
-        .map((p) => ({
-          item: p.description,
-          why_it_would_sharpen: `Standard cluster evidence for ${cluster.cluster_kind}; not currently in this patient's data.`,
-        })),
-    ];
+    // The LLM's authored missing_evidence is the source of truth for the
+    // user-facing list. We do NOT auto-augment from the platonic registry
+    // because the boilerplate text "Standard cluster evidence for X" reads
+    // poorly next to the LLM-authored items and the platonic registry's
+    // matchers were producing false positives before the text_for_matching
+    // fix landed. The platonic registry remains the source of truth for
+    // the missing_data_penalty in the confidence math (computed inside
+    // deriveClusterConfidence), but it no longer writes user-facing text.
+    const augmentedMissing = cluster.missing_evidence;
 
     return {
       cluster_row: {
