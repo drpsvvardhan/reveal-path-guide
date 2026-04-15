@@ -62,7 +62,7 @@ const HelpingFeedingSection: React.FC = () => {
     >
       <div className="grid gap-6 xl:grid-cols-2">
         <div>
-          <h3 className="flex items-center gap-2 text-lg font-medium text-foreground mb-4">
+          <h3 className="flex items-center gap-2 text-subhead text-foreground mb-4">
             <CheckCircle className="h-5 w-5 text-success" />
             Working for you
           </h3>
@@ -72,23 +72,23 @@ const HelpingFeedingSection: React.FC = () => {
             ) : (
               helping.map((item, i) => (
                 <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-3">
-                  <TappableProse text={item.label} className="font-sans font-medium text-foreground text-sm mb-0.5" />
-                  <TappableProse text={item.mechanism} className="text-xs text-muted-foreground" />
+                  <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2" />
+                  <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed" />
                 </div>
               ))
             )}
           </div>
         </div>
         <div>
-          <h3 className="flex items-center gap-2 text-lg font-medium text-foreground mb-4">
+          <h3 className="flex items-center gap-2 text-subhead text-foreground mb-4">
             <AlertTriangle className="h-5 w-5 text-coral" />
             Working against you
           </h3>
           <div className="space-y-3">
             {feedingToShow.map((item, i) => (
               <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-3">
-                <TappableProse text={item.label} className="font-sans font-medium text-foreground text-sm mb-0.5" />
-                <TappableProse text={item.mechanism} className="text-xs text-muted-foreground" />
+                <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2" />
+                <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed" />
               </div>
             ))}
             {hasMoreFeeding && !showAllFeeding && (

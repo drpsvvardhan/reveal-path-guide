@@ -191,7 +191,7 @@ const NoticedSection: React.FC = () => {
         {presentTiers.map((tierInfo) => (
           <div key={tierInfo.tier}>
             {showTierHeaders && (
-              <p className="text-[10px] font-sans font-medium uppercase tracking-[0.18em] text-muted-foreground mb-2 mt-4 first:mt-0">
+              <p className="text-subhead text-muted-foreground mb-2 mt-4 first:mt-0">
                 {tierInfo.label}
               </p>
             )}

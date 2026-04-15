@@ -46,7 +46,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
         <FlowLine variant="hero" className="absolute inset-0 w-full h-full text-signature" />
         <div className="relative">
           {eyebrow && (
-            <p className="text-eyebrow text-muted-foreground mb-4">
+            <p className="text-eyebrow text-muted-foreground mb-3">
               {eyebrow}
             </p>
           )}

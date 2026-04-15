@@ -71,7 +71,7 @@ const ConfidenceSection: React.FC = () => {
           if (!items?.length) return null;
           return (
             <div key={title}>
-              <h3 className="font-serif text-lg text-foreground flex items-center gap-2 mb-3">
+              <h3 className="text-subhead text-foreground flex items-center gap-2 mb-3">
                 <Icon className={`h-5 w-5 ${colorClass}`} /> {title}
               </h3>
               <div className="space-y-2">

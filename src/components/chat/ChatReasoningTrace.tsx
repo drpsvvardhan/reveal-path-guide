@@ -65,8 +65,8 @@ const ChipGroup: React.FC<{
             title={`Ask about ${chip.name}`}
           >
             <div className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
-            <span className="font-medium text-foreground">{chip.name}</span>
-            <span className="font-sans text-muted-foreground opacity-75 font-variant-numeric-tabular">{chip.value} {chip.unit}</span>
+            <span className="font-sans text-[12px] font-semibold text-foreground uppercase" style={{ fontVariant: 'all-small-caps' }}>{chip.name}</span>
+            <span className="font-mono text-[13px] text-muted-foreground" style={{ fontWeight: 500 }}>{chip.value} <span className="text-muted-foreground/60">{chip.unit}</span></span>
           </button>
         ))}
       </div>
@@ -96,11 +96,11 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
         }}
       />
 
-      <div className="px-6 pt-6 pb-4 shrink-0">
-        <h3 className="font-serif text-xl text-foreground leading-tight tracking-tight">
+      <div className="px-6 pt-6 pb-3 shrink-0">
+        <h3 className="text-subhead text-foreground leading-tight tracking-tight">
           Reasoning trace
         </h3>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-0.5">
           What your companion is looking at
         </p>
       </div>

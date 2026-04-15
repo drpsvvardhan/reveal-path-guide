@@ -42,7 +42,7 @@ const AsideInfoPanel: React.FC<AsideInfoPanelProps> = ({
       }}
     >
       <div className="px-7 pt-7 pb-5">
-        <h3 className="font-serif text-xl text-foreground leading-tight tracking-tight" style={{ fontWeight: 500 }}>
+        <h3 className="text-subhead text-foreground leading-tight tracking-tight">
           {title}
         </h3>
         {subtitle && (
