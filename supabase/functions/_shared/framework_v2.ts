@@ -604,3 +604,35 @@ export function buildRetryFeedbackWithSections(
   lines.push('Regenerate the entire output JSON with these fixes. Do not change sentences that were not flagged as violations.');
   return lines.join('\n');
 }
+
+// ── Biotype Archetype Name Guard ──
+
+export const TANGO_BIOTYPE_NAMES: string[] = [
+  'sage', 'seeker', 'sentinel', 'pathfinder', 'guardian', 'architect',
+  'navigator', 'pioneer', 'steward', 'catalyst',
+];
+
+/**
+ * Validate a structured data field (not prose) for the presence of a
+ * TANGO biotype archetype name. Returns a violation if the field value
+ * exactly matches a biotype name (case-insensitive).
+ */
+export function validateStructuredFieldForBiotypeName(
+  fieldValue: string,
+  fieldName: string,
+): VocabularyViolation | null {
+  const lowered = fieldValue.toLowerCase().trim();
+  for (const name of TANGO_BIOTYPE_NAMES) {
+    if (lowered === name.toLowerCase()) {
+      return {
+        sentence: fieldValue,
+        cluster_id: null,
+        cluster_tier: null,
+        rule_violated: 'global_forbidden',
+        matched_phrase: name,
+        section: fieldName,
+      };
+    }
+  }
+  return null;
+}

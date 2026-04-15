@@ -6,6 +6,7 @@ import {
   validateProseAgainstClustersWithAudience,
   parseProseAndCitations,
   stripClusterMarkers,
+  validateStructuredFieldForBiotypeName,
 } from "./framework_v2.ts";
 import type { ClusterTier } from "./framework_v2.ts";
 
@@ -220,4 +221,24 @@ Deno.test("clinician prose validation with audience → passes", () => {
   const result = validateProseAgainstClustersWithAudience(prose, clusterTierMap, sentenceToClusterMap, "clinician");
   assertEquals(result.valid, true);
   assertEquals(result.violations.length, 0);
+});
+
+// ── validateStructuredFieldForBiotypeName tests ──
+
+Deno.test("biotype name 'sage' in structured field → global_forbidden", () => {
+  const result = validateStructuredFieldForBiotypeName("Sage", "dominant_pattern");
+  assertEquals(result?.rule_violated, "global_forbidden");
+  assertEquals(result?.matched_phrase, "sage");
+  assertEquals(result?.section, "dominant_pattern");
+});
+
+Deno.test("biotype name 'seeker' case-insensitive → global_forbidden", () => {
+  const result = validateStructuredFieldForBiotypeName("SEEKER", "archetype");
+  assertEquals(result?.rule_violated, "global_forbidden");
+  assertEquals(result?.matched_phrase, "seeker");
+});
+
+Deno.test("non-biotype name in structured field → no violation", () => {
+  const result = validateStructuredFieldForBiotypeName("Gut-centered coherence", "dominant_pattern");
+  assertEquals(result, null);
 });

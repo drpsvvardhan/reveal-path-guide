@@ -243,3 +243,30 @@ export function parseProseAndCitations(rawProse: string): {
 
   return { prose: rawProse, sentenceToClusterMap };
 }
+
+// ── Biotype Archetype Name Guard ──
+
+export const TANGO_BIOTYPE_NAMES: string[] = [
+  'sage', 'seeker', 'sentinel', 'pathfinder', 'guardian', 'architect',
+  'navigator', 'pioneer', 'steward', 'catalyst',
+];
+
+export function validateStructuredFieldForBiotypeName(
+  fieldValue: string,
+  fieldName: string,
+): VocabularyViolation | null {
+  const lowered = fieldValue.toLowerCase().trim();
+  for (const name of TANGO_BIOTYPE_NAMES) {
+    if (lowered === name.toLowerCase()) {
+      return {
+        sentence: fieldValue,
+        cluster_id: null,
+        cluster_tier: null,
+        rule_violated: 'global_forbidden',
+        matched_phrase: name,
+        section: fieldName,
+      };
+    }
+  }
+  return null;
+}
