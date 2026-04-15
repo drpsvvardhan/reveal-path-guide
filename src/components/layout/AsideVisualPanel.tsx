@@ -37,7 +37,7 @@ const AsideVisualPanel: React.FC<AsideVisualPanelProps> = ({
       />
 
       <div className="px-6 pt-6 pb-4">
-        <h3 className="font-serif text-xl text-foreground leading-tight tracking-tight">
+        <h3 className="text-subhead text-foreground leading-tight tracking-tight">
           {title}
         </h3>
         {subtitle && (

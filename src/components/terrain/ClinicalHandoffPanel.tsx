@@ -98,7 +98,7 @@ const ClinicalHandoffPanel: React.FC = () => {
 
       {/* Block 2: Axis breakdown */}
       <div className="space-y-1">
-        <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+        <h3 className="text-subhead text-muted-foreground mb-3 flex items-center gap-1.5">
           <Activity className="h-3.5 w-3.5" /> Axis breakdown
         </h3>
         <div className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
@@ -118,7 +118,7 @@ const ClinicalHandoffPanel: React.FC = () => {
       {/* Block 3: Perception gaps */}
       {cs.perception_gaps?.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <h3 className="text-subhead text-muted-foreground flex items-center gap-1.5">
             <Eye className="h-3.5 w-3.5" /> Perception gaps
           </h3>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -142,7 +142,7 @@ const ClinicalHandoffPanel: React.FC = () => {
       {/* Block 4: Suggested questions */}
       {cs.suggested_questions?.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <h3 className="text-subhead text-muted-foreground flex items-center gap-1.5">
             <AlertCircle className="h-3.5 w-3.5" /> Questions for the next encounter
           </h3>
           <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">

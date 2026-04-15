@@ -89,30 +89,30 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
 
         {/* Section 1: What you already know */}
         <div>
-          <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3">
             What you already know
           </h3>
-          <TappableProse text={portrait.what_you_already_know} className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]" />
+          <TappableProse text={portrait.what_you_already_know} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
         </div>
 
         <SectionDivider />
 
         {/* Section 2: What's working harder than you realize */}
         <div>
-          <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3">
             What's working harder than you realize
           </h3>
-          <TappableProse text={portrait.working_harder_than_you_realize} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em] font-medium" />
+          <TappableProse text={portrait.working_harder_than_you_realize} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
         </div>
 
         <SectionDivider />
 
         {/* Section 3: Where to start */}
         <div>
-          <h3 className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3">
             Where to start
           </h3>
-          <TappableProse text={portrait.where_to_start} className="font-serif text-lg italic text-foreground leading-[1.8] tracking-[-0.01em]" />
+          <TappableProse text={portrait.where_to_start} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
         </div>
 
         {/* The One Action card */}

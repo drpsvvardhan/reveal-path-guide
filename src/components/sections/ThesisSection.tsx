@@ -50,7 +50,7 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
     return (
       <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
         <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
-          <p className="text-base md:text-lg text-foreground font-serif italic leading-snug">
+          <p className="text-base md:text-lg text-foreground font-serif leading-snug">
             <TappableProse text={left.trim()} />
           </p>
           <div className="flex items-center justify-center text-secondary">
@@ -196,7 +196,7 @@ const ThesisSection: React.FC = () => {
       {/* Biology domain cards — only from real CIE data */}
       {domains.length > 0 && (
         <div>
-          <h3 className="text-xs font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+          <h3 className="text-subhead text-muted-foreground mb-4">
             Your domain scores
           </h3>
           <div className="space-y-3">

@@ -44,7 +44,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
       >
         {/* Title row */}
         <div className="flex items-start justify-between gap-3">
-          <h3 className="text-sm font-serif font-medium text-foreground leading-snug">
+          <h3 className="text-subhead text-foreground leading-snug">
             {formatClusterKind(cluster.cluster_kind)}
           </h3>
           <ClusterTierBadge tier={cluster.confidence_tier} className="shrink-0 mt-0.5" />
@@ -81,7 +81,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
             <div className="border-t border-border bg-muted/10 px-4 py-4 space-y-4">
               {/* Constituent evidence */}
               <div>
-                <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
+                <p className="text-subhead text-muted-foreground mb-2">
                   What this is built from
                 </p>
                 <div className="space-y-1.5">
@@ -114,7 +114,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
               {/* Tensions held */}
               {cluster.tensions_held.length > 0 && (
                 <div className="border-l-2 border-accent/40 pl-3">
-                  <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
+                  <p className="text-subhead text-muted-foreground mb-2">
                     Tensions held in this cluster
                   </p>
                   <div className="space-y-2">
@@ -130,7 +130,7 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
               {/* Missing evidence */}
               {cluster.missing_evidence.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground mb-2">
+                  <p className="text-subhead text-muted-foreground mb-2">
                     What would sharpen this
                   </p>
                   <div className="space-y-2">
