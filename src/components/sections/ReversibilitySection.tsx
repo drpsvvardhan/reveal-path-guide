@@ -1,7 +1,6 @@
 import React from "react";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
-import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import ReversibilityTimeline from "@/components/visuals/ReversibilityTimeline";
 
 const ReversibilitySection: React.FC = () => {
@@ -15,17 +14,6 @@ const ReversibilitySection: React.FC = () => {
       eyebrow="WHAT CAN STILL CHANGE"
       title="Most of this is reversible with focused attention"
       intro="Biology is path-dependent but not fixed. These are the things that respond to different time horizons of effort."
-      aside={
-        <AsideInfoPanel
-          title="Timeline summary"
-          items={[
-            { label: "Changes in weeks", value: `${rev.weeks?.length || 0} items`, tone: "accent" },
-            { label: "Changes in months", value: `${rev.months?.length || 0} items`, tone: "accent" },
-            { label: "Slow changes", value: `${rev.slow?.length || 0} items` },
-            { label: "Work around", value: `${rev.permanent?.length || 0} items` },
-          ]}
-        />
-      }
     >
       <ReversibilityTimeline
         weeks={rev.weeks || []}

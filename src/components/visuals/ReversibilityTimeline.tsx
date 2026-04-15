@@ -10,10 +10,10 @@ interface ReversibilityTimelineProps {
 }
 
 const lanes = [
-  { key: "weeks" as const, title: "Weeks", subtitle: "Responds fast", color: "hsl(174, 50%, 50%)" },
-  { key: "months" as const, title: "Months", subtitle: "Needs time", color: "hsl(200, 45%, 50%)" },
-  { key: "slow" as const, title: "Slow", subtitle: "Worth the effort", color: "hsl(40, 50%, 55%)" },
-  { key: "permanent" as const, title: "Work around", subtitle: "Harder to reverse", color: "hsl(220, 15%, 55%)" },
+  { key: "weeks" as const, title: "Weeks", subtitle: "Responds fast", color: "hsl(174, 50%, 50%)", icon: "⚡" },
+  { key: "months" as const, title: "Months", subtitle: "Needs time", color: "hsl(200, 45%, 50%)", icon: "🔄" },
+  { key: "slow" as const, title: "Slow", subtitle: "Worth the effort", color: "hsl(40, 50%, 55%)", icon: "🌱" },
+  { key: "permanent" as const, title: "Work around", subtitle: "Harder to reverse", color: "hsl(220, 15%, 55%)", icon: "🪨" },
 ];
 
 const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
@@ -23,42 +23,55 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
 
   return (
     <div className={className}>
-      {/* Timeline axis */}
-      <div className="relative mb-2">
-        <div className="h-px bg-gradient-to-r from-[hsl(174,50%,50%)]/60 via-[hsl(40,50%,55%)]/40 to-[hsl(220,15%,55%)]/60" />
-        <div className="flex justify-between mt-2">
-          {lanes.map((lane) => (
-            <div key={lane.key} className="text-center" style={{ width: "25%" }}>
-              <p className="text-[10px] font-sans font-semibold uppercase" style={{ color: lane.color, letterSpacing: "0.15em" }}>{lane.title}</p>
-              <p className="text-[10px] text-muted-foreground/70 font-sans">{lane.subtitle}</p>
+      {/* Stacked lane sections — each lane is a full-width row */}
+      <div className="space-y-6">
+        {lanes.map((lane) => {
+          const items = data[lane.key];
+          if (items.length === 0) return null;
+
+          return (
+            <div key={lane.key}>
+              {/* Lane header */}
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: lane.color }}
+                />
+                <h3
+                  className="text-subhead"
+                  style={{ color: lane.color }}
+                >
+                  {lane.title}
+                </h3>
+                <span className="text-[11px] text-muted-foreground/60 font-sans">
+                  {lane.subtitle} · {items.length} {items.length === 1 ? "item" : "items"}
+                </span>
+                <div className="flex-1 h-px" style={{ backgroundColor: `${lane.color}25` }} />
+              </div>
+
+              {/* Items as a wrapping grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-5">
+                {items.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg px-4 py-3 border transition-colors hover:border-opacity-60"
+                    style={{
+                      borderColor: `${lane.color}30`,
+                      backgroundColor: `${lane.color}0a`,
+                      borderLeftWidth: "3px",
+                      borderLeftColor: lane.color,
+                    }}
+                  >
+                    <TappableProse text={item} className="text-[14px] text-foreground leading-relaxed" />
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Four lanes */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 md:gap-4 mt-6 overflow-x-auto">
-        {lanes.map((lane) => (
-          <div key={lane.key} className="space-y-2 w-full sm:w-[calc(50%-0.375rem)] xl:w-[calc(25%-0.75rem)] sm:min-w-[240px] flex-shrink-0">
-            {data[lane.key].length === 0 && (
-              <div className="rounded-lg border border-dashed border-border/40 p-3 text-center">
-                <p className="text-[10px] text-muted-foreground/50 italic">Nothing here</p>
-              </div>
-            )}
-            {data[lane.key].map((item, idx) => (
-              <div
-                key={idx}
-                className="rounded-lg p-3 border transition-colors hover:border-opacity-60"
-                style={{ borderColor: `${lane.color}40`, backgroundColor: `${lane.color}08` }}
-              >
-                <TappableProse text={item} className="text-[14px] text-foreground leading-snug" />
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 pt-4 border-t border-border/40 text-center">
+      <div className="mt-8 pt-4 border-t border-border/40 text-center">
         <p className="text-xs text-muted-foreground italic">
           Biology is path-dependent but rarely frozen. Most of this moves.
         </p>
