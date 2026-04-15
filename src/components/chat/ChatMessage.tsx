@@ -4,6 +4,7 @@ import PatientCognitiveText from "@/components/PatientCognitiveText";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 import TimeSeriesBlock from "@/components/chat/TimeSeriesBlock";
 import { parseTimeSeriesBlocks, stripTimeSeriesBlocks } from "@/lib/timeSeriesParser";
+import { parseCognitiveModeSubBlocks, type CognitiveModeSubBlock } from "@/components/sections/AskSection";
 import type { ParsedTimeSeries } from "@/lib/timeSeriesParser";
 import type { VocabularyViolation } from "@/lib/voiceValidation";
 
@@ -38,10 +39,10 @@ const sectionMeta: Record<string, { label: string; icon: React.FC<any>; color: s
   acknowledgment: { label: "", icon: MessageCircle, color: "text-muted-foreground" },
 };
 
-const modeLabels: Record<string, { label: string; color: string }> = {
-  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200" },
-  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200" },
+const modeLabels: Record<string, { label: string; color: string; headerColor: string }> = {
+  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200", headerColor: "text-teal-600/70" },
+  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200", headerColor: "text-blue-600/70" },
+  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200", headerColor: "text-slate-500/70" },
 };
 
 /** Extract quoted suggestions (text in "...") from content */
