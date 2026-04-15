@@ -116,7 +116,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
       <div className="flex justify-end mb-6">
         <div className="max-w-[75%]">
           <div className="rounded-2xl rounded-tr-sm bg-secondary text-secondary-foreground px-5 py-3">
-            <p className="text-base leading-relaxed">{message.content}</p>
+            <p className="font-sans text-[16px] leading-[1.5] font-[450] text-secondary-foreground">{message.content}</p>
           </div>
         </div>
       </div>
@@ -149,7 +149,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
 
               if (section.type === "acknowledgment") {
                 return (
-                  <p key={idx} className="text-sm italic text-muted-foreground leading-relaxed pl-1">
+                  <p key={idx} className="font-serif text-[15px] italic text-muted-foreground leading-relaxed pl-1">
                     {section.content}
                   </p>
                 );
@@ -167,7 +167,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-2">
                       <Icon className={`h-4 w-4 ${meta.color}`} />
-                      <p className={`text-sm font-medium ${meta.color}`}>
+                      <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
                         {meta.label}
                       </p>
                     </div>
@@ -179,7 +179,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
                       </span>
                     )}
                   </div>
-                  <div className="text-[15px] text-foreground leading-relaxed">
+                  <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65]">
                     {isLastSection
                       ? renderContentWithQuotes(displayContent, onSuggestionTap)
                       : <PatientCognitiveText content={displayContent} />
@@ -191,7 +191,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
           </div>
         ) : (
           <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
-            <div className="text-[15px] text-foreground leading-relaxed">
+            <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65]">
               {renderContentWithQuotes(
                 stripTimeSeriesBlocks(message.content || ""),
                 isStreaming ? undefined : onSuggestionTap

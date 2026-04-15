@@ -37,9 +37,9 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
       </div>
 
       {/* Four lanes */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 mt-6">
         {lanes.map((lane) => (
-          <div key={lane.key} className="space-y-2">
+          <div key={lane.key} className="space-y-2 min-w-[260px]">
             {data[lane.key].length === 0 && (
               <div className="rounded-lg border border-dashed border-border/40 p-3 text-center">
                 <p className="text-[10px] text-muted-foreground/50 italic">Nothing here</p>
@@ -48,10 +48,10 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
             {data[lane.key].map((item, idx) => (
               <div
                 key={idx}
-                className="rounded-lg p-3 border transition-colors hover:border-opacity-60 min-w-[220px]"
+                className="rounded-lg p-3 border transition-colors hover:border-opacity-60"
                 style={{ borderColor: `${lane.color}40`, backgroundColor: `${lane.color}08` }}
               >
-                <TappableProse text={item} className="text-[15px] text-foreground leading-snug" />
+                <TappableProse text={item} className="text-[14px] text-foreground leading-snug" />
               </div>
             ))}
           </div>
