@@ -37,9 +37,9 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
       </div>
 
       {/* Four lanes */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 mt-6">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 md:gap-4 mt-6 overflow-x-auto">
         {lanes.map((lane) => (
-          <div key={lane.key} className="space-y-2 min-w-[260px]">
+          <div key={lane.key} className="space-y-2 w-full sm:w-[calc(50%-0.375rem)] xl:w-[calc(25%-0.75rem)] sm:min-w-[240px] flex-shrink-0">
             {data[lane.key].length === 0 && (
               <div className="rounded-lg border border-dashed border-border/40 p-3 text-center">
                 <p className="text-[10px] text-muted-foreground/50 italic">Nothing here</p>
