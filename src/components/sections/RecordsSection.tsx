@@ -244,33 +244,49 @@ const RecordsSection: React.FC = () => {
       aside={aside}
       asideSticky
     >
-      {/* Upload button */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={triggerFilePicker}
-          disabled={uploading || processing}
-          className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50"
-        >
-          {uploading ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading...</>)
-           : processing ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading report...</>)
-           : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
-        </button>
-        <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-        <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
+      {/* Admin controls bar — only visible in view-as / admin mode */}
+      {(isViewingAs || isAdmin) && (
+        <div className="flex items-center gap-3 flex-wrap rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+          <span className="text-[10px] font-sans font-semibold uppercase tracking-[0.06em] text-muted-foreground">Admin</span>
+          <button
+            onClick={triggerFilePicker}
+            disabled={uploading || processing}
+            className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50"
+          >
+            {uploading ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading...</>)
+             : processing ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading report...</>)
+             : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
+          </button>
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
 
-        {/* Admin-only regenerate clusters button (visible in view-as mode or for admin viewing own profile) */}
-        {(isViewingAs || isAdmin) && (
           <button
             onClick={handleRegenerateClusters}
             disabled={regenerating}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50 ml-auto"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50"
           >
             {regenerating
               ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating...</>)
               : (<><Zap className="h-3.5 w-3.5" />Regenerate clusters</>)}
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Patient-facing upload button */}
+      {!isViewingAs && !isAdmin && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={triggerFilePicker}
+            disabled={uploading || processing}
+            className="flex items-center gap-1.5 rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50"
+          >
+            {uploading ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Uploading...</>)
+             : processing ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading report...</>)
+             : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
+          </button>
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+          <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
+        </div>
+      )}
 
       {/* Regenerate feedback */}
       {regenerateMsg && (
@@ -319,8 +335,8 @@ const RecordsSection: React.FC = () => {
       {/* ════════════════ CLUSTER TERRAIN SECTION ════════════════ */}
       {hasClusters && (
         <>
-          {/* Coherence Map */}
-          <div className="py-4">
+          {/* Coherence Map — centered with breathing room */}
+          <div className="py-8 flex flex-col items-center">
             <CoherenceMap clusters={clusters} />
           </div>
 
