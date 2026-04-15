@@ -64,7 +64,7 @@ export function parseCognitiveModeSubBlocks(content: string): { preamble: string
   COGNITIVE_MODE_HEADER_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = COGNITIVE_MODE_HEADER_RE.exec(content)) !== null) {
-    const headerText = match[0].replace(/[\*\*:]/g, '').trim().toLowerCase();
+    const headerText = match[0].replace(/\*/g, '').replace(/:/g, '').trim().toLowerCase();
     const mode = COGNITIVE_MODE_MAP[headerText];
     if (mode) {
       markers.push({ mode, start: match.index, headerEnd: match.index + match[0].length });
