@@ -48,7 +48,7 @@ const ChipGroup: React.FC<{
     <div>
       <div className="flex items-center gap-1.5 mb-2">
         {icon}
-        <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
+        <p className="text-[11px] font-sans font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {label}
         </p>
         <span className="text-[10px] text-muted-foreground/60 ml-auto">{sublabel}</span>
@@ -66,7 +66,7 @@ const ChipGroup: React.FC<{
           >
             <div className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
             <span className="font-medium text-foreground">{chip.name}</span>
-            <span className="font-mono text-muted-foreground opacity-75">{chip.value} {chip.unit}</span>
+            <span className="font-sans text-muted-foreground opacity-75 font-variant-numeric-tabular">{chip.value} {chip.unit}</span>
           </button>
         ))}
       </div>
@@ -141,7 +141,7 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <Database className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="text-[11px] font-sans font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                 Data window
               </p>
             </div>
@@ -160,7 +160,7 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
+            <p className="text-[11px] font-sans font-semibold uppercase tracking-[0.06em] text-muted-foreground">
               Conversation
             </p>
           </div>
