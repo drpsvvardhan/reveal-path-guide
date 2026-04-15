@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, Database, Eye, Clock, AlertTriangle, Sparkles, Anchor } from "lucide-react";
+import { Database, Eye, Clock, AlertTriangle, Sparkles, Anchor } from "lucide-react";
 
 export interface BiomarkerChip {
   name: string;
@@ -34,15 +34,57 @@ interface ChatReasoningTraceProps {
   onChipTap?: (question: string) => void;
 }
 
+type ChipSection = "flagged" | "notable" | "anchor";
+
+const BiomarkerPill: React.FC<{
+  chip: BiomarkerChip;
+  section: ChipSection;
+  onChipTap?: (question: string) => void;
+}> = ({ chip, section, onChipTap }) => {
+  return (
+    <button
+      onClick={() => {
+        const q = `Help me understand my ${chip.name} of ${chip.value} ${chip.unit}. What does this mean for me specifically and what's driving it?`;
+        onChipTap?.(q);
+      }}
+      className="w-full text-left transition-colors cursor-pointer"
+      title={`Ask about ${chip.name}`}
+    >
+      <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-background/50 border border-border/30 hover:bg-muted/30 hover:border-border/50">
+        <span
+          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+          style={{
+            backgroundColor:
+              section === "flagged"
+                ? "hsl(var(--amber))"
+                : section === "notable"
+                  ? "hsl(var(--teal))"
+                  : "hsl(var(--muted-foreground))",
+          }}
+        />
+        <span className="flex-1 truncate font-sans text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+          {chip.name}
+        </span>
+        <span className="font-mono text-[13px] font-medium tabular-nums text-foreground">
+          {chip.value}
+        </span>
+        <span className="font-sans text-[11px] font-medium text-muted-foreground">
+          {chip.unit}
+        </span>
+      </div>
+    </button>
+  );
+};
+
 const ChipGroup: React.FC<{
   label: string;
   sublabel: string;
   icon: React.ReactNode;
-  dotColor: string;
   chips: BiomarkerChip[];
+  section: ChipSection;
   onChipTap?: (question: string) => void;
   isFirst?: boolean;
-}> = ({ label, sublabel, icon, dotColor, chips, onChipTap, isFirst }) => {
+}> = ({ label, sublabel, icon, chips, section, onChipTap, isFirst }) => {
   if (chips.length === 0) return null;
 
   return (
@@ -55,22 +97,14 @@ const ChipGroup: React.FC<{
         </p>
       </div>
       <p className="text-[10px] text-muted-foreground/60 mb-2.5 pl-5">{sublabel}</p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="space-y-1.5">
         {chips.map((chip, idx) => (
-          <button
+          <BiomarkerPill
             key={idx}
-            onClick={() => {
-              const q = `Help me understand my ${chip.name} of ${chip.value} ${chip.unit}. What does this mean for me specifically and what's driving it?`;
-              onChipTap?.(q);
-            }}
-            className="group inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 border-border/60 bg-background hover:bg-muted/60 hover:border-border transition-colors cursor-pointer text-left"
-            title={`Ask about ${chip.name}`}
-          >
-            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotColor}`} />
-            <span className="font-sans text-[12px] font-semibold text-foreground uppercase" style={{ fontVariant: 'all-small-caps' }}>{chip.name}</span>
-            <span className="font-mono text-[14px] text-foreground" style={{ fontWeight: 500 }}>{chip.value}</span>
-            <span className="font-sans text-[11px] font-medium text-muted-foreground/60">{chip.unit}</span>
-          </button>
+            chip={chip}
+            section={section}
+            onChipTap={onChipTap}
+          />
         ))}
       </div>
     </div>
@@ -89,12 +123,6 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
   const anchor = askContext?.biomarker_chips?.anchor || [];
   const totalChips = flagged.length + notable.length + anchor.length;
 
-  // Track which is the first non-empty group
-  const groups = [
-    { key: "flagged", chips: flagged },
-    { key: "notable", chips: notable },
-    { key: "anchor", chips: anchor },
-  ];
   let firstGroupRendered = false;
 
   return (
@@ -119,7 +147,6 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
       <div className="h-px bg-border/60 mx-6 shrink-0" />
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-0">
-        {/* Biomarker chip groups */}
         {flagged.length > 0 && (() => {
           const isFirst = !firstGroupRendered;
           firstGroupRendered = true;
@@ -127,9 +154,9 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
             <ChipGroup
               label="Flagged"
               sublabel="needs attention"
-              icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
-              dotColor="bg-amber-500"
+              icon={<AlertTriangle className="h-3.5 w-3.5 text-amber" />}
               chips={flagged}
+              section="flagged"
               onChipTap={onChipTap}
               isFirst={isFirst}
             />
@@ -143,9 +170,9 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
             <ChipGroup
               label="Notable"
               sublabel="worth celebrating"
-              icon={<Sparkles className="h-3.5 w-3.5 text-teal-500" />}
-              dotColor="bg-teal-500"
+              icon={<Sparkles className="h-3.5 w-3.5 text-teal" />}
               chips={notable}
+              section="notable"
               onChipTap={onChipTap}
               isFirst={isFirst}
             />
@@ -160,15 +187,14 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
               label="Anchor"
               sublabel="central to your story"
               icon={<Anchor className="h-3.5 w-3.5 text-muted-foreground" />}
-              dotColor="bg-slate-400"
               chips={anchor}
+              section="anchor"
               onChipTap={onChipTap}
               isFirst={isFirst}
             />
           );
         })()}
 
-        {/* Data window */}
         {dataWindow && (
           <div className={totalChips > 0 ? "pt-6" : ""}>
             {totalChips > 0 && <div className="h-px bg-border/40 -mt-3 mb-3" />}
@@ -189,7 +215,6 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
           </div>
         )}
 
-        {/* Conversation stats */}
         <div className={totalChips > 0 || dataWindow ? "pt-6" : ""}>
           {(totalChips > 0 || dataWindow) && <div className="h-px bg-border/40 -mt-3 mb-3" />}
           <div className="flex items-center gap-1.5 mb-2">
@@ -214,7 +239,6 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
           </div>
         </div>
 
-        {/* Empty state */}
         {totalChips === 0 && (
           <div className="py-8 text-center">
             <Eye className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
