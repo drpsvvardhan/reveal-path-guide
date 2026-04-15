@@ -8,7 +8,7 @@ import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import TerrainRadar from "@/components/visuals/TerrainRadar";
 import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import TappableProse from "@/components/terrain/TappableProse";
-import { useSignatureColor } from "@/context/SignatureColorContext";
+
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
@@ -76,7 +76,7 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
 
 const ThesisSection: React.FC = () => {
   const manifest = useActiveManifest();
-  const { color: signature } = useSignatureColor();
+  
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
   const { domainScores, gateScores } = useCIEAssessment();
@@ -164,29 +164,12 @@ const ThesisSection: React.FC = () => {
       }
       aside={
         asideItems.length > 0 ? (
-          <div className="space-y-4">
-            <AsideInfoPanel
-              title="Your signature"
-              items={[
-                { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
-              ]}
-              footnote={signature.explanation}
-            />
-            <AsideInfoPanel
-              title="Biological terrain"
-              items={asideItems}
-              footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
-            />
-          </div>
-        ) : (
           <AsideInfoPanel
-            title="Your signature"
-            items={[
-              { label: "Dominant pattern", value: signature.label, subvalue: `${signature.category} focus`, tone: "accent" },
-            ]}
-            footnote={signature.explanation}
+            title="Biological terrain"
+            items={asideItems}
+            footnote="Your biological terrain is a snapshot of how different systems are functioning right now."
           />
-        )
+        ) : undefined
       }
       asideSticky
     >
