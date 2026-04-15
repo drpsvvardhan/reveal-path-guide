@@ -159,33 +159,57 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               const isLastSection = idx === (message.sections?.length ?? 0) - 1;
               // Strip time series markup from section content
               const displayContent = stripTimeSeriesBlocks(section.content);
+              
+              // Parse cognitive mode sub-blocks
+              const { preamble, subBlocks } = parseCognitiveModeSubBlocks(displayContent);
+              const hasSubBlocks = subBlocks.length > 0;
 
               return (
                 <div
                   key={idx}
                   className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5"
                 >
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <Icon className={`h-4 w-4 ${meta.color}`} />
-                      <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
-                        {meta.label}
-                      </p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className={`h-4 w-4 ${meta.color}`} />
+                    <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
+                      {meta.label}
+                    </p>
+                  </div>
+                  
+                  {hasSubBlocks ? (
+                    <div className="space-y-6">
+                      {preamble && (
+                        <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                          <PatientCognitiveText content={preamble} />
+                        </div>
+                      )}
+                      {subBlocks.map((block, bi) => {
+                        const modeMeta = modeLabels[block.mode];
+                        return (
+                          <div key={bi}>
+                            <p
+                              className={`font-sans text-[11px] font-semibold uppercase tracking-[0.06em] mb-4 ${modeMeta?.headerColor || 'text-muted-foreground'}`}
+                            >
+                              {modeMeta?.label || block.mode}
+                            </p>
+                            <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                              {bi === subBlocks.length - 1 && isLastSection
+                                ? renderContentWithQuotes(block.content, onSuggestionTap)
+                                : <PatientCognitiveText content={block.content} />
+                              }
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {section.mode && modeLabels[section.mode] && (
-                      <span
-                        className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${modeLabels[section.mode].color}`}
-                      >
-                        {modeLabels[section.mode].label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65]">
-                    {isLastSection
-                      ? renderContentWithQuotes(displayContent, onSuggestionTap)
-                      : <PatientCognitiveText content={displayContent} />
-                    }
-                  </div>
+                  ) : (
+                    <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                      {isLastSection
+                        ? renderContentWithQuotes(displayContent, onSuggestionTap)
+                        : <PatientCognitiveText content={displayContent} />
+                      }
+                    </div>
+                  )}
                 </div>
               );
             })}
