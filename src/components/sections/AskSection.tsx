@@ -41,8 +41,10 @@ const MODE_PATTERNS = [
   { label: "FROM MEDICAL KNOWLEDGE", mode: "from_knowledge" as const },
 ];
 
-/** Regex to detect cognitive mode sub-block headers (bold markdown or all-caps) */
-const COGNITIVE_MODE_HEADER_RE = /(?:^|\n)\s*(?:\*\*(?:From your data|Putting it together|From medical knowledge):?\*\*|(?:FROM YOUR DATA|PUTTING IT TOGETHER|FROM MEDICAL KNOWLEDGE):?)\s*/gi;
+/** Regex to detect cognitive mode sub-block headers (bold markdown or all-caps).
+ *  Handles: **From your data:** / **From your data**: / **From your data** / FROM YOUR DATA:
+ *  Works both at line start AND inline (mid-paragraph). */
+const COGNITIVE_MODE_HEADER_RE = /\s*\*\*\s*(?:From your data|Putting it together|From medical knowledge)\s*:?\s*\*\*\s*:?\s*|\s*(?:FROM YOUR DATA|PUTTING IT TOGETHER|FROM MEDICAL KNOWLEDGE)\s*:?\s*/gi;
 
 const COGNITIVE_MODE_MAP: Record<string, "from_data" | "putting_together" | "from_knowledge"> = {
   "from your data": "from_data",
