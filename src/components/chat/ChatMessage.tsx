@@ -40,9 +40,9 @@ const sectionMeta: Record<string, { label: string; icon: React.FC<any>; color: s
 };
 
 const modeLabels: Record<string, { label: string; color: string; headerColor: string }> = {
-  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200", headerColor: "text-teal-600/70" },
-  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200", headerColor: "text-blue-600/70" },
-  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200", headerColor: "text-slate-500/70" },
+  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200", headerColor: "text-teal-600" },
+  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200", headerColor: "text-purple-600" },
+  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200", headerColor: "text-amber-600" },
 };
 
 /** Extract quoted suggestions (text in "...") from content */
