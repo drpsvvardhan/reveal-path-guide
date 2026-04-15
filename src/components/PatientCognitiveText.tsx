@@ -34,7 +34,7 @@ const PatientCognitiveText: React.FC<PatientCognitiveTextProps> = ({ content, cl
   MARKER_REGEX.lastIndex = 0;
 
   if (!hasMarkers) {
-    return <span className={`whitespace-pre-line ${className}`}>{content}</span>;
+    return <span className={`whitespace-pre-line ${className}`}>{renderInlineMarkdown(content)}</span>;
   }
 
   const parts = content.split(MARKER_REGEX);
@@ -53,7 +53,7 @@ const PatientCognitiveText: React.FC<PatientCognitiveTextProps> = ({ content, cl
             </span>
           );
         }
-        return <React.Fragment key={i}>{part}</React.Fragment>;
+        return <React.Fragment key={i}>{renderInlineMarkdown(part)}</React.Fragment>;
       })}
     </span>
   );
