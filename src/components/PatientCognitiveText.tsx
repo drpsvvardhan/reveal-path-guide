@@ -23,6 +23,31 @@ const PATIENT_MODES = [
 
 const MARKER_REGEX = /(FROM YOUR DATA:|PUTTING IT TOGETHER:|FROM MEDICAL KNOWLEDGE:)/g;
 
+/** Parse **bold** and *italic* markdown into React elements */
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  // Match **bold** first, then *italic*
+  const parts: React.ReactNode[] = [];
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    if (match[2]) {
+      parts.push(<strong key={key++} className="font-semibold">{match[2]}</strong>);
+    } else if (match[3]) {
+      parts.push(<em key={key++}>{match[3]}</em>);
+    }
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : [text];
+}
+
 interface PatientCognitiveTextProps {
   content: string;
   className?: string;
