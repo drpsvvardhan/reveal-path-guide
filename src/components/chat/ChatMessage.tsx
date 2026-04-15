@@ -4,6 +4,7 @@ import PatientCognitiveText from "@/components/PatientCognitiveText";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 import TimeSeriesBlock from "@/components/chat/TimeSeriesBlock";
 import { parseTimeSeriesBlocks, stripTimeSeriesBlocks } from "@/lib/timeSeriesParser";
+import { parseCognitiveModeSubBlocks, type CognitiveModeSubBlock } from "@/components/sections/AskSection";
 import type { ParsedTimeSeries } from "@/lib/timeSeriesParser";
 import type { VocabularyViolation } from "@/lib/voiceValidation";
 
@@ -38,10 +39,10 @@ const sectionMeta: Record<string, { label: string; icon: React.FC<any>; color: s
   acknowledgment: { label: "", icon: MessageCircle, color: "text-muted-foreground" },
 };
 
-const modeLabels: Record<string, { label: string; color: string }> = {
-  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200" },
-  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200" },
+const modeLabels: Record<string, { label: string; color: string; headerColor: string }> = {
+  from_data: { label: "From your data", color: "bg-teal-100 text-teal-700 border-teal-200", headerColor: "text-teal-600/70" },
+  putting_together: { label: "Putting it together", color: "bg-blue-100 text-blue-700 border-blue-200", headerColor: "text-blue-600/70" },
+  from_knowledge: { label: "From medical knowledge", color: "bg-slate-100 text-slate-700 border-slate-200", headerColor: "text-slate-500/70" },
 };
 
 /** Extract quoted suggestions (text in "...") from content */
@@ -158,33 +159,57 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               const isLastSection = idx === (message.sections?.length ?? 0) - 1;
               // Strip time series markup from section content
               const displayContent = stripTimeSeriesBlocks(section.content);
+              
+              // Parse cognitive mode sub-blocks
+              const { preamble, subBlocks } = parseCognitiveModeSubBlocks(displayContent);
+              const hasSubBlocks = subBlocks.length > 0;
 
               return (
                 <div
                   key={idx}
                   className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5"
                 >
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <Icon className={`h-4 w-4 ${meta.color}`} />
-                      <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
-                        {meta.label}
-                      </p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className={`h-4 w-4 ${meta.color}`} />
+                    <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
+                      {meta.label}
+                    </p>
+                  </div>
+                  
+                  {hasSubBlocks ? (
+                    <div className="space-y-6">
+                      {preamble && (
+                        <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                          <PatientCognitiveText content={preamble} />
+                        </div>
+                      )}
+                      {subBlocks.map((block, bi) => {
+                        const modeMeta = modeLabels[block.mode];
+                        return (
+                          <div key={bi}>
+                            <p
+                              className={`font-sans text-[11px] font-semibold uppercase tracking-[0.06em] mb-4 ${modeMeta?.headerColor || 'text-muted-foreground'}`}
+                            >
+                              {modeMeta?.label || block.mode}
+                            </p>
+                            <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                              {bi === subBlocks.length - 1 && isLastSection
+                                ? renderContentWithQuotes(block.content, onSuggestionTap)
+                                : <PatientCognitiveText content={block.content} />
+                              }
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {section.mode && modeLabels[section.mode] && (
-                      <span
-                        className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded border ${modeLabels[section.mode].color}`}
-                      >
-                        {modeLabels[section.mode].label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65]">
-                    {isLastSection
-                      ? renderContentWithQuotes(displayContent, onSuggestionTap)
-                      : <PatientCognitiveText content={displayContent} />
-                    }
-                  </div>
+                  ) : (
+                    <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                      {isLastSection
+                        ? renderContentWithQuotes(displayContent, onSuggestionTap)
+                        : <PatientCognitiveText content={displayContent} />
+                      }
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -41,6 +41,63 @@ const MODE_PATTERNS = [
   { label: "FROM MEDICAL KNOWLEDGE", mode: "from_knowledge" as const },
 ];
 
+/** Regex to detect cognitive mode sub-block headers (bold markdown or all-caps) */
+const COGNITIVE_MODE_HEADER_RE = /(?:^|\n)\s*(?:\*\*(?:From your data|Putting it together|From medical knowledge):?\*\*|(?:FROM YOUR DATA|PUTTING IT TOGETHER|FROM MEDICAL KNOWLEDGE):?)\s*/gi;
+
+const COGNITIVE_MODE_MAP: Record<string, "from_data" | "putting_together" | "from_knowledge"> = {
+  "from your data": "from_data",
+  "putting it together": "putting_together",
+  "from medical knowledge": "from_knowledge",
+};
+
+export interface CognitiveModeSubBlock {
+  mode: "from_data" | "putting_together" | "from_knowledge";
+  content: string;
+}
+
+/** Parse cognitive mode sub-blocks within a section's content */
+export function parseCognitiveModeSubBlocks(content: string): { preamble: string; subBlocks: CognitiveModeSubBlock[] } {
+  const markers: { mode: "from_data" | "putting_together" | "from_knowledge"; start: number; headerEnd: number }[] = [];
+  
+  COGNITIVE_MODE_HEADER_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = COGNITIVE_MODE_HEADER_RE.exec(content)) !== null) {
+    const headerText = match[0].replace(/[\*\*:]/g, '').trim().toLowerCase();
+    const mode = COGNITIVE_MODE_MAP[headerText];
+    if (mode) {
+      markers.push({ mode, start: match.index, headerEnd: match.index + match[0].length });
+    }
+  }
+
+  if (markers.length === 0) {
+    // Fallback: check for old-style inline markers
+    for (const mp of MODE_PATTERNS) {
+      const idx = content.indexOf(mp.label);
+      if (idx !== -1) {
+        markers.push({ mode: mp.mode, start: idx, headerEnd: idx + mp.label.length + 1 });
+      }
+    }
+    markers.sort((a, b) => a.start - b.start);
+  }
+
+  if (markers.length === 0) {
+    return { preamble: content, subBlocks: [] };
+  }
+
+  const preamble = content.slice(0, markers[0].start).trim();
+  const subBlocks: CognitiveModeSubBlock[] = [];
+
+  for (let i = 0; i < markers.length; i++) {
+    const blockEnd = i + 1 < markers.length ? markers[i + 1].start : content.length;
+    const blockContent = content.slice(markers[i].headerEnd, blockEnd).trim();
+    if (blockContent) {
+      subBlocks.push({ mode: markers[i].mode, content: blockContent });
+    }
+  }
+
+  return { preamble, subBlocks };
+}
+
 function parseAssistantResponse(raw: string): ChatMessageData["sections"] {
   const found: { type: typeof SECTION_MARKERS[number]["type"]; start: number; headerEnd: number }[] = [];
   for (const m of SECTION_MARKERS) {
@@ -64,13 +121,9 @@ function parseAssistantResponse(raw: string): ChatMessageData["sections"] {
     let content = raw.slice(contentStart, contentEnd).trim();
     if (!content) continue;
 
-    let mode: "from_data" | "putting_together" | "from_knowledge" | undefined;
-    for (const mp of MODE_PATTERNS) {
-      if (content.includes(mp.label)) {
-        mode = mp.mode;
-        break;
-      }
-    }
+    // Determine dominant mode from first sub-block (for backward compat)
+    const { subBlocks } = parseCognitiveModeSubBlocks(content);
+    const mode = subBlocks.length > 0 ? subBlocks[0].mode : undefined;
 
     sections.push({ type: found[i].type, mode, content });
   }
