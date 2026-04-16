@@ -178,7 +178,10 @@ OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
   "meta": {
     "source_lab": "string — name of the laboratory (Quest Diagnostics, LabCorp, hospital name) or null",
     "collection_date": "string — specimen collection date in ISO format YYYY-MM-DD, or null if not visible",
-    "ordering_provider": "string — doctor or clinic name who ordered the labs, or null"
+    "ordering_provider": "string — doctor or clinic name who ordered the labs, or null",
+    "patient_name": "string — full patient name exactly as printed on the report, or null",
+    "patient_dob": "string — patient date of birth in YYYY-MM-DD if present, or null",
+    "patient_mrn": "string — Medical Record Number / Patient ID if present, or null"
   },
   "observations": [
     {
@@ -247,7 +250,10 @@ OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
     "source_lab": "InBody",
     "collection_date": "string — test date in ISO format YYYY-MM-DD",
     "ordering_provider": null,
-    "is_inbody": true
+    "is_inbody": true,
+    "patient_name": "string — full patient name exactly as printed on the report, or null",
+    "patient_dob": "string — patient date of birth in YYYY-MM-DD if present, or null",
+    "patient_mrn": "string — Member ID / Patient ID if present, or null"
   },
   "observations": [
     {
@@ -442,6 +448,9 @@ interface ExtractionResult {
     collection_date: string | null;
     ordering_provider: string | null;
     is_inbody?: boolean;
+    patient_name: string | null;
+    patient_dob: string | null;
+    patient_mrn: string | null;
   };
   observations: ExtractedObservation[];
 }
@@ -456,6 +465,9 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
       collection_date: typeof raw.meta?.collection_date === "string" ? raw.meta.collection_date : null,
       ordering_provider: typeof raw.meta?.ordering_provider === "string" ? raw.meta.ordering_provider : null,
       is_inbody: raw.meta?.is_inbody === true,
+      patient_name: typeof raw.meta?.patient_name === "string" ? raw.meta.patient_name : null,
+      patient_dob: typeof raw.meta?.patient_dob === "string" ? raw.meta.patient_dob : null,
+      patient_mrn: typeof raw.meta?.patient_mrn === "string" ? raw.meta.patient_mrn : null,
     },
     observations: [],
   };
