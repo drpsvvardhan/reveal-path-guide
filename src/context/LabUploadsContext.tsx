@@ -213,6 +213,26 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             };
           }
 
+          if (updated.status === "awaiting_identity_confirmation") {
+            // Stop polling — RecordsSection will surface a confirmation modal driven by `uploads`.
+            await refresh();
+            return {
+              success: false,
+              awaiting_identity_confirmation: true,
+              upload_id: uploadRow.id,
+            } as any;
+          }
+
+          if (updated.status === "rejected_identity") {
+            await refresh();
+            return { success: false, error: "Report rejected: name does not match your account." };
+          }
+
+          if (updated.status === "rejected_duplicate") {
+            await refresh();
+            return { success: false, error: "You already uploaded this file." };
+          }
+
           if (updated.status === "failed") {
             await refresh();
             return { success: false, error: updated.error_message || "Extraction failed" };
