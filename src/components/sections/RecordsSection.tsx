@@ -20,6 +20,7 @@ import { ClusterTier } from "@/types/clusters";
 import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
 import { CelfExportButton } from "@/components/CelfExportButton";
+import IdentityConfirmModal, { IdentityConfirmRequest } from "@/components/records/IdentityConfirmModal";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
@@ -86,7 +87,49 @@ const RecordsSection: React.FC = () => {
   const [uploadsOpen, setUploadsOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
+  const [identityRequest, setIdentityRequest] = useState<IdentityConfirmRequest | null>(null);
   const { navigateTo } = useNavigation();
+
+  // Surface confirmation modal whenever an upload lands in awaiting state.
+  useEffect(() => {
+    if (identityRequest) return;
+    const awaiting = uploads.find((u: any) => u.status === "awaiting_identity_confirmation");
+    if (!awaiting) return;
+    const a: any = awaiting;
+    const kind: "unknown" | "mismatch" =
+      a.name_match_status === "needs_confirmation_mismatch" ? "mismatch" : "unknown";
+    const isFibro = (a.original_filename ?? "").startsWith("[FibroScan]");
+    setIdentityRequest({
+      uploadId: a.id,
+      kind,
+      extractedName: a.extracted_patient_name ?? null,
+      accountName: user?.user_metadata?.full_name ?? user?.email ?? null,
+      score: a.name_match_score ?? null,
+      processor: isFibro ? "process-fibroscan" : "process-lab-pdf",
+      storagePath: a.storage_path,
+    });
+  }, [uploads, identityRequest, user]);
+
+  const handleIdentityConfirm = useCallback(async (req: IdentityConfirmRequest, confirmedName: string) => {
+    const overrideKind = req.kind === "mismatch" ? "mismatch_overridden" : "unknown_accepted";
+    const body: any = req.processor === "process-lab-pdf"
+      ? { uploadId: req.uploadId, identity_override: { kind: overrideKind, confirmed_name: confirmedName } }
+      : { upload_id: req.uploadId, storage_path: req.storagePath, identity_override: { kind: overrideKind, confirmed_name: confirmedName } };
+    const { error } = await supabase.functions.invoke(req.processor, { body });
+    if (error) throw new Error(error.message ?? "Could not confirm");
+    setIdentityRequest(null);
+    // small delay then refresh so the new status propagates
+    setTimeout(() => { window.location.reload(); }, 1500);
+  }, []);
+
+  const handleIdentityReject = useCallback(async (req: IdentityConfirmRequest) => {
+    const { error } = await supabase.functions.invoke("reject-upload-identity", {
+      body: { upload_id: req.uploadId },
+    });
+    if (error) throw new Error(error.message ?? "Could not reject");
+    setIdentityRequest(null);
+    window.location.reload();
+  }, []);
 
   /* ── Deep-link scroll-and-highlight from #cluster-{id} ── */
   useEffect(() => {
@@ -676,6 +719,13 @@ const RecordsSection: React.FC = () => {
       <div className="border-t border-border pt-6 mt-6">
         <CelfExportButton />
       </div>
+
+      <IdentityConfirmModal
+        request={identityRequest}
+        onConfirm={handleIdentityConfirm}
+        onReject={handleIdentityReject}
+        onClose={() => setIdentityRequest(null)}
+      />
     </PatientSectionLayout>
   );
 };

@@ -5,7 +5,14 @@
 // Writes each measurement as a row in patient_lab_observations with
 // source='fibroscan' so the CELF adapter picks them up.
 //
-// Same identity/dedup guards as process-lab-pdf.
+// Identity flow:
+//   - match    -> proceed and write observations.
+//   - mismatch -> set status='awaiting_identity_confirmation' and stop.
+//                 Front end shows a typed-confirmation modal.
+//   - unknown  -> same await state. Front end shows a yes/no modal.
+//   - With identity_override:{kind:'unknown_accepted'|'mismatch_overridden',
+//     confirmed_name:string} the function bypasses the guard, records the
+//     override, and writes observations.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -53,6 +60,11 @@ LSM is liver stiffness in kPa (typical range 2-75).
 If a value is not present, use null.
 Do not invent values.`;
 
+type IdentityOverride = {
+  kind: "unknown_accepted" | "mismatch_overridden";
+  confirmed_name: string;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -76,6 +88,7 @@ serve(async (req) => {
 
     const body = await req.json();
     const { upload_id: uploadId, storage_path: storagePath } = body;
+    const identityOverride: IdentityOverride | undefined = body.identity_override;
     if (!uploadId || !storagePath) {
       return new Response(JSON.stringify({ error: "missing upload_id or storage_path" }), {
         status: 400,
@@ -85,10 +98,9 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceKey);
 
-    // Fetch upload row
     const { data: uploadRow, error: uErr } = await sb
       .from("patient_lab_uploads")
-      .select("id, original_filename, user_id")
+      .select("id, original_filename, user_id, status, extracted_patient_name, name_match_score, name_match_status")
       .eq("id", uploadId)
       .eq("user_id", userId)
       .single();
@@ -114,9 +126,9 @@ serve(async (req) => {
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer());
     const contentSha = await sha256Bytes(pdfBytes);
 
-    // -------- Guard 1: duplicate check --------
+    // -------- Guard 1: duplicate check (skip when this is the same upload re-trying after confirmation) --------
     const dedup = await checkContentDuplicate(sb, userId, contentSha);
-    if (dedup.isDuplicate) {
+    if (dedup.isDuplicate && dedup.existingUploadId !== uploadRow.id) {
       await recordRejection(sb, {
         userId,
         uploadId: uploadRow.id,
@@ -177,48 +189,59 @@ serve(async (req) => {
       name_match_status:      identity.status,
     }).eq("id", uploadRow.id);
 
-    if (identity.status === "mismatch") {
-      await recordRejection(sb, {
-        userId,
-        uploadId: uploadRow.id,
-        fileName: uploadRow.original_filename,
-        category: "identity_mismatch",
-        detail: `FibroScan name "${identity.extractedName}" ≠ account "${identity.accountName}"`,
-        accountHolderName: identity.accountName,
-        extractedPatientName: identity.extractedName,
-        nameMatchScore: identity.score,
-        contentSha256: contentSha,
-      });
-      return new Response(JSON.stringify({
-        error: "identity_mismatch",
-        message: `This FibroScan appears to be for "${identity.extractedName}". For patient safety, we can't add it to your record.`,
-        extracted_name: identity.extractedName,
-        account_name: identity.accountName,
-      }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // ---- override branch: caller has explicitly confirmed identity from the UI ----
+    if (identityOverride) {
+      const validKind = identityOverride.kind === "unknown_accepted" || identityOverride.kind === "mismatch_overridden";
+      if (!validKind || typeof identityOverride.confirmed_name !== "string" || identityOverride.confirmed_name.trim().length < 2) {
+        return new Response(JSON.stringify({ error: "invalid_identity_override" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      await sb.from("patient_lab_uploads").update({
+        identity_confirmed_at: new Date().toISOString(),
+        identity_confirmed_name: identityOverride.confirmed_name.trim(),
+        identity_confirmation_kind: identityOverride.kind,
+        name_match_status: "confirmed_by_user",
+      }).eq("id", uploadRow.id);
+    } else {
+      // ---- no override: enforce gates ----
+      if (identity.status === "mismatch") {
+        await sb.from("patient_lab_uploads").update({
+          status: "awaiting_identity_confirmation",
+          name_match_status: "needs_confirmation_mismatch",
+        }).eq("id", uploadRow.id);
+        return new Response(JSON.stringify({
+          status: "awaiting_identity_confirmation",
+          kind: "mismatch",
+          extracted_name: identity.extractedName,
+          account_name: identity.accountName,
+          score: identity.score,
+          message: `This FibroScan appears to be for "${identity.extractedName}". Confirm before we add it.`,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    if (identity.status === "unknown" && identity.reason !== "no_name_extracted") {
-      await recordRejection(sb, {
-        userId,
-        uploadId: uploadRow.id,
-        fileName: uploadRow.original_filename,
-        category: "identity_mismatch",
-        detail: `FibroScan identity inconclusive: ${identity.reason}`,
-        accountHolderName: identity.accountName,
-        extractedPatientName: identity.extractedName,
-        nameMatchScore: identity.score,
-        contentSha256: contentSha,
-      });
-      return new Response(JSON.stringify({
-        error: "identity_inconclusive",
-        message: "We couldn't confirm this FibroScan is for you. Please update your profile with an alias if this is your report.",
-      }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (identity.status === "unknown" && identity.reason !== "no_name_extracted") {
+        await sb.from("patient_lab_uploads").update({
+          status: "awaiting_identity_confirmation",
+          name_match_status: "needs_confirmation_unknown",
+        }).eq("id", uploadRow.id);
+        return new Response(JSON.stringify({
+          status: "awaiting_identity_confirmation",
+          kind: "unknown",
+          extracted_name: identity.extractedName,
+          account_name: identity.accountName,
+          score: identity.score,
+          reason: identity.reason,
+          message: `We couldn't confirm this report belongs to you. Is "${identity.extractedName ?? "the name on this report"}" you?`,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // -------- Write observations --------
@@ -243,7 +266,6 @@ serve(async (req) => {
       });
     };
 
-    // Numeric measurements only — value column is NOT NULL numeric.
     pushObs("CAP", m.cap_median, "dB/m");
     pushObs("CAP IQR", m.cap_iqr, "dB/m");
     pushObs("LSM", m.lsm_median, "kPa");
@@ -252,7 +274,6 @@ serve(async (req) => {
     pushObs("Success Rate", m.success_rate_pct, "%");
     pushObs("Valid Measurements", m.valid_measurements, "count");
 
-    // Grades/stages: parse the leading digit (S2 -> 2, F3 -> 3) so they fit numeric value.
     const parseStage = (v: unknown): number | null => {
       if (typeof v !== "string") return null;
       const match = v.match(/(\d)/);
@@ -276,6 +297,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       ok: true,
+      status: "complete",
       extracted: {
         exam_date: examDate,
         measurements_written: obsRows.length,

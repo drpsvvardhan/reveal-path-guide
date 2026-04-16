@@ -677,6 +677,9 @@ export type Database = {
           extracted_patient_name: string | null
           file_size_bytes: number | null
           id: string
+          identity_confirmation_kind: string | null
+          identity_confirmed_at: string | null
+          identity_confirmed_name: string | null
           name_match_score: number | null
           name_match_status: string | null
           observations_duplicates: number | null
@@ -705,6 +708,9 @@ export type Database = {
           extracted_patient_name?: string | null
           file_size_bytes?: number | null
           id?: string
+          identity_confirmation_kind?: string | null
+          identity_confirmed_at?: string | null
+          identity_confirmed_name?: string | null
           name_match_score?: number | null
           name_match_status?: string | null
           observations_duplicates?: number | null
@@ -733,6 +739,9 @@ export type Database = {
           extracted_patient_name?: string | null
           file_size_bytes?: number | null
           id?: string
+          identity_confirmation_kind?: string | null
+          identity_confirmed_at?: string | null
+          identity_confirmed_name?: string | null
           name_match_score?: number | null
           name_match_status?: string | null
           observations_duplicates?: number | null

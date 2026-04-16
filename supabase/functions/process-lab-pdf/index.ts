@@ -497,7 +497,12 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
 // BACKGROUND PROCESSING
 // ============================================================================
 
-async function processUpload(uploadId: string) {
+type IdentityOverride = {
+  kind: "unknown_accepted" | "mismatch_overridden";
+  confirmed_name: string;
+};
+
+async function processUpload(uploadId: string, identityOverride?: IdentityOverride) {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -592,48 +597,52 @@ async function processUpload(uploadId: string) {
 
     const identity = await verifyPatientIdentity(supabase, upload.user_id, extractedPatientName);
 
-    if (identity.status === "mismatch") {
-      await recordRejection(supabase, {
-        userId: upload.user_id,
-        uploadId,
-        fileName: upload.original_filename,
-        category: "identity_mismatch",
-        detail: `Extracted name "${identity.extractedName}" does not match account holder "${identity.accountName}" (score ${identity.score})`,
-        accountHolderName: identity.accountName,
-        extractedPatientName: identity.extractedName,
-        nameMatchScore: identity.score,
-        contentSha256,
-      });
-      console.log(`Upload ${uploadId} rejected for identity mismatch (score=${identity.score})`);
-      return;
-    }
+    // Persist score so the UI can show context in the confirmation modal.
+    await supabase.from("patient_lab_uploads").update({
+      name_match_score: identity.score,
+    }).eq("id", uploadId);
 
-    if (identity.status === "unknown") {
+    if (identityOverride) {
+      // Caller has explicitly confirmed identity from the UI. Bypass the gate
+      // and record what they confirmed.
+      const validKind =
+        identityOverride.kind === "unknown_accepted" ||
+        identityOverride.kind === "mismatch_overridden";
+      if (!validKind || typeof identityOverride.confirmed_name !== "string" || identityOverride.confirmed_name.trim().length < 2) {
+        throw new Error("invalid_identity_override");
+      }
+      await supabase.from("patient_lab_uploads").update({
+        name_match_status: "confirmed_by_user",
+        identity_confirmed_at: new Date().toISOString(),
+        identity_confirmed_name: identityOverride.confirmed_name.trim(),
+        identity_confirmation_kind: identityOverride.kind,
+      }).eq("id", uploadId);
+    } else if (identity.status === "mismatch") {
+      // Hard mismatch — pause for the user to either override (typed name) or reject.
+      await supabase.from("patient_lab_uploads").update({
+        status: "awaiting_identity_confirmation",
+        name_match_status: "needs_confirmation_mismatch",
+      }).eq("id", uploadId);
+      console.log(`Upload ${uploadId} awaiting identity confirmation (mismatch, score=${identity.score})`);
+      return;
+    } else if (identity.status === "unknown") {
       if (identity.reason === "no_name_extracted") {
-        // Couldn't read a name — flag for review but allow observation writes.
+        // No name on the report — record as pending and proceed (we can't ask the user "is this you?" with no name to show).
         await supabase.from("patient_lab_uploads").update({
           name_match_status: "pending",
-          name_match_score: identity.score,
         }).eq("id", uploadId);
       } else {
-        await recordRejection(supabase, {
-          userId: upload.user_id,
-          uploadId,
-          fileName: upload.original_filename,
-          category: "identity_mismatch",
-          detail: `Identity verification inconclusive: ${identity.reason}. Extracted: "${identity.extractedName}", Account: "${identity.accountName}", score ${identity.score}`,
-          accountHolderName: identity.accountName,
-          extractedPatientName: identity.extractedName,
-          nameMatchScore: identity.score,
-          contentSha256,
-        });
-        console.log(`Upload ${uploadId} rejected as identity_inconclusive (${identity.reason})`);
+        // We have a name but score is borderline — pause for a simple yes/no.
+        await supabase.from("patient_lab_uploads").update({
+          status: "awaiting_identity_confirmation",
+          name_match_status: "needs_confirmation_unknown",
+        }).eq("id", uploadId);
+        console.log(`Upload ${uploadId} awaiting identity confirmation (unknown: ${identity.reason})`);
         return;
       }
     } else {
       await supabase.from("patient_lab_uploads").update({
         name_match_status: "match",
-        name_match_score: identity.score,
       }).eq("id", uploadId);
     }
 
@@ -733,6 +742,7 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { uploadId } = body;
+    const identityOverride: IdentityOverride | undefined = body.identity_override;
 
     if (!uploadId) {
       return new Response(JSON.stringify({ error: "No uploadId provided" }), {
@@ -761,7 +771,7 @@ serve(async (req) => {
     }
 
     // @ts-ignore — EdgeRuntime is available in Supabase edge functions
-    EdgeRuntime.waitUntil(processUpload(uploadId));
+    EdgeRuntime.waitUntil(processUpload(uploadId, identityOverride));
 
     return new Response(
       JSON.stringify({ message: "Processing started", uploadId }),
