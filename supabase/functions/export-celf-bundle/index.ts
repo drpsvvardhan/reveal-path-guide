@@ -20,7 +20,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { createHash } from "https://deno.land/std@0.168.0/hash/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,10 +48,12 @@ function slugify(s: string): string {
     .slice(0, 80);
 }
 
-function sha256(obj: unknown): string {
-  const h = createHash("sha256");
-  h.update(JSON.stringify(obj));
-  return h.toString();
+async function sha256(obj: unknown): Promise<string> {
+  const data = new TextEncoder().encode(JSON.stringify(obj));
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function lookupFeature(
@@ -398,7 +399,7 @@ serve(async (req) => {
       feature_state: featureState,
     };
 
-    const contentHash = sha256(bundle);
+    const contentHash = await sha256(bundle);
 
     // Coverage flags (diagnostic visibility)
     const hasLabs    = labObs.some((o) => o.source_class === "lab");
