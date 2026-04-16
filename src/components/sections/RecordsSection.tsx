@@ -19,6 +19,7 @@ import ClusterCard from "@/components/clusters/ClusterCard";
 import { ClusterTier } from "@/types/clusters";
 import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
+import { CelfExportButton } from "@/components/CelfExportButton";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
@@ -527,6 +528,11 @@ const RecordsSection: React.FC = () => {
           Total: <span className="font-medium text-foreground">{observations.length}</span> biomarker{observations.length !== 1 ? "s" : ""} across {distinctTestCount} distinct tests, from {uploads.filter((u) => u.status === "complete").length} processed upload{uploads.filter((u) => u.status === "complete").length !== 1 ? "s" : ""}.
         </div>
       )}
+
+      {/* CELF export */}
+      <div className="border-t border-border pt-6 mt-6">
+        <CelfExportButton />
+      </div>
     </PatientSectionLayout>
   );
 };
