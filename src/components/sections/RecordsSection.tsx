@@ -76,7 +76,10 @@ const RecordsSection: React.FC = () => {
   const { user } = useAuth();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fibroFileInputRef = useRef<HTMLInputElement>(null);
   const [lastResult, setLastResult] = useState<any>(null);
+  const [fibroUploading, setFibroUploading] = useState(false);
+  const [fibroResult, setFibroResult] = useState<{ success: boolean; message: string } | null>(null);
   const [expandedUploads, setExpandedUploads] = useState<Set<string>>(new Set());
   const [editingObs, setEditingObs] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
