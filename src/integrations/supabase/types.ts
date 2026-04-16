@@ -91,6 +91,123 @@ export type Database = {
           },
         ]
       }
+      celf_exports: {
+        Row: {
+          bundle: Json
+          bundle_version: string
+          content_sha256: string
+          downloaded_at: string | null
+          failure_reason: string | null
+          feature_state_count: number
+          generated_at: string
+          has_cie: boolean
+          has_food_log: boolean
+          has_inbody: boolean
+          has_labs: boolean
+          id: string
+          map_version: string
+          observation_count: number
+          phi_level: string
+          pushed_at: string | null
+          pushed_to_url: string | null
+          shared_with_clinician_at: string | null
+          source_document_count: number
+          status: string
+          subject_count: number
+          user_id: string
+        }
+        Insert: {
+          bundle: Json
+          bundle_version?: string
+          content_sha256: string
+          downloaded_at?: string | null
+          failure_reason?: string | null
+          feature_state_count?: number
+          generated_at?: string
+          has_cie?: boolean
+          has_food_log?: boolean
+          has_inbody?: boolean
+          has_labs?: boolean
+          id?: string
+          map_version?: string
+          observation_count?: number
+          phi_level?: string
+          pushed_at?: string | null
+          pushed_to_url?: string | null
+          shared_with_clinician_at?: string | null
+          source_document_count?: number
+          status?: string
+          subject_count?: number
+          user_id: string
+        }
+        Update: {
+          bundle?: Json
+          bundle_version?: string
+          content_sha256?: string
+          downloaded_at?: string | null
+          failure_reason?: string | null
+          feature_state_count?: number
+          generated_at?: string
+          has_cie?: boolean
+          has_food_log?: boolean
+          has_inbody?: boolean
+          has_labs?: boolean
+          id?: string
+          map_version?: string
+          observation_count?: number
+          phi_level?: string
+          pushed_at?: string | null
+          pushed_to_url?: string | null
+          shared_with_clinician_at?: string | null
+          source_document_count?: number
+          status?: string
+          subject_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      celf_feature_map: {
+        Row: {
+          celf_domain: string | null
+          celf_feature_label: string | null
+          celf_feature_name: string
+          celf_panel_group: string | null
+          created_at: string
+          id: string
+          map_version: string
+          notes: string | null
+          reveal_canonical: string
+          source_system: string
+          unit_canonical: string | null
+        }
+        Insert: {
+          celf_domain?: string | null
+          celf_feature_label?: string | null
+          celf_feature_name: string
+          celf_panel_group?: string | null
+          created_at?: string
+          id?: string
+          map_version?: string
+          notes?: string | null
+          reveal_canonical: string
+          source_system: string
+          unit_canonical?: string | null
+        }
+        Update: {
+          celf_domain?: string | null
+          celf_feature_label?: string | null
+          celf_feature_name?: string
+          celf_panel_group?: string | null
+          created_at?: string
+          id?: string
+          map_version?: string
+          notes?: string | null
+          reveal_canonical?: string
+          source_system?: string
+          unit_canonical?: string | null
+        }
+        Relationships: []
+      }
       cie_assessments: {
         Row: {
           created_at: string
