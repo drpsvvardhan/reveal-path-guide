@@ -145,7 +145,107 @@ const RecordsSection: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleFibroFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (fibroFileInputRef.current) fibroFileInputRef.current.value = "";
+    setFibroResult(null);
+    if (file.type !== "application/pdf") {
+      setFibroResult({ success: false, message: "FibroScan reports must be PDF files." });
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setFibroResult({ success: false, message: "File too large (20 MB max)." });
+      return;
+    }
+    const targetUserId = effectiveUserId || user?.id;
+    if (!targetUserId) {
+      setFibroResult({ success: false, message: "Not authenticated." });
+      return;
+    }
+
+    setFibroUploading(true);
+    try {
+      // 1. Insert upload row (filename prefixed so it's discoverable as FibroScan)
+      const { data: uploadRow, error: insertError } = await supabase
+        .from("patient_lab_uploads")
+        .insert({
+          user_id: targetUserId,
+          original_filename: `[FibroScan] ${file.name}`,
+          storage_path: "pending",
+          file_size_bytes: file.size,
+          status: "uploaded",
+        })
+        .select("*")
+        .single();
+      if (insertError || !uploadRow) {
+        throw new Error(insertError?.message || "Failed to create upload row");
+      }
+
+      // 2. Upload to storage bucket (same bucket the lab flow uses)
+      const storagePath = `${targetUserId}/${uploadRow.id}.pdf`;
+      const { error: uploadError } = await supabase.storage
+        .from("lab-uploads")
+        .upload(storagePath, file, { contentType: "application/pdf", upsert: false });
+      if (uploadError) {
+        await supabase.from("patient_lab_uploads").delete().eq("id", uploadRow.id);
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
+      await supabase
+        .from("patient_lab_uploads")
+        .update({ storage_path: storagePath })
+        .eq("id", uploadRow.id);
+
+      // 3. Invoke the FibroScan processor
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        "process-fibroscan",
+        { body: { upload_id: uploadRow.id, storage_path: storagePath } },
+      );
+
+      if (invokeError) {
+        // Try to read the response body for our 422 identity_mismatch case
+        const ctx: any = (invokeError as any).context;
+        let payload: any = null;
+        try {
+          if (ctx && typeof ctx.json === "function") payload = await ctx.json();
+        } catch { /* noop */ }
+        const status = ctx?.status as number | undefined;
+        const code = payload?.error;
+
+        if (status === 422 && code === "identity_mismatch") {
+          const name = payload?.extracted_name || "someone else";
+          setFibroResult({
+            success: false,
+            message: `This report appears to be for ${name}, not you. We can't add it to your account.`,
+          });
+        } else if (status === 409 && code === "duplicate_upload") {
+          setFibroResult({
+            success: false,
+            message: payload?.message || "You already uploaded this file.",
+          });
+        } else {
+          setFibroResult({
+            success: false,
+            message: payload?.message || invokeError.message || "FibroScan processing failed.",
+          });
+        }
+      } else {
+        const written = (data as any)?.extracted?.measurements_written ?? 0;
+        setFibroResult({
+          success: true,
+          message: `FibroScan extracted${written ? `: ${written} measurement${written !== 1 ? "s" : ""}` : ""}.`,
+        });
+      }
+    } catch (err: any) {
+      console.error("FibroScan upload failed:", err);
+      setFibroResult({ success: false, message: err.message || "Upload failed" });
+    } finally {
+      setFibroUploading(false);
+    }
+  };
+
   const triggerFilePicker = () => fileInputRef.current?.click();
+  const triggerFibroFilePicker = () => fibroFileInputRef.current?.click();
   const toggleExpanded = (uploadId: string) => {
     setExpandedUploads((prev) => {
       const next = new Set(prev);
