@@ -742,6 +742,7 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { uploadId } = body;
+    const identityOverride: IdentityOverride | undefined = body.identity_override;
 
     if (!uploadId) {
       return new Response(JSON.stringify({ error: "No uploadId provided" }), {
@@ -770,7 +771,7 @@ serve(async (req) => {
     }
 
     // @ts-ignore — EdgeRuntime is available in Supabase edge functions
-    EdgeRuntime.waitUntil(processUpload(uploadId));
+    EdgeRuntime.waitUntil(processUpload(uploadId, identityOverride));
 
     return new Response(
       JSON.stringify({ message: "Processing started", uploadId }),
