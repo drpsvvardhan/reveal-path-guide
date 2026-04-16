@@ -364,6 +364,17 @@ const RecordsSection: React.FC = () => {
           <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
 
           <button
+            onClick={triggerFibroFilePicker}
+            disabled={fibroUploading}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50"
+          >
+            {fibroUploading
+              ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading FibroScan...</>)
+              : (<><Upload className="h-3.5 w-3.5" />Upload FibroScan report</>)}
+          </button>
+          <input ref={fibroFileInputRef} type="file" accept="application/pdf" onChange={handleFibroFileSelect} className="hidden" />
+
+          <button
             onClick={handleRegenerateClusters}
             disabled={regenerating}
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50"
@@ -375,7 +386,7 @@ const RecordsSection: React.FC = () => {
         </div>
       )}
 
-      {/* Patient-facing upload button */}
+      {/* Patient-facing upload buttons */}
       {!isViewingAs && !isAdmin && (
         <div className="flex items-center gap-3 flex-wrap">
           <button
@@ -388,7 +399,36 @@ const RecordsSection: React.FC = () => {
              : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
           </button>
           <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+
+          <button
+            onClick={triggerFibroFilePicker}
+            disabled={fibroUploading}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-xs hover:bg-muted/60 transition-colors disabled:opacity-50"
+          >
+            {fibroUploading
+              ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading FibroScan...</>)
+              : (<><Upload className="h-3.5 w-3.5" />Upload FibroScan report</>)}
+          </button>
+          <input ref={fibroFileInputRef} type="file" accept="application/pdf" onChange={handleFibroFileSelect} className="hidden" />
+
           <span className="text-xs text-muted-foreground">PDF or image, 20 MB max</span>
+        </div>
+      )}
+
+      {/* FibroScan upload feedback */}
+      {fibroResult && !fibroUploading && (
+        <div className="text-xs">
+          {fibroResult.success ? (
+            <div className="flex items-center gap-2 text-teal-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>{fibroResult.message}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-orange-700">
+              <XCircle className="h-3.5 w-3.5" />
+              <span>{fibroResult.message}</span>
+            </div>
+          )}
         </div>
       )}
 
