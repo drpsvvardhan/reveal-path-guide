@@ -719,6 +719,13 @@ const RecordsSection: React.FC = () => {
       <div className="border-t border-border pt-6 mt-6">
         <CelfExportButton />
       </div>
+
+      <IdentityConfirmModal
+        request={identityRequest}
+        onConfirm={handleIdentityConfirm}
+        onReject={handleIdentityReject}
+        onClose={() => setIdentityRequest(null)}
+      />
     </PatientSectionLayout>
   );
 };
