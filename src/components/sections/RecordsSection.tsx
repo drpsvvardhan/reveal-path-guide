@@ -528,6 +528,11 @@ const RecordsSection: React.FC = () => {
           Total: <span className="font-medium text-foreground">{observations.length}</span> biomarker{observations.length !== 1 ? "s" : ""} across {distinctTestCount} distinct tests, from {uploads.filter((u) => u.status === "complete").length} processed upload{uploads.filter((u) => u.status === "complete").length !== 1 ? "s" : ""}.
         </div>
       )}
+
+      {/* CELF export */}
+      <div className="border-t border-border pt-6 mt-6">
+        <CelfExportButton />
+      </div>
     </PatientSectionLayout>
   );
 };
