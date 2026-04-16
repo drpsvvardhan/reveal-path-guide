@@ -535,6 +535,30 @@ async function processUpload(uploadId: string) {
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
+    const pdfBytes = new Uint8Array(arrayBuffer);
+
+    // ------------------------------------------------------------------
+    // STEP 2 — Content hash + dedup guard (BEFORE Gemini extraction)
+    // ------------------------------------------------------------------
+    const contentSha256 = await sha256Bytes(pdfBytes);
+    const dedup = await checkContentDuplicate(supabase, upload.user_id, contentSha256);
+    if (dedup.isDuplicate && dedup.existingUploadId !== uploadId) {
+      await recordRejection(supabase, {
+        userId: upload.user_id,
+        uploadId,
+        fileName: upload.original_filename,
+        category: "duplicate_content",
+        detail: `Identical file already uploaded on ${dedup.uploadedAt}`,
+        contentSha256,
+      });
+      console.log(`Upload ${uploadId} rejected as duplicate of ${dedup.existingUploadId}`);
+      return;
+    }
+    await supabase
+      .from("patient_lab_uploads")
+      .update({ content_sha256: contentSha256 })
+      .eq("id", uploadId);
+
     const base64Data = arrayBufferToBase64(arrayBuffer);
     const mimeType = detectMimeFromPath(upload.storage_path);
 
@@ -552,6 +576,70 @@ async function processUpload(uploadId: string) {
     if (!extracted) {
       throw new Error("Extracted data did not match expected schema");
     }
+
+    // ------------------------------------------------------------------
+    // STEP 3 — Patient identity verification (BEFORE writing observations)
+    // ------------------------------------------------------------------
+    const extractedPatientName = extracted.meta.patient_name;
+    const extractedDob = extracted.meta.patient_dob;
+    const extractedMrn = extracted.meta.patient_mrn;
+
+    await supabase.from("patient_lab_uploads").update({
+      extracted_patient_name: extractedPatientName,
+      extracted_patient_dob: extractedDob,
+      extracted_patient_mrn: extractedMrn,
+    }).eq("id", uploadId);
+
+    const identity = await verifyPatientIdentity(supabase, upload.user_id, extractedPatientName);
+
+    if (identity.status === "mismatch") {
+      await recordRejection(supabase, {
+        userId: upload.user_id,
+        uploadId,
+        fileName: upload.original_filename,
+        category: "identity_mismatch",
+        detail: `Extracted name "${identity.extractedName}" does not match account holder "${identity.accountName}" (score ${identity.score})`,
+        accountHolderName: identity.accountName,
+        extractedPatientName: identity.extractedName,
+        nameMatchScore: identity.score,
+        contentSha256,
+      });
+      console.log(`Upload ${uploadId} rejected for identity mismatch (score=${identity.score})`);
+      return;
+    }
+
+    if (identity.status === "unknown") {
+      if (identity.reason === "no_name_extracted") {
+        // Couldn't read a name — flag for review but allow observation writes.
+        await supabase.from("patient_lab_uploads").update({
+          name_match_status: "pending",
+          name_match_score: identity.score,
+        }).eq("id", uploadId);
+      } else {
+        await recordRejection(supabase, {
+          userId: upload.user_id,
+          uploadId,
+          fileName: upload.original_filename,
+          category: "identity_mismatch",
+          detail: `Identity verification inconclusive: ${identity.reason}. Extracted: "${identity.extractedName}", Account: "${identity.accountName}", score ${identity.score}`,
+          accountHolderName: identity.accountName,
+          extractedPatientName: identity.extractedName,
+          nameMatchScore: identity.score,
+          contentSha256,
+        });
+        console.log(`Upload ${uploadId} rejected as identity_inconclusive (${identity.reason})`);
+        return;
+      }
+    } else {
+      await supabase.from("patient_lab_uploads").update({
+        name_match_status: "match",
+        name_match_score: identity.score,
+      }).eq("id", uploadId);
+    }
+
+    // ------------------------------------------------------------------
+    // STEP 4 — Continue with existing observation write logic
+    // ------------------------------------------------------------------
 
     // Also detect InBody from the LLM response
     const detectedInBody = isInBody || extracted.meta.is_inbody === true;
