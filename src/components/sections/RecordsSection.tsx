@@ -19,6 +19,7 @@ import ClusterCard from "@/components/clusters/ClusterCard";
 import { ClusterTier } from "@/types/clusters";
 import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
+import { CelfExportButton } from "@/components/CelfExportButton";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
