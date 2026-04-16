@@ -106,8 +106,8 @@ export async function verifyPatientIdentity(
 
   const { data: profile, error } = await sb
     .from("profiles")
-    .select("first_name, last_name, preferred_name, name_aliases")
-    .eq("id", userId)
+    .select("first_name, display_name, preferred_name, name_aliases")
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error || !profile) {
@@ -122,8 +122,8 @@ export async function verifyPatientIdentity(
 
   // Build candidate names to match against
   const candidates: string[] = [];
-  const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim();
-  if (fullName) candidates.push(fullName);
+  if (profile.display_name) candidates.push(profile.display_name);
+  if (profile.first_name) candidates.push(profile.first_name);
   if (profile.preferred_name) candidates.push(profile.preferred_name);
   if (profile.name_aliases && Array.isArray(profile.name_aliases)) {
     candidates.push(...profile.name_aliases);
@@ -174,11 +174,11 @@ export async function checkContentDuplicate(
 ): Promise<DedupCheckResult> {
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, uploaded_at, status")
+    .select("id, created_at, status")
     .eq("user_id", userId)
     .eq("content_sha256", contentSha256)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -186,7 +186,7 @@ export async function checkContentDuplicate(
   return {
     isDuplicate: true,
     existingUploadId: data.id,
-    uploadedAt: data.uploaded_at,
+    uploadedAt: data.created_at,
   };
 }
 
