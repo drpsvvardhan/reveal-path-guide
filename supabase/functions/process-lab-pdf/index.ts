@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  sha256Bytes,
+  verifyPatientIdentity,
+  checkContentDuplicate,
+  recordRejection,
+} from "../_shared/uploadGuards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,7 +178,10 @@ OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
   "meta": {
     "source_lab": "string — name of the laboratory (Quest Diagnostics, LabCorp, hospital name) or null",
     "collection_date": "string — specimen collection date in ISO format YYYY-MM-DD, or null if not visible",
-    "ordering_provider": "string — doctor or clinic name who ordered the labs, or null"
+    "ordering_provider": "string — doctor or clinic name who ordered the labs, or null",
+    "patient_name": "string — full patient name exactly as printed on the report, or null",
+    "patient_dob": "string — patient date of birth in YYYY-MM-DD if present, or null",
+    "patient_mrn": "string — Medical Record Number / Patient ID if present, or null"
   },
   "observations": [
     {
@@ -241,7 +250,10 @@ OUTPUT SCHEMA — EXACT JSON STRUCTURE REQUIRED
     "source_lab": "InBody",
     "collection_date": "string — test date in ISO format YYYY-MM-DD",
     "ordering_provider": null,
-    "is_inbody": true
+    "is_inbody": true,
+    "patient_name": "string — full patient name exactly as printed on the report, or null",
+    "patient_dob": "string — patient date of birth in YYYY-MM-DD if present, or null",
+    "patient_mrn": "string — Member ID / Patient ID if present, or null"
   },
   "observations": [
     {
@@ -436,6 +448,9 @@ interface ExtractionResult {
     collection_date: string | null;
     ordering_provider: string | null;
     is_inbody?: boolean;
+    patient_name: string | null;
+    patient_dob: string | null;
+    patient_mrn: string | null;
   };
   observations: ExtractedObservation[];
 }
@@ -450,6 +465,9 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
       collection_date: typeof raw.meta?.collection_date === "string" ? raw.meta.collection_date : null,
       ordering_provider: typeof raw.meta?.ordering_provider === "string" ? raw.meta.ordering_provider : null,
       is_inbody: raw.meta?.is_inbody === true,
+      patient_name: typeof raw.meta?.patient_name === "string" ? raw.meta.patient_name : null,
+      patient_dob: typeof raw.meta?.patient_dob === "string" ? raw.meta.patient_dob : null,
+      patient_mrn: typeof raw.meta?.patient_mrn === "string" ? raw.meta.patient_mrn : null,
     },
     observations: [],
   };
@@ -517,6 +535,30 @@ async function processUpload(uploadId: string) {
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
+    const pdfBytes = new Uint8Array(arrayBuffer);
+
+    // ------------------------------------------------------------------
+    // STEP 2 — Content hash + dedup guard (BEFORE Gemini extraction)
+    // ------------------------------------------------------------------
+    const contentSha256 = await sha256Bytes(pdfBytes);
+    const dedup = await checkContentDuplicate(supabase, upload.user_id, contentSha256);
+    if (dedup.isDuplicate && dedup.existingUploadId !== uploadId) {
+      await recordRejection(supabase, {
+        userId: upload.user_id,
+        uploadId,
+        fileName: upload.original_filename,
+        category: "duplicate_content",
+        detail: `Identical file already uploaded on ${dedup.uploadedAt}`,
+        contentSha256,
+      });
+      console.log(`Upload ${uploadId} rejected as duplicate of ${dedup.existingUploadId}`);
+      return;
+    }
+    await supabase
+      .from("patient_lab_uploads")
+      .update({ content_sha256: contentSha256 })
+      .eq("id", uploadId);
+
     const base64Data = arrayBufferToBase64(arrayBuffer);
     const mimeType = detectMimeFromPath(upload.storage_path);
 
@@ -534,6 +576,70 @@ async function processUpload(uploadId: string) {
     if (!extracted) {
       throw new Error("Extracted data did not match expected schema");
     }
+
+    // ------------------------------------------------------------------
+    // STEP 3 — Patient identity verification (BEFORE writing observations)
+    // ------------------------------------------------------------------
+    const extractedPatientName = extracted.meta.patient_name;
+    const extractedDob = extracted.meta.patient_dob;
+    const extractedMrn = extracted.meta.patient_mrn;
+
+    await supabase.from("patient_lab_uploads").update({
+      extracted_patient_name: extractedPatientName,
+      extracted_patient_dob: extractedDob,
+      extracted_patient_mrn: extractedMrn,
+    }).eq("id", uploadId);
+
+    const identity = await verifyPatientIdentity(supabase, upload.user_id, extractedPatientName);
+
+    if (identity.status === "mismatch") {
+      await recordRejection(supabase, {
+        userId: upload.user_id,
+        uploadId,
+        fileName: upload.original_filename,
+        category: "identity_mismatch",
+        detail: `Extracted name "${identity.extractedName}" does not match account holder "${identity.accountName}" (score ${identity.score})`,
+        accountHolderName: identity.accountName,
+        extractedPatientName: identity.extractedName,
+        nameMatchScore: identity.score,
+        contentSha256,
+      });
+      console.log(`Upload ${uploadId} rejected for identity mismatch (score=${identity.score})`);
+      return;
+    }
+
+    if (identity.status === "unknown") {
+      if (identity.reason === "no_name_extracted") {
+        // Couldn't read a name — flag for review but allow observation writes.
+        await supabase.from("patient_lab_uploads").update({
+          name_match_status: "pending",
+          name_match_score: identity.score,
+        }).eq("id", uploadId);
+      } else {
+        await recordRejection(supabase, {
+          userId: upload.user_id,
+          uploadId,
+          fileName: upload.original_filename,
+          category: "identity_mismatch",
+          detail: `Identity verification inconclusive: ${identity.reason}. Extracted: "${identity.extractedName}", Account: "${identity.accountName}", score ${identity.score}`,
+          accountHolderName: identity.accountName,
+          extractedPatientName: identity.extractedName,
+          nameMatchScore: identity.score,
+          contentSha256,
+        });
+        console.log(`Upload ${uploadId} rejected as identity_inconclusive (${identity.reason})`);
+        return;
+      }
+    } else {
+      await supabase.from("patient_lab_uploads").update({
+        name_match_status: "match",
+        name_match_score: identity.score,
+      }).eq("id", uploadId);
+    }
+
+    // ------------------------------------------------------------------
+    // STEP 4 — Continue with existing observation write logic
+    // ------------------------------------------------------------------
 
     // Also detect InBody from the LLM response
     const detectedInBody = isInBody || extracted.meta.is_inbody === true;
