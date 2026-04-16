@@ -1,21 +1,6 @@
 // ============================================================================
 // export-celf-bundle
-// Assembles a CELF ingestion bundle matching the Russell Shapiro shape from
-// Reveal Path's internal Supabase state.
-//
-// Contract (CELF v0.2):
-//   {
-//     meta: { bundle_version, map_version, generated_at, phi_level, source },
-//     subject: [{ subject_id, external_name, dob, sex, mrn, source_system }],
-//     source_documents: [{ source_doc_id, source_name, pages, document_type, ingest_confidence }],
-//     observations: [{ ...flat observation record }],
-//     feature_state: [{ ...latest per twin_feature_name }]
-//   }
-//
-// Called by:
-//   POST /export-celf-bundle
-//   Authorization: Bearer <jwt>
-//   Body: {}  (user_id is derived from JWT; admin override via ?user_id= param requires rbgs_admin)
+// Assembles a CELF v0.2 ingestion bundle from Reveal Path's Supabase state.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -38,36 +23,17 @@ type FeatureMap = Map<string, {
   unit_canonical: string | null;
 }>;
 
-// ----------------------------------------------------------------------------
-// Utilities
-// ----------------------------------------------------------------------------
 function slugify(s: string): string {
-  return s.toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 80);
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80);
 }
 
 async function sha256(obj: unknown): Promise<string> {
   const data = new TextEncoder().encode(JSON.stringify(obj));
   const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function lookupFeature(
-  map: FeatureMap,
-  sourceSystem: string,
-  revealCanonical: string
-): {
-  twin_feature_name: string;
-  feature_label: string;
-  domain: string | null;
-  panel_group: string | null;
-  unit_canonical: string | null;
-  needs_verification: boolean;
-} {
+function lookupFeature(map: FeatureMap, sourceSystem: string, revealCanonical: string) {
   const key = `${sourceSystem}::${revealCanonical}`;
   const hit = map.get(key);
   if (hit) {
@@ -80,28 +46,22 @@ function lookupFeature(
       needs_verification: false,
     };
   }
-  // Fallback: slugify the canonical name, flag for Vizzhy ingestion review
   return {
     twin_feature_name: `${sourceSystem}_${slugify(revealCanonical)}`,
     feature_label: revealCanonical,
-    domain: null,
-    panel_group: null,
-    unit_canonical: null,
+    domain: null as string | null,
+    panel_group: null as string | null,
+    unit_canonical: null as string | null,
     needs_verification: true,
   };
 }
 
-// ----------------------------------------------------------------------------
-// Build feature map
-// ----------------------------------------------------------------------------
 async function buildFeatureMap(sb: SupabaseClient): Promise<FeatureMap> {
   const { data, error } = await sb
     .from("celf_feature_map")
     .select("source_system, reveal_canonical, celf_feature_name, celf_feature_label, celf_domain, celf_panel_group, unit_canonical")
     .eq("map_version", MAP_VERSION);
-
   if (error) throw new Error(`feature_map load failed: ${error.message}`);
-
   const m: FeatureMap = new Map();
   for (const row of data ?? []) {
     m.set(`${row.source_system}::${row.reveal_canonical}`, {
@@ -115,29 +75,22 @@ async function buildFeatureMap(sb: SupabaseClient): Promise<FeatureMap> {
   return m;
 }
 
-// ----------------------------------------------------------------------------
-// Section builders
-// ----------------------------------------------------------------------------
-
 async function buildSubject(sb: SupabaseClient, userId: string) {
   const { data: profile, error } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, date_of_birth, sex, mrn")
-    .eq("id", userId)
+    .select("id, first_name, display_name, age, sex")
+    .eq("user_id", userId)
     .maybeSingle();
-
   if (error) throw new Error(`profiles load failed: ${error.message}`);
 
-  const externalName = profile
-    ? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim() || "Unnamed Subject"
-    : "Unnamed Subject";
-
+  const externalName = profile?.display_name || profile?.first_name || "Unnamed Subject";
   return [{
     subject_id: userId,
     external_name: externalName,
-    dob: profile?.date_of_birth ?? null,
+    dob: null,
+    age: profile?.age ?? null,
     sex: profile?.sex ?? null,
-    mrn: profile?.mrn ?? null,
+    mrn: null,
     source_system: "reveal_path",
   }];
 }
@@ -145,19 +98,20 @@ async function buildSubject(sb: SupabaseClient, userId: string) {
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, file_name, document_type, page_count, extraction_confidence, uploaded_at, status")
+    .select("id, original_filename, source_lab, collection_date, status, created_at, observations_extracted")
     .eq("user_id", userId)
-    .order("uploaded_at", { ascending: true });
-
+    .order("created_at", { ascending: true });
   if (error) throw new Error(`lab_uploads load failed: ${error.message}`);
-
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
-    source_name: u.file_name ?? "unnamed_upload",
-    pages: u.page_count ?? null,
-    document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    source_name: u.original_filename ?? "unnamed_upload",
+    source_lab: u.source_lab,
+    pages: null,
+    document_type: "lab_pdf",
+    ingest_confidence: null,
+    ingested_at: u.created_at,
+    collection_date: u.collection_date,
+    observations_extracted: u.observations_extracted,
     status: u.status,
   }));
 }
@@ -165,47 +119,48 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 async function buildLabObservations(sb: SupabaseClient, userId: string, map: FeatureMap) {
   const { data, error } = await sb
     .from("patient_lab_observations")
-    .select("id, upload_id, canonical_name, original_name, value_numeric, value_text, unit, flag, reference_range_text, specimen_type, collected_at, page_number, extraction_confidence")
+    .select("id, upload_id, canonical_name, raw_name, display_name, value, unit, flag, ref_low, ref_high, source, collection_date, corrected, original_value")
     .eq("user_id", userId);
-
   if (error) throw new Error(`lab_observations load failed: ${error.message}`);
 
-  const obs = [];
+  const obs: any[] = [];
   for (const r of data ?? []) {
-    const source = r.upload_id ? "lab" : "emr";          // EMR rows may not have upload
-    const subSys = r.specimen_type === "body_composition" ? "inbody" : "lab";
-    const f = lookupFeature(map, subSys, r.canonical_name ?? r.original_name ?? "");
+    const subSys = "lab";
+    const f = lookupFeature(map, subSys, r.canonical_name ?? r.raw_name ?? "");
+    const refRange = (r.ref_low != null || r.ref_high != null)
+      ? `${r.ref_low ?? ""}–${r.ref_high ?? ""}`.trim()
+      : null;
 
     obs.push({
       observation_id: r.id,
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: subSys,
-      collection_date: r.collected_at,
-      observed_at_precision: r.collected_at ? "date" : "unknown",
+      collection_date: r.collection_date,
+      observed_at_precision: r.collection_date ? "date" : "unknown",
       category: subSys,
       domain: f.domain,
       panel_group: f.panel_group,
-      panel_original: null,
+      panel_original: r.source ?? null,
       analyte_name: f.feature_label,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name,
       twin_feature_name: f.twin_feature_name,
-      result_display: r.value_text ?? (r.value_numeric != null ? String(r.value_numeric) : null),
+      result_display: r.value != null ? String(r.value) : null,
       value_operator: null,
-      value_numeric: r.value_numeric,
-      value_text: r.value_text,
+      value_numeric: r.value,
+      value_text: null,
       unit_normalized: f.unit_canonical ?? r.unit,
       unit_original: r.unit,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
-      specimen_type: r.specimen_type,
+      reference_range_text: refRange,
+      specimen_type: null,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
+      page_number: null,
+      ocr_confidence: null,
       needs_pdf_verification: f.needs_verification,
-      raw_notes: null,
+      raw_notes: r.corrected ? JSON.stringify({ corrected: true, original_value: r.original_value }) : null,
     });
   }
   return obs;
@@ -214,16 +169,25 @@ async function buildLabObservations(sb: SupabaseClient, userId: string, map: Fea
 async function buildCieObservations(sb: SupabaseClient, userId: string, map: FeatureMap) {
   const obs: any[] = [];
 
-  // Domain scores
+  // Domain scores — join to assessments via assessment_id
+  const { data: assessments, error: aErr } = await sb
+    .from("cie_assessments")
+    .select("id, created_at, full_completed_at, status")
+    .eq("user_id", userId);
+  if (aErr) throw new Error(`cie_assessments load failed: ${aErr.message}`);
+  const asmtById = new Map<string, any>();
+  for (const a of assessments ?? []) asmtById.set(a.id, a);
+
   const { data: domainScores, error: dErr } = await sb
     .from("cie_domain_scores")
-    .select("id, assessment_id, domain_id, score, completion_pct, computed_at, cie_assessments!inner(user_id, assessed_at)")
-    .eq("cie_assessments.user_id", userId);
-
+    .select("id, assessment_id, domain_id, axis, final_score, layer1_score, layer2_score, triggered_layer2, created_at")
+    .eq("user_id", userId);
   if (dErr) throw new Error(`cie_domain_scores load failed: ${dErr.message}`);
 
-  for (const r of (domainScores ?? []) as any[]) {
+  for (const r of domainScores ?? []) {
     const f = lookupFeature(map, "cie_domain", r.domain_id);
+    const asmt = asmtById.get(r.assessment_id);
+    const collectionDate = asmt?.full_completed_at ?? asmt?.created_at ?? r.created_at;
     obs.push({
       observation_id: r.id,
       subject_id: userId,
@@ -231,42 +195,43 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       source_doc_id: null,
       source_name: "cie_v2.2_self_report",
       source_class: "cie",
-      collection_date: r.cie_assessments?.assessed_at ?? r.computed_at,
+      collection_date: collectionDate,
       observed_at_precision: "date",
       category: "cie",
-      domain: f.domain,
+      domain: f.domain ?? r.axis,
       panel_group: f.panel_group,
       panel_original: "CIE v2.2",
       analyte_name: f.feature_label,
       test_name_original: `Domain ${r.domain_id}`,
       twin_feature_name: f.twin_feature_name,
-      result_display: r.score != null ? String(r.score) : null,
+      result_display: r.final_score != null ? String(r.final_score) : null,
       value_operator: null,
-      value_numeric: r.score,
+      value_numeric: r.final_score,
       value_text: null,
       unit_normalized: "score_0_100",
       unit_original: "score",
       flag: null,
       reference_range_text: null,
       specimen_type: "self_report",
-      status: r.completion_pct >= 1.0 ? "final" : "preliminary",
+      status: r.triggered_layer2 ? "final" : "preliminary",
       page_number: null,
       ocr_confidence: null,
       needs_pdf_verification: false,
-      raw_notes: JSON.stringify({ completion_pct: r.completion_pct }),
+      raw_notes: JSON.stringify({ layer1_score: r.layer1_score, layer2_score: r.layer2_score, triggered_layer2: r.triggered_layer2 }),
     });
   }
 
   // Gate scores
   const { data: gateScores, error: gErr } = await sb
     .from("cie_gate_scores")
-    .select("id, assessment_id, gate_id, score, status, computed_at, cie_assessments!inner(user_id, assessed_at)")
-    .eq("cie_assessments.user_id", userId);
-
+    .select("id, assessment_id, gate_id, gate_name, score, traffic_light, contributing_domains, created_at")
+    .eq("user_id", userId);
   if (gErr) throw new Error(`cie_gate_scores load failed: ${gErr.message}`);
 
-  for (const r of (gateScores ?? []) as any[]) {
+  for (const r of gateScores ?? []) {
     const f = lookupFeature(map, "cie_gate", r.gate_id);
+    const asmt = asmtById.get(r.assessment_id);
+    const collectionDate = asmt?.full_completed_at ?? asmt?.created_at ?? r.created_at;
     obs.push({
       observation_id: r.id,
       subject_id: userId,
@@ -274,29 +239,29 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       source_doc_id: null,
       source_name: "cie_v2.2_gate",
       source_class: "cie",
-      collection_date: r.cie_assessments?.assessed_at ?? r.computed_at,
+      collection_date: collectionDate,
       observed_at_precision: "date",
       category: "cie",
       domain: "cie_gate",
       panel_group: f.panel_group,
       panel_original: "CIE v2.2 Gates",
-      analyte_name: f.feature_label,
+      analyte_name: f.feature_label ?? r.gate_name,
       test_name_original: r.gate_id,
       twin_feature_name: f.twin_feature_name,
       result_display: r.score != null ? String(r.score) : null,
       value_operator: null,
       value_numeric: r.score,
-      value_text: r.status,
+      value_text: r.traffic_light,
       unit_normalized: "score_0_100",
       unit_original: "score",
-      flag: r.status,
+      flag: r.traffic_light,
       reference_range_text: null,
       specimen_type: "self_report",
       status: "final",
       page_number: null,
       ocr_confidence: null,
       needs_pdf_verification: false,
-      raw_notes: null,
+      raw_notes: JSON.stringify({ contributing_domains: r.contributing_domains }),
     });
   }
 
@@ -310,9 +275,7 @@ function computeFeatureState(observations: any[]) {
     const existing = latest.get(o.twin_feature_name);
     const oDate = o.collection_date ? new Date(o.collection_date).getTime() : 0;
     const eDate = existing?.collection_date ? new Date(existing.collection_date).getTime() : -1;
-    if (!existing || oDate > eDate) {
-      latest.set(o.twin_feature_name, o);
-    }
+    if (!existing || oDate > eDate) latest.set(o.twin_feature_name, o);
   }
   return Array.from(latest.values()).map((o) => ({
     feature_state_id: crypto.randomUUID(),
@@ -330,9 +293,6 @@ function computeFeatureState(observations: any[]) {
   }));
 }
 
-// ----------------------------------------------------------------------------
-// Main handler
-// ----------------------------------------------------------------------------
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -341,7 +301,6 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const authHeader = req.headers.get("authorization") ?? "";
 
-    // Use service role for reads (we'll enforce user_id manually) but validate JWT first.
     const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -351,18 +310,13 @@ serve(async (req) => {
     }
     const callerUserId = authData.user.id;
 
-    // Admin override via query param (?user_id=) — requires admin role
     const url = new URL(req.url);
     const requestedUserId = url.searchParams.get("user_id");
     let targetUserId = callerUserId;
 
     if (requestedUserId && requestedUserId !== callerUserId) {
       const { data: roleData } = await userClient
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", callerUserId)
-        .eq("role", "admin")
-        .maybeSingle();
+        .from("user_roles").select("role").eq("user_id", callerUserId).eq("role", "admin").maybeSingle();
       if (!roleData) {
         return new Response(JSON.stringify({ error: "forbidden: admin role required for cross-user export" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -370,8 +324,6 @@ serve(async (req) => {
     }
 
     const sb = createClient(supabaseUrl, serviceKey);
-
-    // --- Assemble bundle ---
     const featureMap = await buildFeatureMap(sb);
 
     const [subject, sourceDocs, labObs, cieObs] = await Promise.all([
@@ -400,13 +352,10 @@ serve(async (req) => {
     };
 
     const contentHash = await sha256(bundle);
+    const hasLabs = labObs.length > 0;
+    const hasInbody = false;
+    const hasCie = cieObs.length > 0;
 
-    // Coverage flags (diagnostic visibility)
-    const hasLabs    = labObs.some((o) => o.source_class === "lab");
-    const hasInbody  = labObs.some((o) => o.source_class === "inbody");
-    const hasCie     = cieObs.length > 0;
-
-    // --- Persist audit row ---
     const { data: auditRow, error: auditErr } = await sb
       .from("celf_exports")
       .insert({
@@ -447,7 +396,6 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (e) {
     console.error("[export-celf-bundle] error", e);
     return new Response(JSON.stringify({ error: String((e as any)?.message ?? e) }), {
