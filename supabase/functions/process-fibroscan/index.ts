@@ -1,16 +1,9 @@
 // ============================================================================
 // process-fibroscan
 //
-// Ingests a FibroScan report PDF. Extracts:
-//   - Patient identity (name, DOB, MRN) for identity match
-//   - CAP (Controlled Attenuation Parameter) — dB/m — steatosis
-//   - LSM (Liver Stiffness Measurement) — kPa — fibrosis
-//   - IQRs, success rate, valid measurement count
-//   - Steatosis grade (S0-S3), fibrosis stage (F0-F4) if present
-//
+// Ingests a FibroScan report PDF. Extracts CAP, LSM, IQRs, success rate, etc.
 // Writes each measurement as a row in patient_lab_observations with
-// specimen_type='fibroscan' so the CELF adapter picks them up with
-// source_class='fibroscan'.
+// source='fibroscan' so the CELF adapter picks them up.
 //
 // Same identity/dedup guards as process-lab-pdf.
 // ============================================================================
@@ -32,9 +25,6 @@ const corsHeaders = {
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const GEMINI_MODEL = "gemini-2.5-flash";
 
-// ----------------------------------------------------------------------------
-// Extraction schema
-// ----------------------------------------------------------------------------
 const EXTRACTION_PROMPT = `You are extracting data from a FibroScan liver elastography report.
 
 Return ONLY valid JSON in this exact shape:
@@ -63,9 +53,6 @@ LSM is liver stiffness in kPa (typical range 2-75).
 If a value is not present, use null.
 Do not invent values.`;
 
-// ----------------------------------------------------------------------------
-// Handler
-// ----------------------------------------------------------------------------
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -75,7 +62,6 @@ serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const authHeader = req.headers.get("authorization") ?? "";
 
-    // Authenticate the caller
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -99,10 +85,10 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceKey);
 
-    // Fetch the upload row (owned by this user via RLS)
+    // Fetch upload row
     const { data: uploadRow, error: uErr } = await sb
       .from("patient_lab_uploads")
-      .select("id, file_name, user_id")
+      .select("id, original_filename, user_id")
       .eq("id", uploadId)
       .eq("user_id", userId)
       .single();
@@ -116,7 +102,7 @@ serve(async (req) => {
 
     // Download file bytes from storage
     const { data: fileData, error: fileErr } = await sb.storage
-      .from("patient-uploads")
+      .from("lab-uploads")
       .download(storagePath);
     if (fileErr || !fileData) {
       return new Response(JSON.stringify({ error: "file_download_failed", detail: fileErr?.message }), {
@@ -134,7 +120,7 @@ serve(async (req) => {
       await recordRejection(sb, {
         userId,
         uploadId: uploadRow.id,
-        fileName: uploadRow.file_name,
+        fileName: uploadRow.original_filename,
         category: "duplicate_content",
         detail: `Duplicate of upload ${dedup.existingUploadId}`,
         contentSha256: contentSha,
@@ -149,7 +135,7 @@ serve(async (req) => {
     }
 
     await sb.from("patient_lab_uploads")
-      .update({ content_sha256: contentSha, document_type: "fibroscan" })
+      .update({ content_sha256: contentSha, processing_started_at: new Date().toISOString() })
       .eq("id", uploadRow.id);
 
     // -------- Gemini extraction --------
@@ -195,7 +181,7 @@ serve(async (req) => {
       await recordRejection(sb, {
         userId,
         uploadId: uploadRow.id,
-        fileName: uploadRow.file_name,
+        fileName: uploadRow.original_filename,
         category: "identity_mismatch",
         detail: `FibroScan name "${identity.extractedName}" ≠ account "${identity.accountName}"`,
         accountHolderName: identity.accountName,
@@ -218,7 +204,7 @@ serve(async (req) => {
       await recordRejection(sb, {
         userId,
         uploadId: uploadRow.id,
-        fileName: uploadRow.file_name,
+        fileName: uploadRow.original_filename,
         category: "identity_mismatch",
         detail: `FibroScan identity inconclusive: ${identity.reason}`,
         accountHolderName: identity.accountName,
@@ -240,25 +226,24 @@ serve(async (req) => {
     const m = extraction.measurements ?? {};
 
     const obsRows: any[] = [];
-    const pushObs = (canonical: string, value: number | string | null, unit: string | null) => {
+    const pushObs = (canonical: string, value: number | string | null, unit: string) => {
       if (value === null || value === undefined || value === "") return;
-      const numeric = typeof value === "number" ? value : (isFinite(Number(value)) ? Number(value) : null);
+      const numeric = typeof value === "number" ? value : Number(value);
+      if (!isFinite(numeric)) return;
       obsRows.push({
         user_id: userId,
         upload_id: uploadRow.id,
         canonical_name: canonical,
-        original_name: canonical,
-        value_numeric: numeric,
-        value_text: numeric === null ? String(value) : null,
+        raw_name: canonical,
+        display_name: canonical,
+        value: numeric,
         unit,
-        flag: null,
-        reference_range_text: null,
-        specimen_type: "fibroscan",
-        collected_at: examDate,
-        extraction_confidence: null,
+        collection_date: examDate,
+        source: "fibroscan",
       });
     };
 
+    // Numeric measurements only — value column is NOT NULL numeric.
     pushObs("CAP", m.cap_median, "dB/m");
     pushObs("CAP IQR", m.cap_iqr, "dB/m");
     pushObs("LSM", m.lsm_median, "kPa");
@@ -266,8 +251,15 @@ serve(async (req) => {
     pushObs("IQR/Median", m.iqr_median_ratio, "ratio");
     pushObs("Success Rate", m.success_rate_pct, "%");
     pushObs("Valid Measurements", m.valid_measurements, "count");
-    pushObs("Steatosis Grade", m.steatosis_grade, "grade");
-    pushObs("Fibrosis Stage", m.fibrosis_stage, "stage");
+
+    // Grades/stages: parse the leading digit (S2 -> 2, F3 -> 3) so they fit numeric value.
+    const parseStage = (v: unknown): number | null => {
+      if (typeof v !== "string") return null;
+      const match = v.match(/(\d)/);
+      return match ? Number(match[1]) : null;
+    };
+    pushObs("Steatosis Grade", parseStage(m.steatosis_grade), "grade");
+    pushObs("Fibrosis Stage", parseStage(m.fibrosis_stage), "stage");
 
     if (obsRows.length > 0) {
       const { error: insErr } = await sb.from("patient_lab_observations").insert(obsRows);
@@ -275,8 +267,11 @@ serve(async (req) => {
     }
 
     await sb.from("patient_lab_uploads").update({
-      status: "extracted",
-      document_type: "fibroscan",
+      status: "complete",
+      processing_completed_at: new Date().toISOString(),
+      observations_extracted: obsRows.length,
+      observations_inserted: obsRows.length,
+      collection_date: examDate,
     }).eq("id", uploadRow.id);
 
     return new Response(JSON.stringify({
