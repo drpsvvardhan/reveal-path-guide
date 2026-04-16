@@ -669,10 +669,16 @@ export type Database = {
       patient_lab_uploads: {
         Row: {
           collection_date: string | null
+          content_sha256: string | null
           created_at: string
           error_message: string | null
+          extracted_patient_dob: string | null
+          extracted_patient_mrn: string | null
+          extracted_patient_name: string | null
           file_size_bytes: number | null
           id: string
+          name_match_score: number | null
+          name_match_status: string | null
           observations_duplicates: number | null
           observations_extracted: number | null
           observations_inserted: number | null
@@ -680,6 +686,8 @@ export type Database = {
           original_filename: string
           processing_completed_at: string | null
           processing_started_at: string | null
+          rejected_at: string | null
+          rejection_reason: string | null
           retry_count: number
           source_lab: string | null
           status: string
@@ -689,10 +697,16 @@ export type Database = {
         }
         Insert: {
           collection_date?: string | null
+          content_sha256?: string | null
           created_at?: string
           error_message?: string | null
+          extracted_patient_dob?: string | null
+          extracted_patient_mrn?: string | null
+          extracted_patient_name?: string | null
           file_size_bytes?: number | null
           id?: string
+          name_match_score?: number | null
+          name_match_status?: string | null
           observations_duplicates?: number | null
           observations_extracted?: number | null
           observations_inserted?: number | null
@@ -700,6 +714,8 @@ export type Database = {
           original_filename: string
           processing_completed_at?: string | null
           processing_started_at?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
           retry_count?: number
           source_lab?: string | null
           status?: string
@@ -709,10 +725,16 @@ export type Database = {
         }
         Update: {
           collection_date?: string | null
+          content_sha256?: string | null
           created_at?: string
           error_message?: string | null
+          extracted_patient_dob?: string | null
+          extracted_patient_mrn?: string | null
+          extracted_patient_name?: string | null
           file_size_bytes?: number | null
           id?: string
+          name_match_score?: number | null
+          name_match_status?: string | null
           observations_duplicates?: number | null
           observations_extracted?: number | null
           observations_inserted?: number | null
@@ -720,6 +742,8 @@ export type Database = {
           original_filename?: string
           processing_completed_at?: string | null
           processing_started_at?: string | null
+          rejected_at?: string | null
+          rejection_reason?: string | null
           retry_count?: number
           source_lab?: string | null
           status?: string
@@ -830,9 +854,11 @@ export type Database = {
           first_name: string | null
           first_time_banner_dismissed_at: string | null
           id: string
+          name_aliases: string[] | null
           onboarding_completed_at: string | null
           onboarding_started_at: string | null
           onboarding_step: string | null
+          preferred_name: string | null
           sex: string | null
           share_token: string | null
           signature_color: string | null
@@ -847,9 +873,11 @@ export type Database = {
           first_name?: string | null
           first_time_banner_dismissed_at?: string | null
           id?: string
+          name_aliases?: string[] | null
           onboarding_completed_at?: string | null
           onboarding_started_at?: string | null
           onboarding_step?: string | null
+          preferred_name?: string | null
           sex?: string | null
           share_token?: string | null
           signature_color?: string | null
@@ -864,9 +892,11 @@ export type Database = {
           first_name?: string | null
           first_time_banner_dismissed_at?: string | null
           id?: string
+          name_aliases?: string[] | null
           onboarding_completed_at?: string | null
           onboarding_started_at?: string | null
           onboarding_step?: string | null
+          preferred_name?: string | null
           sex?: string | null
           share_token?: string | null
           signature_color?: string | null
@@ -985,6 +1015,56 @@ export type Database = {
           },
         ]
       }
+      upload_rejection_audit: {
+        Row: {
+          account_holder_name: string | null
+          content_sha256: string | null
+          extracted_patient_name: string | null
+          file_name: string | null
+          id: string
+          name_match_score: number | null
+          rejected_at: string
+          rejection_category: string
+          rejection_detail: string | null
+          upload_id: string | null
+          user_id: string
+        }
+        Insert: {
+          account_holder_name?: string | null
+          content_sha256?: string | null
+          extracted_patient_name?: string | null
+          file_name?: string | null
+          id?: string
+          name_match_score?: number | null
+          rejected_at?: string
+          rejection_category: string
+          rejection_detail?: string | null
+          upload_id?: string | null
+          user_id: string
+        }
+        Update: {
+          account_holder_name?: string | null
+          content_sha256?: string | null
+          extracted_patient_name?: string | null
+          file_name?: string | null
+          id?: string
+          name_match_score?: number | null
+          rejected_at?: string
+          rejection_category?: string
+          rejection_detail?: string | null
+          upload_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_rejection_audit_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1035,6 +1115,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fn_name_match_score: {
+        Args: { p_account_name: string; p_extracted_name: string }
+        Returns: number
+      }
+      fn_normalize_name: { Args: { p_name: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
