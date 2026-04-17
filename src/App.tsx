@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound.tsx";
 import SharedQueue from "./pages/SharedQueue.tsx";
 import ClinicalShare from "./pages/ClinicalShare.tsx";
 import AdminReviewQueue from "./pages/AdminReviewQueue.tsx";
+import Account from "./pages/Account.tsx";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,7 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
               <Route path="/share/:token" element={<SharedQueue />} />
               <Route path="/clinical/:token" element={<ClinicalShare />} />
               <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
