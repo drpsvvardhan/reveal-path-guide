@@ -751,6 +751,14 @@ const RecordsSection: React.FC = () => {
         onReject={handleIdentityReject}
         onClose={() => setIdentityRequest(null)}
       />
+
+      <PreUploadConfirmModal
+        open={!!pendingUpload}
+        fileName={pendingUpload?.file.name ?? null}
+        onConfirm={handlePendingConfirm}
+        onCancel={() => setPendingUpload(null)}
+      />
+
     </PatientSectionLayout>
   );
 };
