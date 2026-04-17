@@ -1,0 +1,1 @@
+update public.patient_lab_uploads set status='uploaded', error_message=null, processing_started_at=null where id='68fb9102-e45d-4a67-868f-4254024e1631';
