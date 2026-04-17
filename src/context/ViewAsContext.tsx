@@ -74,60 +74,112 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(i);
   }, []);
 
-  // On mount: check admin status and restore any active session from sessionStorage
+  // On mount + on auth changes: re-evaluate admin status and any persisted view-as session.
+  // CRITICAL: a persisted session from a previous login must NEVER leak into a new login.
   useEffect(() => {
-    (async () => {
-      try {
-        const { data: u } = await supabase.auth.getUser();
-        if (!u.user) return;
-        setAuthUserId(u.user.id);
+    let cancelled = false;
 
-        const { data: role } = await supabase
-          .from("user_roles").select("role")
-          .eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-        const adminFlag = Boolean(role);
-        setIsAdmin(adminFlag);
-
-        // Admin profile picker support
-        if (adminFlag) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, first_name, display_name, age, sex")
-            .order("created_at", { ascending: false });
-          if (profiles) setAllProfiles(profiles as ProfileSummary[]);
+    const evaluate = async (currentAuthUserId: string | null) => {
+      if (!currentAuthUserId) {
+        // Logged out — wipe everything
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        if (!cancelled) {
+          setAuthUserId(null);
+          setIsAdmin(false);
+          setAllProfiles([]);
+          setSession(null);
+          setIsLoading(false);
         }
+        return;
+      }
 
-        const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as ViewAsSession;
-          // Validate with server — session may have been revoked elsewhere
-          const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-          const { data: authData } = await supabase.auth.getSession();
-          const token = authData.session?.access_token;
-          if (token) {
-            const res = await fetch(
-              `${supabaseUrl}/functions/v1/admin-view-as-mint?target_user_id=${encodeURIComponent(parsed.target_user_id)}`,
-              { method: "GET", headers: { Authorization: `Bearer ${token}` } },
-            );
-            if (res.ok) {
-              const { session: serverSession } = await res.json();
-              if (serverSession && new Date(serverSession.expires_at).getTime() > Date.now()) {
-                setSession({
-                  session_id: serverSession.id,
-                  target_user_id: parsed.target_user_id,
-                  granted_at: serverSession.granted_at,
-                  expires_at: serverSession.expires_at,
-                });
+      if (!cancelled) setAuthUserId(currentAuthUserId);
+
+      const { data: role } = await supabase
+        .from("user_roles").select("role")
+        .eq("user_id", currentAuthUserId).eq("role", "admin").maybeSingle();
+      const adminFlag = Boolean(role);
+      if (cancelled) return;
+      setIsAdmin(adminFlag);
+
+      // Non-admins can never have a view-as session — purge any stale storage.
+      if (!adminFlag) {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        setSession(null);
+        setAllProfiles([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Admin profile picker support
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, first_name, display_name, age, sex")
+        .order("created_at", { ascending: false });
+      if (cancelled) return;
+      if (profiles) setAllProfiles(profiles as ProfileSummary[]);
+
+      // Restore session ONLY if it belongs to this admin (server validates ownership).
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as ViewAsSession & { admin_user_id?: string };
+          // Reject sessions belonging to a different admin account
+          if (parsed.admin_user_id && parsed.admin_user_id !== currentAuthUserId) {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+          } else {
+            const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
+            const { data: authData } = await supabase.auth.getSession();
+            const token = authData.session?.access_token;
+            if (token) {
+              const res = await fetch(
+                `${supabaseUrl}/functions/v1/admin-view-as-mint?target_user_id=${encodeURIComponent(parsed.target_user_id)}`,
+                { method: "GET", headers: { Authorization: `Bearer ${token}` } },
+              );
+              if (res.ok) {
+                const { session: serverSession } = await res.json();
+                if (serverSession && new Date(serverSession.expires_at).getTime() > Date.now()) {
+                  if (!cancelled) {
+                    setSession({
+                      session_id: serverSession.id,
+                      target_user_id: parsed.target_user_id,
+                      granted_at: serverSession.granted_at,
+                      expires_at: serverSession.expires_at,
+                    });
+                  }
+                } else {
+                  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+                }
               } else {
+                // Server rejected — clear local
                 sessionStorage.removeItem(SESSION_STORAGE_KEY);
               }
             }
           }
+        } catch {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
         }
-      } finally {
-        setIsLoading(false);
       }
-    })();
+
+      if (!cancelled) setIsLoading(false);
+    };
+
+    // Initial check
+    supabase.auth.getUser().then(({ data }) => evaluate(data.user?.id ?? null));
+
+    // React to auth changes (login / logout / token refresh switching users)
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, authSession) => {
+      const newUid = authSession?.user?.id ?? null;
+      // If the signed-in user changed, drop any persisted view-as state immediately.
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      setSession(null);
+      evaluate(newUid);
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   // Auto-expire: if current time passes expires_at, drop the session
