@@ -8,6 +8,8 @@ import { LogOut, ChevronDown, Users, ArrowLeft } from "lucide-react";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
+import ViewAsSessionBanner from "@/components/ViewAsSessionBanner";
+import EnterViewAsDialog from "@/components/EnterViewAsDialog";
 import TodayBar from "@/components/TodayBar";
 import QuickActions from "@/components/QuickActions";
 import WeeklySnapshot from "@/components/WeeklySnapshot";
@@ -47,9 +49,11 @@ const sections: Record<string, React.FC> = {
 const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
   const { signOut, user } = useAuth();
-  const { isAdmin, isViewingAs, allProfiles, viewAs, resetViewAs, effectiveUserId } = useViewAs();
+  const { isAdmin, isViewingAs, allProfiles, resetViewAs, effectiveUserId } = useViewAs();
   const [activeSection, setActiveSection] = useState("journey");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [viewAsDialogOpen, setViewAsDialogOpen] = useState(false);
+  const [viewAsTarget, setViewAsTarget] = useState<string | undefined>(undefined);
   const mainRef = useRef<HTMLDivElement>(null);
 
   const handleNavigate = (id: string) => {
@@ -62,28 +66,12 @@ const PatientShell: React.FC = () => {
 
   return (
     <NavigationProvider onNavigate={handleNavigate}>
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden flex-col">
+      <ViewAsSessionBanner />
+      <div className="flex flex-1 overflow-hidden">
       <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
 
       <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 md:pb-8">
-        {/* View-as banner */}
-        {isViewingAs && (
-          <div className="bg-accent/10 border-b border-accent/20 px-6 py-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-3.5 w-3.5 text-accent" />
-              <p className="text-xs font-sans font-medium text-accent">
-                Viewing as: {manifest.patient.firstName || "Patient"}
-              </p>
-            </div>
-            <button
-              onClick={resetViewAs}
-              className="flex items-center gap-1 text-xs font-sans text-accent hover:text-accent/80 transition-colors"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Back to my profile
-            </button>
-          </div>
-        )}
 
         <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border px-6 py-3 md:px-10">
           <div className="flex items-center justify-between">
@@ -123,38 +111,30 @@ const PatientShell: React.FC = () => {
                       <p className="text-xs font-sans text-foreground truncate">{user?.email}</p>
                     </div>
 
-                    {/* Profile switcher for admins */}
-                    {isAdmin && allProfiles.length > 1 && (
+                    {/* Admin: start audited view-as session */}
+                    {isAdmin && (
                       <div className="border-b border-border py-1">
-                        <p className="px-3 py-1 text-[10px] text-muted-foreground font-sans uppercase tracking-wider">Switch profile</p>
-                        {allProfiles.map((p) => {
-                          const isActive = p.user_id === effectiveUserId;
-                          const isSelf = p.user_id === user?.id;
-                          return (
-                            <button
-                              key={p.user_id}
-                              onClick={() => {
-                                if (isSelf) resetViewAs();
-                                else viewAs(p.user_id);
-                                setProfileOpen(false);
-                              }}
-                              className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-sans transition-colors ${
-                                isActive ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted/60"
-                              }`}
-                            >
-                              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${
-                                isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                              }`}>
-                                {(p.first_name?.[0] ?? p.display_name?.[0] ?? "?").toUpperCase()}
-                              </div>
-                              <div className="text-left min-w-0">
-                                <p className="truncate font-medium">{p.first_name || p.display_name || "Unknown"}</p>
-                                {p.age && <p className="text-[10px] text-muted-foreground">{p.age}y · {p.sex || "—"}</p>}
-                              </div>
-                              {isSelf && <span className="text-[9px] text-muted-foreground ml-auto">(you)</span>}
-                            </button>
-                          );
-                        })}
+                        <p className="px-3 py-1 text-[10px] text-muted-foreground font-sans uppercase tracking-wider">Admin</p>
+                        {isViewingAs && (
+                          <button
+                            onClick={() => { resetViewAs(); setProfileOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                          >
+                            <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                            Exit view-as
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setViewAsTarget(undefined);
+                            setProfileOpen(false);
+                            setViewAsDialogOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                          Start view-as session…
+                        </button>
                       </div>
                     )}
 
@@ -196,6 +176,12 @@ const PatientShell: React.FC = () => {
 
       <MobileNav activeSection={activeSection} onNavigate={handleNavigate} />
       <ManifestSwitcher />
+      </div>
+      <EnterViewAsDialog
+        open={viewAsDialogOpen}
+        onOpenChange={setViewAsDialogOpen}
+        defaultTargetUserId={viewAsTarget}
+      />
     </div>
     </NavigationProvider>
   );
