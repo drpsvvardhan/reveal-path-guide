@@ -311,10 +311,34 @@ serve(async (req) => {
       const { data: roleData } = await userClient
         .from("user_roles").select("role").eq("user_id", callerUserId).eq("role", "admin").maybeSingle();
       if (!roleData) {
-        return new Response(JSON.stringify({ error: "forbidden" }), {
+        return new Response(JSON.stringify({ error: "forbidden", message: "Admin role required" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // NEW: check for valid view-as session
+      const { data: hasSession } = await userClient.rpc("has_valid_view_as_session", {
+        p_admin_user_id: callerUserId,
+        p_target_user_id: requestedUserId,
+      });
+      if (!hasSession) {
+        return new Response(JSON.stringify({
+          error: "no_view_as_session",
+          message: "An active view-as session is required to export another user's bundle. Start a session first.",
+        }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Log the bundle export to audit
+      const sb = createClient(supabaseUrl, serviceKey);
+      await sb.from("admin_view_as_audit").insert({
+        admin_user_id: callerUserId,
+        target_user_id: requestedUserId,
+        event_type: "bundle_exported",
+        event_detail: { timestamp: new Date().toISOString() },
+      });
+
       targetUserId = requestedUserId;
       isViewAsExport = true;
     }
