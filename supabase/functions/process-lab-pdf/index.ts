@@ -878,6 +878,8 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
       }
     }
 
+    const writeMs = Date.now() - writeStartedAt;
+    console.log(`[timing] upload=${uploadId} db_write_ms=${writeMs} inserted=${inserted} dup=${duplicates} queued=${queuedForReview}`);
     console.log(`Upload ${uploadId} canonicalization: ${inserted} inserted, ${duplicates} dup, ${queuedForReview} queued for review`);
 
 
