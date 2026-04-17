@@ -1132,6 +1132,60 @@ export type Database = {
           },
         ]
       }
+      review_queue_audit_log: {
+        Row: {
+          created_at: string
+          created_new_proposal: boolean
+          id: string
+          new_concept_id: string | null
+          observation_id: string | null
+          previous_concept_id: string | null
+          queue_item_id: string
+          reviewer_action: string
+          reviewer_id: string
+          reviewer_notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_new_proposal?: boolean
+          id?: string
+          new_concept_id?: string | null
+          observation_id?: string | null
+          previous_concept_id?: string | null
+          queue_item_id: string
+          reviewer_action: string
+          reviewer_id: string
+          reviewer_notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_new_proposal?: boolean
+          id?: string
+          new_concept_id?: string | null
+          observation_id?: string | null
+          previous_concept_id?: string | null
+          queue_item_id?: string
+          reviewer_action?: string
+          reviewer_id?: string
+          reviewer_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_queue_audit_log_observation_id_fkey"
+            columns: ["observation_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_observations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_queue_audit_log_queue_item_id_fkey"
+            columns: ["queue_item_id"]
+            isOneToOne: false
+            referencedRelation: "observation_review_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       terrain_renders: {
         Row: {
           assessment_id: string | null
@@ -1309,6 +1363,15 @@ export type Database = {
       next_terrain_render_version: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      resolve_observation_review_queue_item: {
+        Args: {
+          p_action: string
+          p_concept_id?: string
+          p_queue_item_id: string
+          p_reviewer_notes?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
