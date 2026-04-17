@@ -34,48 +34,52 @@ async function sha256(obj: unknown): Promise<string> {
 }
 
 async function buildSubject(sb: SupabaseClient, userId: string) {
-  const { data: profile } = await sb
+  const { data: profile, error } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, preferred_name, date_of_birth, sex, mrn, age")
-    .eq("id", userId).maybeSingle();
+    .select("id, user_id, first_name, display_name, preferred_name, age, sex")
+    .eq("user_id", userId).maybeSingle();
+  if (error) console.error("[buildSubject] profile lookup error", error);
 
   const candidateName = profile
-    ? (profile.preferred_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim())
+    ? (profile.preferred_name ?? profile.display_name ?? profile.first_name ?? null)
     : null;
   const externalName = candidateName && candidateName.length > 0 ? candidateName : null;
 
   return {
-    ok: Boolean(externalName) || Boolean(profile?.date_of_birth) || Boolean(profile?.sex),
+    ok: Boolean(externalName) || Boolean(profile?.age) || Boolean(profile?.sex),
     subject: [{
       subject_id: userId,
       external_name: externalName ?? "Unnamed Subject",
-      dob: profile?.date_of_birth ?? null,
+      dob: null,
       age: profile?.age ?? null,
       sex: profile?.sex ?? null,
-      mrn: profile?.mrn ?? null,
+      mrn: null,
       source_system: "reveal_path",
     }],
     profileFound: Boolean(profile),
     hasName: Boolean(externalName),
-    hasDob: Boolean(profile?.date_of_birth),
+    hasAge: Boolean(profile?.age),
     hasSex: Boolean(profile?.sex),
   };
 }
 
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, original_filename, document_type, page_count, extraction_confidence, uploaded_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
+    .select("id, original_filename, document_type, created_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256, collection_date, source_lab")
     .eq("user_id", userId)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: true });
+    .order("created_at", { ascending: true });
+  if (error) console.error("[buildSourceDocuments] error", error);
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
     source_name: u.original_filename ?? "unnamed_upload",
-    pages: u.page_count ?? null,
+    pages: null,
     document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    ingest_confidence: null,
+    ingested_at: u.created_at,
+    collection_date: u.collection_date ?? null,
+    source_lab: u.source_lab ?? null,
     status: u.status,
     identity_verified: u.name_match_status === "match",
     identity_match_score: u.name_match_score ?? null,
@@ -85,16 +89,17 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 }
 
 async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: string) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("patient_lab_observations")
     .select(`
-      id, upload_id, canonical_name, original_name,
-      value, value_text, unit, flag, reference_range_text,
-      specimen_type, collection_date, page_number, extraction_confidence,
+      id, upload_id, canonical_name, raw_name, display_name,
+      value, original_value, unit, flag, ref_low, ref_high,
+      specimen_type, collection_date,
       canonical_concept_id, canonical_unit, canonical_value,
-      classification_confidence, biomarker_class, classification_method
+      classification_confidence, biomarker_class, classification_method, source
     `)
     .eq("user_id", userId);
+  if (error) console.error("[buildLabAndFibroscanObservations] error", error);
 
   const obs: any[] = [];
   const excluded: any[] = [];
@@ -123,7 +128,7 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: sourceClass,
       collection_date: r.collection_date,
       observed_at_precision: r.collection_date ? "date" : "unknown",
@@ -131,23 +136,23 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       domain: null,
       biomarker_class: r.biomarker_class,
       analyte_name: r.canonical_concept_id,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name,
       twin_feature_name: r.canonical_concept_id,
-      result_display: r.value_text ?? (r.canonical_value != null ? String(r.canonical_value) : null),
+      result_display: r.canonical_value != null ? String(r.canonical_value) : (r.value != null ? String(r.value) : null),
       value_numeric: r.canonical_value,
       value_raw: r.value,
-      value_text: r.value_text,
+      value_original: r.original_value,
       unit_normalized: r.canonical_unit,
       unit_original: r.unit,
       classification_confidence: r.classification_confidence,
       classification_method: r.classification_method,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
+      reference_range_text: r.ref_low != null && r.ref_high != null ? `${r.ref_low}-${r.ref_high}` : null,
+      ref_low: r.ref_low,
+      ref_high: r.ref_high,
       specimen_type: r.specimen_type,
+      source: r.source,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
-      needs_pdf_verification: false,
     });
   }
 
@@ -156,45 +161,48 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
 
 async function buildCieObservations(sb: SupabaseClient, userId: string) {
   const out: any[] = [];
-  const { data: assessments } = await sb
+  const { data: assessments, error: aErr } = await sb
     .from("cie_assessments")
-    .select("id, assessed_at, completed_at, created_at")
+    .select("id, full_completed_at, layer1_completed_at, layer2_completed_at, created_at")
     .eq("user_id", userId);
+  if (aErr) console.error("[buildCieObservations] assessments error", aErr);
   if (!assessments || assessments.length === 0) return out;
 
   const aIds = assessments.map((a: any) => a.id);
   const [{ data: ds }, { data: gs }] = await Promise.all([
-    sb.from("cie_domain_scores").select("id, assessment_id, domain_id, score, completion_pct, computed_at").in("assessment_id", aIds),
-    sb.from("cie_gate_scores").select("id, assessment_id, gate_id, score, status, computed_at").in("assessment_id", aIds),
+    sb.from("cie_domain_scores").select("id, assessment_id, domain_id, final_score, axis, created_at").in("assessment_id", aIds),
+    sb.from("cie_gate_scores").select("id, assessment_id, gate_id, gate_name, score, traffic_light, created_at").in("assessment_id", aIds),
   ]);
   const aById = new Map(assessments.map((a: any) => [a.id, a]));
 
   for (const r of ds ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
+    const collectedAt = a.full_completed_at ?? a.layer2_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
-      source_doc_id: null, source_name: "cie_v2.2_self_report", source_class: "cie",
-      collection_date: a.assessed_at ?? a.completed_at ?? r.computed_at,
-      category: "cie", domain: "cie_domain", biomarker_class: "cie",
+      source_doc_id: null, source_name: "cie_self_report", source_class: "cie",
+      collection_date: collectedAt,
+      category: "cie", domain: r.axis ?? "cie_domain", biomarker_class: "cie",
       analyte_name: r.domain_id, twin_feature_name: `cie_domain_${r.domain_id}`,
-      value_numeric: r.score, value_raw: r.score, unit_normalized: "score_0_100",
+      value_numeric: r.final_score, value_raw: r.final_score, unit_normalized: "score_0_100",
       classification_method: "structured_intake",
       classification_confidence: 1.0,
-      specimen_type: "self_report", status: (r.completion_pct ?? 1) >= 1 ? "final" : "preliminary",
+      specimen_type: "self_report", status: a.full_completed_at ? "final" : "preliminary",
     });
   }
   for (const r of gs ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
+    const collectedAt = a.full_completed_at ?? a.layer2_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
-      source_doc_id: null, source_name: "cie_v2.2_gate", source_class: "cie",
-      collection_date: a.assessed_at ?? a.completed_at ?? r.computed_at,
+      source_doc_id: null, source_name: "cie_gate", source_class: "cie",
+      collection_date: collectedAt,
       category: "cie", domain: "cie_gate", biomarker_class: "cie",
       analyte_name: r.gate_id, twin_feature_name: `cie_gate_${r.gate_id}`,
       value_numeric: r.score, value_raw: r.score, unit_normalized: "score_0_100",
       classification_method: "structured_intake",
       classification_confidence: 1.0,
-      flag: r.status, specimen_type: "self_report", status: "final",
+      flag: r.traffic_light, specimen_type: "self_report", status: "final",
     });
   }
   return out;
@@ -330,7 +338,7 @@ serve(async (req) => {
           is_view_as_export: isViewAsExport,
           profile_found: subjectResult.profileFound,
           has_name: subjectResult.hasName,
-          has_dob: subjectResult.hasDob, has_sex: subjectResult.hasSex,
+          has_age: subjectResult.hasAge, has_sex: subjectResult.hasSex,
           source_documents_found: sourceDocs.length,
           observations_found: labResult.observations.length + cieObs.length,
         },
