@@ -607,9 +607,149 @@ export type Database = {
         }
         Relationships: []
       }
+      observation_review_queue: {
+        Row: {
+          classification_confidence: number | null
+          id: string
+          observation_id: string
+          page_number: number | null
+          proposed_concept_id: string | null
+          proposed_concept_label: string | null
+          proposed_new_concept: boolean
+          proposed_unit: string | null
+          queued_at: string
+          raw_name: string
+          raw_unit: string | null
+          raw_value: number | null
+          reject_reason: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_concept_id: string | null
+          reviewer_notes: string | null
+          upload_id: string | null
+          user_id: string
+        }
+        Insert: {
+          classification_confidence?: number | null
+          id?: string
+          observation_id: string
+          page_number?: number | null
+          proposed_concept_id?: string | null
+          proposed_concept_label?: string | null
+          proposed_new_concept?: boolean
+          proposed_unit?: string | null
+          queued_at?: string
+          raw_name: string
+          raw_unit?: string | null
+          raw_value?: number | null
+          reject_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_concept_id?: string | null
+          reviewer_notes?: string | null
+          upload_id?: string | null
+          user_id: string
+        }
+        Update: {
+          classification_confidence?: number | null
+          id?: string
+          observation_id?: string
+          page_number?: number | null
+          proposed_concept_id?: string | null
+          proposed_concept_label?: string | null
+          proposed_new_concept?: boolean
+          proposed_unit?: string | null
+          queued_at?: string
+          raw_name?: string
+          raw_unit?: string | null
+          raw_value?: number | null
+          reject_reason?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_concept_id?: string | null
+          reviewer_notes?: string | null
+          upload_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "observation_review_queue_observation_id_fkey"
+            columns: ["observation_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_observations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "observation_review_queue_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ontology_concept_proposals: {
+        Row: {
+          example_raw_names: string[] | null
+          first_seen_observation_id: string | null
+          id: string
+          merged_into_concept_id: string | null
+          proposed_at: string
+          proposed_by: string | null
+          proposed_concept_id: string
+          proposed_domain: string | null
+          proposed_label: string
+          proposed_unit: string | null
+          status: string
+        }
+        Insert: {
+          example_raw_names?: string[] | null
+          first_seen_observation_id?: string | null
+          id?: string
+          merged_into_concept_id?: string | null
+          proposed_at?: string
+          proposed_by?: string | null
+          proposed_concept_id: string
+          proposed_domain?: string | null
+          proposed_label: string
+          proposed_unit?: string | null
+          status?: string
+        }
+        Update: {
+          example_raw_names?: string[] | null
+          first_seen_observation_id?: string | null
+          id?: string
+          merged_into_concept_id?: string | null
+          proposed_at?: string
+          proposed_by?: string | null
+          proposed_concept_id?: string
+          proposed_domain?: string | null
+          proposed_label?: string
+          proposed_unit?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ontology_concept_proposals_first_seen_observation_id_fkey"
+            columns: ["first_seen_observation_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patient_lab_observations: {
         Row: {
+          biomarker_class: string | null
+          canonical_concept_id: string | null
           canonical_name: string
+          canonical_unit: string | null
+          canonical_value: number | null
+          classification_confidence: number | null
+          classification_method: string | null
           collection_date: string
           corrected: boolean
           corrected_at: string | null
@@ -629,7 +769,13 @@ export type Database = {
           value: number
         }
         Insert: {
+          biomarker_class?: string | null
+          canonical_concept_id?: string | null
           canonical_name: string
+          canonical_unit?: string | null
+          canonical_value?: number | null
+          classification_confidence?: number | null
+          classification_method?: string | null
           collection_date: string
           corrected?: boolean
           corrected_at?: string | null
@@ -649,7 +795,13 @@ export type Database = {
           value: number
         }
         Update: {
+          biomarker_class?: string | null
+          canonical_concept_id?: string | null
           canonical_name?: string
+          canonical_unit?: string | null
+          canonical_value?: number | null
+          classification_confidence?: number | null
+          classification_method?: string | null
           collection_date?: string
           corrected?: boolean
           corrected_at?: string | null
