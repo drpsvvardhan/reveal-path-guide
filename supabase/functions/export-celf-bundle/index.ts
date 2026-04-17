@@ -128,7 +128,7 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: sourceClass,
       collection_date: r.collection_date,
       observed_at_precision: r.collection_date ? "date" : "unknown",
@@ -136,23 +136,23 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       domain: null,
       biomarker_class: r.biomarker_class,
       analyte_name: r.canonical_concept_id,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name,
       twin_feature_name: r.canonical_concept_id,
-      result_display: r.value_text ?? (r.canonical_value != null ? String(r.canonical_value) : null),
+      result_display: r.canonical_value != null ? String(r.canonical_value) : (r.value != null ? String(r.value) : null),
       value_numeric: r.canonical_value,
       value_raw: r.value,
-      value_text: r.value_text,
+      value_original: r.original_value,
       unit_normalized: r.canonical_unit,
       unit_original: r.unit,
       classification_confidence: r.classification_confidence,
       classification_method: r.classification_method,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
+      reference_range_text: r.ref_low != null && r.ref_high != null ? `${r.ref_low}-${r.ref_high}` : null,
+      ref_low: r.ref_low,
+      ref_high: r.ref_high,
       specimen_type: r.specimen_type,
+      source: r.source,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
-      needs_pdf_verification: false,
     });
   }
 
@@ -161,45 +161,48 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
 
 async function buildCieObservations(sb: SupabaseClient, userId: string) {
   const out: any[] = [];
-  const { data: assessments } = await sb
+  const { data: assessments, error: aErr } = await sb
     .from("cie_assessments")
-    .select("id, assessed_at, completed_at, created_at")
+    .select("id, full_completed_at, layer1_completed_at, layer2_completed_at, created_at")
     .eq("user_id", userId);
+  if (aErr) console.error("[buildCieObservations] assessments error", aErr);
   if (!assessments || assessments.length === 0) return out;
 
   const aIds = assessments.map((a: any) => a.id);
   const [{ data: ds }, { data: gs }] = await Promise.all([
-    sb.from("cie_domain_scores").select("id, assessment_id, domain_id, score, completion_pct, computed_at").in("assessment_id", aIds),
-    sb.from("cie_gate_scores").select("id, assessment_id, gate_id, score, status, computed_at").in("assessment_id", aIds),
+    sb.from("cie_domain_scores").select("id, assessment_id, domain_id, final_score, axis, created_at").in("assessment_id", aIds),
+    sb.from("cie_gate_scores").select("id, assessment_id, gate_id, gate_name, score, traffic_light, created_at").in("assessment_id", aIds),
   ]);
   const aById = new Map(assessments.map((a: any) => [a.id, a]));
 
   for (const r of ds ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
+    const collectedAt = a.full_completed_at ?? a.layer2_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
-      source_doc_id: null, source_name: "cie_v2.2_self_report", source_class: "cie",
-      collection_date: a.assessed_at ?? a.completed_at ?? r.computed_at,
-      category: "cie", domain: "cie_domain", biomarker_class: "cie",
+      source_doc_id: null, source_name: "cie_self_report", source_class: "cie",
+      collection_date: collectedAt,
+      category: "cie", domain: r.axis ?? "cie_domain", biomarker_class: "cie",
       analyte_name: r.domain_id, twin_feature_name: `cie_domain_${r.domain_id}`,
-      value_numeric: r.score, value_raw: r.score, unit_normalized: "score_0_100",
+      value_numeric: r.final_score, value_raw: r.final_score, unit_normalized: "score_0_100",
       classification_method: "structured_intake",
       classification_confidence: 1.0,
-      specimen_type: "self_report", status: (r.completion_pct ?? 1) >= 1 ? "final" : "preliminary",
+      specimen_type: "self_report", status: a.full_completed_at ? "final" : "preliminary",
     });
   }
   for (const r of gs ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
+    const collectedAt = a.full_completed_at ?? a.layer2_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
-      source_doc_id: null, source_name: "cie_v2.2_gate", source_class: "cie",
-      collection_date: a.assessed_at ?? a.completed_at ?? r.computed_at,
+      source_doc_id: null, source_name: "cie_gate", source_class: "cie",
+      collection_date: collectedAt,
       category: "cie", domain: "cie_gate", biomarker_class: "cie",
       analyte_name: r.gate_id, twin_feature_name: `cie_gate_${r.gate_id}`,
       value_numeric: r.score, value_raw: r.score, unit_normalized: "score_0_100",
       classification_method: "structured_intake",
       classification_confidence: 1.0,
-      flag: r.status, specimen_type: "self_report", status: "final",
+      flag: r.traffic_light, specimen_type: "self_server", status: "final",
     });
   }
   return out;
