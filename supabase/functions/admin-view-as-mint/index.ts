@@ -162,7 +162,7 @@ serve(async (req) => {
       await sb.from("admin_view_as_audit").insert({
         session_id: session.id,
         admin_user_id: adminUserId,
-        target_user_id,
+        target_user_id: normalizedTargetUserId,
         event_type: "session_minted",
         event_detail: {
           reason: reason.trim(),
