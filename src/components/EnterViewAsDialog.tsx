@@ -86,13 +86,26 @@ export default function EnterViewAsDialog({
                   <SelectValue placeholder="Select a profile…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allProfiles.map((p) => (
-                    <SelectItem key={p.user_id} value={p.user_id}>
-                      {p.first_name || p.display_name || "Unknown"}
-                      {p.age ? ` · ${p.age}y` : ""}
-                      {p.sex ? ` · ${p.sex}` : ""}
-                    </SelectItem>
-                  ))}
+                  {allProfiles.map((p) => {
+                    const name =
+                      p.first_name ||
+                      p.display_name ||
+                      `User ${p.user_id.slice(0, 8)}…`;
+                    const meta = [
+                      p.age ? `${p.age}y` : null,
+                      p.sex ?? null,
+                    ].filter(Boolean).join(" · ");
+                    return (
+                      <SelectItem key={p.user_id} value={p.user_id}>
+                        <div className="flex flex-col py-0.5">
+                          <span className="text-sm">{name}{meta ? ` · ${meta}` : ""}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[280px]">
+                            {p.user_id}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             ) : (

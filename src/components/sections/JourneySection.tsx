@@ -273,6 +273,13 @@ const JourneySection: React.FC = () => {
         />
       }
     >
+      {/* PERSONAL GREETING */}
+      {greetingName && (
+        <p className="text-eyebrow text-muted-foreground -mb-2">
+          {greeting}, <span className="text-foreground">{greetingName}</span>.
+        </p>
+      )}
+
       {/* TODAY BLOCK — prefer action plan, fall back to terrain portrait */}
       {(topAction || portrait?.the_one_action) && (
         <motion.div

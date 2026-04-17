@@ -4,7 +4,8 @@ import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { NavigationProvider } from "@/context/NavigationContext";
-import { LogOut, ChevronDown, Users, ArrowLeft } from "lucide-react";
+import { LogOut, ChevronDown, Users, ArrowLeft, Settings } from "lucide-react";
+import { Link } from "react-router-dom";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
@@ -138,6 +139,14 @@ const PatientShell: React.FC = () => {
                       </div>
                     )}
 
+                    <Link
+                      to="/account"
+                      onClick={() => setProfileOpen(false)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                    >
+                      <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                      Account settings
+                    </Link>
                     <button
                       onClick={() => { setProfileOpen(false); signOut(); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
