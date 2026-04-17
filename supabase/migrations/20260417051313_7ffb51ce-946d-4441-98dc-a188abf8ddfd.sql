@@ -1,0 +1,1 @@
+delete from public.patient_lab_uploads where error_message='arrayBuffer is not defined';
