@@ -109,7 +109,22 @@ const ClinicalShare: React.FC = () => {
 
       {/* Content */}
       <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
-        <h1 className="font-serif text-2xl text-[#3A2F3F]">Clinical handoff</h1>
+        <div className="space-y-2">
+          <h1 className="font-serif text-2xl text-[#3A2F3F]">Clinical handoff</h1>
+          {(patient.name || patient.age || patient.sex) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#5B4A5F]">
+              {patient.name && (
+                <span className="font-medium text-[#1E1A1F]">{patient.name}</span>
+              )}
+              {patient.age != null && (
+                <span>· {patient.age} years</span>
+              )}
+              {patient.sex && (
+                <span className="capitalize">· {patient.sex.replace(/_/g, " ")}</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Terrain overview */}
         <p className="text-base text-[#1E1A1F]/85 leading-relaxed">{cs.terrain_overview}</p>
