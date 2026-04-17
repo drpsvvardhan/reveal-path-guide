@@ -318,7 +318,7 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
   const out: any[] = [];
   const { data: assessments, error: aErr } = await sb
     .from("cie_assessments")
-    .select("id, user_id, assessed_at, completed_at, created_at")
+    .select("id, user_id, full_completed_at, layer1_completed_at, created_at")
     .eq("user_id", userId);
   if (aErr || !assessments || assessments.length === 0) return out;
 
@@ -326,18 +326,18 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
 
   const { data: domainScores } = await sb
     .from("cie_domain_scores")
-    .select("id, assessment_id, domain_id, score, completion_pct, computed_at")
+    .select("id, assessment_id, domain_id, final_score, created_at")
     .in("assessment_id", assessmentIds);
   const { data: gateScores } = await sb
     .from("cie_gate_scores")
-    .select("id, assessment_id, gate_id, score, status, computed_at")
+    .select("id, assessment_id, gate_id, score, traffic_light, created_at")
     .in("assessment_id", assessmentIds);
 
   const aById = new Map(assessments.map((a: any) => [a.id, a]));
 
   for (const r of domainScores ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
-    const dt = a.assessed_at ?? a.completed_at ?? a.created_at ?? r.computed_at;
+    const dt = a.full_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     const f = lookupFeature(map, "cie_domain", r.domain_id, null);
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
@@ -346,21 +346,21 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       category: "cie", domain: f.domain, panel_group: f.panel_group,
       panel_original: "CIE v2.2", analyte_name: f.feature_label,
       test_name_original: `Domain ${r.domain_id}`, twin_feature_name: f.twin_feature_name,
-      result_display: r.score != null ? String(r.score) : null,
-      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: null,
+      result_display: r.final_score != null ? String(r.final_score) : null,
+      value_operator: null, value_numeric: r.final_score, value_raw: r.final_score, value_text: null,
       unit_normalized: "score_0_100", unit_original: "score",
       unit_factor: 1, unit_offset: 0, unit_normalized_applied: false,
       flag: null, reference_range_text: null,
       specimen_type: "self_report",
-      status: (r.completion_pct ?? 1) >= 1.0 ? "final" : "preliminary",
+      status: "final",
       page_number: null, ocr_confidence: null,
       needs_pdf_verification: false,
-      raw_notes: JSON.stringify({ completion_pct: r.completion_pct }),
+      raw_notes: null,
     });
   }
   for (const r of gateScores ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
-    const dt = a.assessed_at ?? a.completed_at ?? a.created_at ?? r.computed_at;
+    const dt = a.full_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     const f = lookupFeature(map, "cie_gate", r.gate_id, null);
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
@@ -370,10 +370,10 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       panel_original: "CIE v2.2 Gates", analyte_name: f.feature_label,
       test_name_original: r.gate_id, twin_feature_name: f.twin_feature_name,
       result_display: r.score != null ? String(r.score) : null,
-      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: r.status,
+      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: r.traffic_light,
       unit_normalized: "score_0_100", unit_original: "score",
       unit_factor: 1, unit_offset: 0, unit_normalized_applied: false,
-      flag: r.status, reference_range_text: null,
+      flag: r.traffic_light, reference_range_text: null,
       specimen_type: "self_report", status: "final",
       page_number: null, ocr_confidence: null,
       needs_pdf_verification: false, raw_notes: null,
