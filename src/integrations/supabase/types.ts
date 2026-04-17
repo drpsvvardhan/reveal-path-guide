@@ -613,6 +613,7 @@ export type Database = {
           ref_high: number | null
           ref_low: number | null
           source: string | null
+          specimen_type: string | null
           unit: string
           upload_id: string
           user_id: string
@@ -632,6 +633,7 @@ export type Database = {
           ref_high?: number | null
           ref_low?: number | null
           source?: string | null
+          specimen_type?: string | null
           unit: string
           upload_id: string
           user_id: string
@@ -651,6 +653,7 @@ export type Database = {
           ref_high?: number | null
           ref_low?: number | null
           source?: string | null
+          specimen_type?: string | null
           unit?: string
           upload_id?: string
           user_id?: string
@@ -671,6 +674,7 @@ export type Database = {
           collection_date: string | null
           content_sha256: string | null
           created_at: string
+          document_type: string | null
           error_message: string | null
           extracted_patient_dob: string | null
           extracted_patient_mrn: string | null
@@ -702,6 +706,7 @@ export type Database = {
           collection_date?: string | null
           content_sha256?: string | null
           created_at?: string
+          document_type?: string | null
           error_message?: string | null
           extracted_patient_dob?: string | null
           extracted_patient_mrn?: string | null
@@ -733,6 +738,7 @@ export type Database = {
           collection_date?: string | null
           content_sha256?: string | null
           created_at?: string
+          document_type?: string | null
           error_message?: string | null
           extracted_patient_dob?: string | null
           extracted_patient_mrn?: string | null
