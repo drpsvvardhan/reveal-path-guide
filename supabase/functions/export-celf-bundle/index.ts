@@ -574,6 +574,9 @@ serve(async (req) => {
       export_id: auditRow.id,
       generated_at: auditRow.generated_at,
       content_sha256: contentHash,
+      is_view_as_export: isViewAsExport,
+      caller_user_id: callerUserId,
+      target_user_id: targetUserId,
       coverage: { labs: hasLabs, inbody: hasInbody, cie: hasCie, fibroscan: hasFibroscan },
       counts: {
         subject: subject.length,
