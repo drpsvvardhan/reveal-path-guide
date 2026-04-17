@@ -216,8 +216,24 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     ? Math.max(0, new Date(session.expires_at).getTime() - now)
     : null;
 
+  const viewingUserId = session?.target_user_id ?? null;
+  const isViewingAs = !!session;
+
+  // Legacy shim: prompt for a reason, then mint a session.
+  const viewAs = useCallback(async (userId: string) => {
+    const reason = typeof window !== "undefined"
+      ? window.prompt("Reason for viewing as this patient (min 10 chars, audit-logged):")
+      : null;
+    if (!reason) return;
+    await enterViewAs(userId, reason, 60);
+  }, [enterViewAs]);
+
+  const resetViewAs = useCallback(async () => {
+    await exitViewAs();
+  }, [exitViewAs]);
+
   const value: ViewAsState = {
-    viewingUserId: session?.target_user_id ?? null,
+    viewingUserId,
     sessionId: session?.session_id ?? null,
     sessionExpiresAt: session?.expires_at ?? null,
     isAdmin,
@@ -225,6 +241,12 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     enterViewAs,
     exitViewAs,
     timeRemainingMs,
+    // Legacy compatibility
+    effectiveUserId: viewingUserId ?? authUserId,
+    isViewingAs,
+    allProfiles,
+    viewAs,
+    resetViewAs,
   };
 
   return <ViewAsContext.Provider value={value}>{children}</ViewAsContext.Provider>;
