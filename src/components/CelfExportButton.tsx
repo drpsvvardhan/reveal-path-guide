@@ -112,7 +112,18 @@ export function CelfExportButton() {
             <div>Observations</div><div className="text-right">{lastResult.counts.observations}</div>
             <div>Distinct features</div><div className="text-right">{lastResult.counts.feature_state}</div>
             <div>Source documents</div><div className="text-right">{lastResult.counts.source_documents}</div>
+            {typeof lastResult.counts.excluded === "number" && lastResult.counts.excluded > 0 && (
+              <>
+                <div className="text-amber-700 dark:text-amber-400">Excluded (low confidence)</div>
+                <div className="text-right text-amber-700 dark:text-amber-400">{lastResult.counts.excluded}</div>
+              </>
+            )}
           </div>
+          {typeof lastResult.counts.excluded === "number" && lastResult.counts.excluded > 0 && (
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              {lastResult.counts.excluded} observation{lastResult.counts.excluded === 1 ? "" : "s"} filtered out — classifier confidence below 0.80 or no canonical concept match.
+            </p>
+          )}
           <div className="flex flex-wrap gap-1.5 pt-1">
             {lastResult.coverage.labs && <CoverageBadge label="Labs" />}
             {lastResult.coverage.inbody && <CoverageBadge label="InBody" />}
