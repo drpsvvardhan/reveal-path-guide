@@ -23,8 +23,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const BUNDLE_VERSION = "celf-v0.3";
-const MAP_VERSION    = "celf-v0.3";
+const BUNDLE_VERSION = "celf-v0.4";
+const MAP_VERSION    = "celf-v0.4";
 
 type FeatureMap = Map<string, {
   celf_feature_name: string;
