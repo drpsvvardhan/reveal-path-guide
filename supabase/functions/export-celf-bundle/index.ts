@@ -533,7 +533,7 @@ serve(async (req) => {
         generated_at: new Date().toISOString(),
         phi_level: "full_phi",
         source: "reveal_path",
-        generator: "vizzhy_reveal_path_celf_adapter_v1.4",
+        generator: "vizzhy_reveal_path_celf_adapter_v1.5",
         caller_user_id: callerUserId,
         target_user_id: targetUserId,
         is_view_as_export: isViewAsExport,
