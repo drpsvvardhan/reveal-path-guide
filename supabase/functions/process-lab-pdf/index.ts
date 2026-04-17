@@ -629,7 +629,10 @@ async function processUpload(
       .update({ content_sha256: contentSha256 })
       .eq("id", uploadId);
 
-    const base64Data = arrayBufferToBase64(pdfBytes.buffer as ArrayBuffer);
+    // Slice exactly to the view in case Uint8Array is a view over a larger buffer
+    const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength);
+    const base64Data = arrayBufferToBase64(exactBuffer);
+    console.log(`[encode] pdfBytes.length=${pdfBytes.length}, base64.length=${base64Data.length}`);
     const mimeType = detectMimeFromPath(upload.storage_path);
 
     // Detect if this is an InBody report
@@ -705,11 +708,12 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
     const llmMs = Date.now() - llmStartedAt;
     console.log(`[timing] upload=${uploadId} llm_call_ms=${llmMs} model=google/gemini-3-flash-preview`);
+    console.log(`[llm-raw] upload=${uploadId} output_length=${rawOutput.length}, preview=${rawOutput.slice(0, 600)}`);
 
     const parseStartedAt = Date.now();
     const parsed = extractJsonFromText(rawOutput);
     const extracted = validateAndCleanExtraction(parsed);
-    console.log(`[timing] upload=${uploadId} parse_ms=${Date.now() - parseStartedAt} observations=${extracted?.observations?.length ?? 0}`);
+    console.log(`[timing] upload=${uploadId} parse_ms=${Date.now() - parseStartedAt} observations=${extracted?.observations?.length ?? 0} raw_obs_count=${parsed?.observations?.length ?? 'n/a'}`);
 
     if (!extracted) {
       throw new Error("Extracted data did not match expected schema");

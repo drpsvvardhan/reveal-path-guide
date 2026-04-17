@@ -1,0 +1,1 @@
+delete from public.patient_lab_uploads where id='e5f7952d-4095-4d4c-9497-7203428e1c85';
