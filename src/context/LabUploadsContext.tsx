@@ -12,7 +12,7 @@ interface LabUploadsContextValue {
   processing: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  uploadAndProcess: (file: File) => Promise<LabUploadProcessResult>;
+  uploadAndProcess: (file: File, options?: { confirmedName?: string }) => Promise<LabUploadProcessResult>;
   deleteUpload: (uploadId: string) => Promise<void>;
   correctObservation: (observationId: string, newValue: number) => Promise<void>;
   observationsAsTimeline: () => BiomarkerObservation[];
@@ -98,7 +98,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [refresh]);
 
   const uploadAndProcess = useCallback(
-    async (file: File): Promise<LabUploadProcessResult> => {
+    async (file: File, options?: { confirmedName?: string }): Promise<LabUploadProcessResult> => {
       if (!user) return { success: false, error: "Not authenticated" };
       const targetUserId = effectiveUserId || user.id;
       if (!SUPPORTED_TYPES.includes(file.type)) {
@@ -154,13 +154,17 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setProcessing(true);
 
         // Step 4: Trigger the edge function (returns 202 immediately)
+        const reqBody: Record<string, unknown> = { uploadId: uploadRow.id };
+        if (options?.confirmedName && options.confirmedName.trim().length > 0) {
+          reqBody.pre_confirmed = { confirmed_name: options.confirmedName.trim() };
+        }
         const resp = await fetch(PROCESS_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ uploadId: uploadRow.id }),
+          body: JSON.stringify(reqBody),
         });
 
         if (!resp.ok && resp.status !== 202) {

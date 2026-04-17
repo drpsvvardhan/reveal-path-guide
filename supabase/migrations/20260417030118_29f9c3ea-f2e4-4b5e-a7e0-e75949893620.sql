@@ -1,0 +1,1 @@
+delete from public.patient_lab_uploads where original_filename ilike '%whoop%' and (status in ('rejected_duplicate','processing','awaiting_identity_confirmation') or coalesce(observations_inserted,0) = 0);

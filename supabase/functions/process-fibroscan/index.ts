@@ -89,6 +89,11 @@ serve(async (req) => {
     const body = await req.json();
     const { upload_id: uploadId, storage_path: storagePath } = body;
     const identityOverride: IdentityOverride | undefined = body.identity_override;
+    const preConfirmedRaw = body.pre_confirmed;
+    const preConfirmed: { confirmed_name: string } | undefined =
+      preConfirmedRaw && typeof preConfirmedRaw.confirmed_name === "string" && preConfirmedRaw.confirmed_name.trim().length > 0
+        ? { confirmed_name: preConfirmedRaw.confirmed_name }
+        : undefined;
     if (!uploadId || !storagePath) {
       return new Response(JSON.stringify({ error: "missing upload_id or storage_path" }), {
         status: 400,
@@ -126,9 +131,9 @@ serve(async (req) => {
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer());
     const contentSha = await sha256Bytes(pdfBytes);
 
-    // -------- Guard 1: duplicate check (skip when this is the same upload re-trying after confirmation) --------
+    // -------- Guard 1: duplicate check (skip when this is the same upload re-trying after confirmation, or user pre-confirmed) --------
     const dedup = await checkContentDuplicate(sb, userId, contentSha);
-    if (dedup.isDuplicate && dedup.existingUploadId !== uploadRow.id) {
+    if (dedup.isDuplicate && dedup.existingUploadId !== uploadRow.id && !preConfirmed) {
       await recordRejection(sb, {
         userId,
         uploadId: uploadRow.id,
@@ -189,8 +194,15 @@ serve(async (req) => {
       name_match_status:      identity.status,
     }).eq("id", uploadRow.id);
 
-    // ---- override branch: caller has explicitly confirmed identity from the UI ----
-    if (identityOverride) {
+    // ---- pre-upload confirmation: user asserted ownership BEFORE extraction ----
+    if (preConfirmed) {
+      await sb.from("patient_lab_uploads").update({
+        identity_confirmed_at: new Date().toISOString(),
+        identity_confirmed_name: preConfirmed.confirmed_name.trim().slice(0, 200),
+        identity_confirmation_kind: "pre_upload_confirmed",
+        name_match_status: "confirmed_by_user",
+      }).eq("id", uploadRow.id);
+    } else if (identityOverride) {
       const validKind = identityOverride.kind === "unknown_accepted" || identityOverride.kind === "mismatch_overridden";
       if (!validKind || typeof identityOverride.confirmed_name !== "string" || identityOverride.confirmed_name.trim().length < 2) {
         return new Response(JSON.stringify({ error: "invalid_identity_override" }), {

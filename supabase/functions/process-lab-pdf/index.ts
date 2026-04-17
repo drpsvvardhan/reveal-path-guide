@@ -521,7 +521,19 @@ type IdentityOverride = {
   confirmed_name: string;
 };
 
-async function processUpload(uploadId: string, identityOverride?: IdentityOverride) {
+// User explicitly confirmed ownership in the pre-upload modal BEFORE we read
+// anything off the file. This bypasses both the duplicate guard (because they
+// are knowingly re-uploading) and the identity guard (because they have
+// asserted, with the contamination warning shown, that the file is theirs).
+type PreConfirmed = {
+  confirmed_name: string;
+};
+
+async function processUpload(
+  uploadId: string,
+  identityOverride?: IdentityOverride,
+  preConfirmed?: PreConfirmed,
+) {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -566,7 +578,7 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
     // ------------------------------------------------------------------
     const contentSha256 = await sha256Bytes(pdfBytes);
     const dedup = await checkContentDuplicate(supabase, upload.user_id, contentSha256);
-    if (dedup.isDuplicate && dedup.existingUploadId !== uploadId) {
+    if (dedup.isDuplicate && dedup.existingUploadId !== uploadId && !preConfirmed) {
       await recordRejection(supabase, {
         userId: upload.user_id,
         uploadId,
@@ -577,6 +589,9 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
       });
       console.log(`Upload ${uploadId} rejected as duplicate of ${dedup.existingUploadId}`);
       return;
+    }
+    if (dedup.isDuplicate && preConfirmed) {
+      console.log(`Upload ${uploadId} duplicate of ${dedup.existingUploadId} but user pre-confirmed re-upload — proceeding.`);
     }
     await supabase
       .from("patient_lab_uploads")
@@ -689,7 +704,17 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
       name_match_score: identity.score,
     }).eq("id", uploadId);
 
-    if (identityOverride) {
+    if (preConfirmed) {
+      // User said "this is mine" up front. Record their assertion and proceed
+      // regardless of name match score. Any mismatch becomes an audit-only
+      // signal stored in identity_confirmation_kind = 'pre_upload_confirmed'.
+      await supabase.from("patient_lab_uploads").update({
+        name_match_status: "confirmed_by_user",
+        identity_confirmed_at: new Date().toISOString(),
+        identity_confirmed_name: preConfirmed.confirmed_name.trim().slice(0, 200),
+        identity_confirmation_kind: "pre_upload_confirmed",
+      }).eq("id", uploadId);
+    } else if (identityOverride) {
       const validKind =
         identityOverride.kind === "unknown_accepted" ||
         identityOverride.kind === "mismatch_overridden";
@@ -921,6 +946,11 @@ serve(async (req) => {
     const body = await req.json();
     const { uploadId } = body;
     const identityOverride: IdentityOverride | undefined = body.identity_override;
+    const preConfirmedRaw = body.pre_confirmed;
+    const preConfirmed: PreConfirmed | undefined =
+      preConfirmedRaw && typeof preConfirmedRaw.confirmed_name === "string" && preConfirmedRaw.confirmed_name.trim().length > 0
+        ? { confirmed_name: preConfirmedRaw.confirmed_name }
+        : undefined;
 
     if (!uploadId) {
       return new Response(JSON.stringify({ error: "No uploadId provided" }), {
@@ -949,7 +979,7 @@ serve(async (req) => {
     }
 
     // @ts-ignore — EdgeRuntime is available in Supabase edge functions
-    EdgeRuntime.waitUntil(processUpload(uploadId, identityOverride));
+    EdgeRuntime.waitUntil(processUpload(uploadId, identityOverride, preConfirmed));
 
     return new Response(
       JSON.stringify({ message: "Processing started", uploadId }),

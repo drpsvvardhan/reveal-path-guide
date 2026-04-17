@@ -191,8 +191,8 @@ const RecordsSection: React.FC = () => {
     setPendingUpload({ file, kind: "lab" });
   };
 
-  const runLabUpload = async (file: File) => {
-    const result = await uploadAndProcess(file);
+  const runLabUpload = async (file: File, confirmedName: string) => {
+    const result = await uploadAndProcess(file, { confirmedName });
     setLastResult(result);
   };
 
@@ -212,7 +212,7 @@ const RecordsSection: React.FC = () => {
     setPendingUpload({ file, kind: "fibro" });
   };
 
-  const runFibroUpload = async (file: File) => {
+  const runFibroUpload = async (file: File, confirmedName: string) => {
     const targetUserId = effectiveUserId || user?.id;
     if (!targetUserId) {
       setFibroResult({ success: false, message: "Not authenticated." });
@@ -251,10 +251,14 @@ const RecordsSection: React.FC = () => {
         .update({ storage_path: storagePath })
         .eq("id", uploadRow.id);
 
-      // 3. Invoke the FibroScan processor
+      // 3. Invoke the FibroScan processor (with pre-upload ownership confirmation)
+      const fibroBody: Record<string, unknown> = { upload_id: uploadRow.id, storage_path: storagePath };
+      if (confirmedName && confirmedName.trim().length > 0) {
+        fibroBody.pre_confirmed = { confirmed_name: confirmedName.trim() };
+      }
       const { data, error: invokeError } = await supabase.functions.invoke(
         "process-fibroscan",
-        { body: { upload_id: uploadRow.id, storage_path: storagePath } },
+        { body: fibroBody },
       );
 
       if (invokeError) {
@@ -304,13 +308,17 @@ const RecordsSection: React.FC = () => {
     if (!pendingUpload) return;
     const { file, kind } = pendingUpload;
     setPendingUpload(null);
+    const confirmedName =
+      (user?.user_metadata?.full_name as string | undefined) ||
+      user?.email ||
+      "self-confirmed";
     if (kind === "lab") {
-      await runLabUpload(file);
+      await runLabUpload(file, confirmedName);
     } else {
-      await runFibroUpload(file);
+      await runFibroUpload(file, confirmedName);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingUpload]);
+  }, [pendingUpload, user]);
 
   const triggerFilePicker = () => fileInputRef.current?.click();
   const triggerFibroFilePicker = () => fibroFileInputRef.current?.click();
