@@ -463,23 +463,25 @@ serve(async (req) => {
     const url = new URL(req.url);
     const requestedUserId = url.searchParams.get("user_id");
     let targetUserId = callerUserId;
+    let isViewAsExport = false;
 
     if (requestedUserId && requestedUserId !== callerUserId) {
       const { data: roleData } = await userClient
         .from("user_roles").select("role").eq("user_id", callerUserId).eq("role", "admin").maybeSingle();
       if (!roleData) {
-        return new Response(JSON.stringify({ error: "forbidden" }), {
+        return new Response(JSON.stringify({ error: "forbidden", message: "Admin role required to export another user's bundle." }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       targetUserId = requestedUserId;
+      isViewAsExport = true;
     }
 
     const sb = createClient(supabaseUrl, serviceKey);
 
     const featureMap = await buildFeatureMap(sb);
 
-    const [subject, sourceDocs, labLikeObs, cieObs, identityAudit] = await Promise.all([
+    const [subjectResult, sourceDocs, labLikeObs, cieObs, identityAudit] = await Promise.all([
       buildSubject(sb, targetUserId),
       buildSourceDocuments(sb, targetUserId),
       buildLabAndFibroscanObservations(sb, targetUserId, featureMap),
@@ -487,6 +489,34 @@ serve(async (req) => {
       buildIdentityAudit(sb, targetUserId),
     ]);
 
+    // ------------------------------------------------------------------------
+    // SUBJECT IDENTITY GATE
+    //   Refuse to emit a bundle for an account missing demographics. This
+    //   prevents the view-as confusion where the UI shows one patient but
+    //   the export silently runs against a different (empty) account.
+    // ------------------------------------------------------------------------
+    if (!subjectResult.ok) {
+      return new Response(JSON.stringify({
+        error: "subject_identity_missing",
+        message: "Cannot export a bundle for an account with no demographic information. Please complete the profile (name, age, sex) before exporting.",
+        diagnostic: {
+          target_user_id: targetUserId,
+          caller_user_id: callerUserId,
+          is_view_as_export: isViewAsExport,
+          profile_found: subjectResult.profileFound,
+          has_name: subjectResult.hasName,
+          has_age: subjectResult.hasAge,
+          has_sex: subjectResult.hasSex,
+          source_documents_found: sourceDocs.length,
+          observations_found: labLikeObs.length + cieObs.length,
+        },
+      }, null, 2), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const subject = subjectResult.subject;
     const observations = [...labLikeObs, ...cieObs];
     const featureState = computeFeatureState(observations);
     const timelines    = computeTimelines(observations);
@@ -503,7 +533,10 @@ serve(async (req) => {
         generated_at: new Date().toISOString(),
         phi_level: "full_phi",
         source: "reveal_path",
-        generator: "vizzhy_reveal_path_celf_adapter_v1.2",
+        generator: "vizzhy_reveal_path_celf_adapter_v1.3",
+        caller_user_id: callerUserId,
+        target_user_id: targetUserId,
+        is_view_as_export: isViewAsExport,
       },
       subject,
       source_documents: sourceDocs,
