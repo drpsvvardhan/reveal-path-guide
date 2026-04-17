@@ -21,6 +21,7 @@ import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
 import { CelfExportButton } from "@/components/CelfExportButton";
 import IdentityConfirmModal, { IdentityConfirmRequest } from "@/components/records/IdentityConfirmModal";
+import PreUploadConfirmModal from "@/components/records/PreUploadConfirmModal";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
@@ -88,6 +89,7 @@ const RecordsSection: React.FC = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
   const [identityRequest, setIdentityRequest] = useState<IdentityConfirmRequest | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{ file: File; kind: "lab" | "fibro" } | null>(null);
   const { navigateTo } = useNavigation();
 
   // Surface confirmation modal whenever an upload lands in awaiting state.
@@ -179,19 +181,25 @@ const RecordsSection: React.FC = () => {
     }
   }, [effectiveUserId, user?.id, refetch]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Stage the picked file and open the ownership-confirmation modal.
+  // Actual upload runs only after the user explicitly confirms.
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
     setLastResult(null);
-    const result = await uploadAndProcess(file);
-    setLastResult(result);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setPendingUpload({ file, kind: "lab" });
   };
 
-  const handleFibroFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const runLabUpload = async (file: File) => {
+    const result = await uploadAndProcess(file);
+    setLastResult(result);
+  };
+
+  const handleFibroFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
     if (fibroFileInputRef.current) fibroFileInputRef.current.value = "";
+    if (!file) return;
     setFibroResult(null);
     if (file.type !== "application/pdf") {
       setFibroResult({ success: false, message: "FibroScan reports must be PDF files." });
@@ -201,6 +209,10 @@ const RecordsSection: React.FC = () => {
       setFibroResult({ success: false, message: "File too large (20 MB max)." });
       return;
     }
+    setPendingUpload({ file, kind: "fibro" });
+  };
+
+  const runFibroUpload = async (file: File) => {
     const targetUserId = effectiveUserId || user?.id;
     if (!targetUserId) {
       setFibroResult({ success: false, message: "Not authenticated." });
@@ -286,6 +298,19 @@ const RecordsSection: React.FC = () => {
       setFibroUploading(false);
     }
   };
+
+  // Called when the user confirms ownership in PreUploadConfirmModal.
+  const handlePendingConfirm = useCallback(async () => {
+    if (!pendingUpload) return;
+    const { file, kind } = pendingUpload;
+    setPendingUpload(null);
+    if (kind === "lab") {
+      await runLabUpload(file);
+    } else {
+      await runFibroUpload(file);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUpload]);
 
   const triggerFilePicker = () => fileInputRef.current?.click();
   const triggerFibroFilePicker = () => fibroFileInputRef.current?.click();
@@ -726,6 +751,14 @@ const RecordsSection: React.FC = () => {
         onReject={handleIdentityReject}
         onClose={() => setIdentityRequest(null)}
       />
+
+      <PreUploadConfirmModal
+        open={!!pendingUpload}
+        fileName={pendingUpload?.file.name ?? null}
+        onConfirm={handlePendingConfirm}
+        onCancel={() => setPendingUpload(null)}
+      />
+
     </PatientSectionLayout>
   );
 };
