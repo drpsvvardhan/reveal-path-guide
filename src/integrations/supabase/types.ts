@@ -178,7 +178,10 @@ export type Database = {
           notes: string | null
           reveal_canonical: string
           source_system: string
+          source_unit: string | null
           unit_canonical: string | null
+          unit_factor: number
+          unit_offset: number
         }
         Insert: {
           celf_domain?: string | null
@@ -191,7 +194,10 @@ export type Database = {
           notes?: string | null
           reveal_canonical: string
           source_system: string
+          source_unit?: string | null
           unit_canonical?: string | null
+          unit_factor?: number
+          unit_offset?: number
         }
         Update: {
           celf_domain?: string | null
@@ -204,7 +210,10 @@ export type Database = {
           notes?: string | null
           reveal_canonical?: string
           source_system?: string
+          source_unit?: string | null
           unit_canonical?: string | null
+          unit_factor?: number
+          unit_offset?: number
         }
         Relationships: []
       }
