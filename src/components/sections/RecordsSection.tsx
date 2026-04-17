@@ -181,13 +181,19 @@ const RecordsSection: React.FC = () => {
     }
   }, [effectiveUserId, user?.id, refetch]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Stage the picked file and open the ownership-confirmation modal.
+  // Actual upload runs only after the user explicitly confirms.
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
     setLastResult(null);
+    setPendingUpload({ file, kind: "lab" });
+  };
+
+  const runLabUpload = async (file: File) => {
     const result = await uploadAndProcess(file);
     setLastResult(result);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleFibroFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
