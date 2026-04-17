@@ -308,13 +308,17 @@ const RecordsSection: React.FC = () => {
     if (!pendingUpload) return;
     const { file, kind } = pendingUpload;
     setPendingUpload(null);
+    const confirmedName =
+      (user?.user_metadata?.full_name as string | undefined) ||
+      user?.email ||
+      "self-confirmed";
     if (kind === "lab") {
-      await runLabUpload(file);
+      await runLabUpload(file, confirmedName);
     } else {
-      await runFibroUpload(file);
+      await runFibroUpload(file, confirmedName);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingUpload]);
+  }, [pendingUpload, user]);
 
   const triggerFilePicker = () => fileInputRef.current?.click();
   const triggerFibroFilePicker = () => fibroFileInputRef.current?.click();
