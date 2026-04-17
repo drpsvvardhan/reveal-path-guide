@@ -23,6 +23,14 @@ type ViewAsSession = {
   expires_at: string;
 };
 
+type ProfileSummary = {
+  user_id: string;
+  first_name: string | null;
+  display_name: string | null;
+  age: number | null;
+  sex: string | null;
+};
+
 type ViewAsState = {
   viewingUserId: string | null;
   sessionId: string | null;
@@ -32,6 +40,20 @@ type ViewAsState = {
   enterViewAs: (targetUserId: string, reason: string, durationMinutes?: number) => Promise<void>;
   exitViewAs: (reason?: string) => Promise<void>;
   timeRemainingMs: number | null;
+  // ---- Legacy compatibility shim (v1 API) ----
+  /** Effective user id for data fetching: target if viewing-as, else self. */
+  effectiveUserId: string | null;
+  /** Whether an active view-as session exists. */
+  isViewingAs: boolean;
+  /** Profiles available to admins for impersonation. */
+  allProfiles: ProfileSummary[];
+  /**
+   * Legacy switch: prompts for a reason and mints a session.
+   * Prefer `enterViewAs(id, reason, minutes)` for new code.
+   */
+  viewAs: (userId: string) => Promise<void>;
+  /** Legacy reset: revokes the active session. */
+  resetViewAs: () => Promise<void>;
 };
 
 const ViewAsContext = createContext<ViewAsState | null>(null);
