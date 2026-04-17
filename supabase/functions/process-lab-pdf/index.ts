@@ -6,6 +6,12 @@ import {
   checkContentDuplicate,
   recordRejection,
 } from "../_shared/uploadGuards.ts";
+import {
+  loadOntology,
+  formatOntologyForPrompt,
+  validateConceptId,
+  type Ontology,
+} from "../_shared/ontology.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
