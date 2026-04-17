@@ -389,7 +389,7 @@ async function callClaudeWithDocument(base64Data: string, mimeType: string, syst
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -655,9 +655,15 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}, ontology=${ontology ? 'loaded' : 'unavailable'}`);
 
     // Call Gemini vision with appropriate prompt
+    const llmStartedAt = Date.now();
     const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    const llmMs = Date.now() - llmStartedAt;
+    console.log(`[timing] upload=${uploadId} llm_call_ms=${llmMs} model=google/gemini-3-flash-preview`);
+
+    const parseStartedAt = Date.now();
     const parsed = extractJsonFromText(rawOutput);
     const extracted = validateAndCleanExtraction(parsed);
+    console.log(`[timing] upload=${uploadId} parse_ms=${Date.now() - parseStartedAt} observations=${extracted?.observations?.length ?? 0}`);
 
     if (!extracted) {
       throw new Error("Extracted data did not match expected schema");
@@ -744,6 +750,7 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     let inserted = 0;
     let duplicates = 0;
     let queuedForReview = 0;
+    const writeStartedAt = Date.now();
 
     for (const obs of extracted.observations) {
       const canonicalName = detectedInBody
@@ -871,6 +878,8 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
       }
     }
 
+    const writeMs = Date.now() - writeStartedAt;
+    console.log(`[timing] upload=${uploadId} db_write_ms=${writeMs} inserted=${inserted} dup=${duplicates} queued=${queuedForReview}`);
     console.log(`Upload ${uploadId} canonicalization: ${inserted} inserted, ${duplicates} dup, ${queuedForReview} queued for review`);
 
 
