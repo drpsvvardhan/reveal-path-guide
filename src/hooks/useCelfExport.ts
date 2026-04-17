@@ -1,10 +1,12 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useViewAs } from "@/context/ViewAsContext";
 
 export type CelfExportCoverage = {
   labs: boolean;
   inbody: boolean;
   cie: boolean;
+  fibroscan?: boolean;
 };
 
 export type CelfExportCounts = {
@@ -12,85 +14,136 @@ export type CelfExportCounts = {
   source_documents: number;
   observations: number;
   feature_state: number;
+  timelines?: number;
+  identity_events?: number;
 };
 
 export type CelfExportResult = {
   export_id: string;
   generated_at: string;
   content_sha256: string;
+  is_view_as_export?: boolean;
+  caller_user_id?: string;
+  target_user_id?: string;
   coverage: CelfExportCoverage;
   counts: CelfExportCounts;
   bundle: unknown;
 };
 
+export type CelfExportErrorDiagnostic = {
+  target_user_id: string;
+  caller_user_id: string;
+  is_view_as_export: boolean;
+  profile_found: boolean;
+  has_name: boolean;
+  has_age: boolean;
+  has_sex: boolean;
+  source_documents_found: number;
+  observations_found: number;
+};
+
 /**
- * useCelfExport
+ * useCelfExport v1.3
  *
- * Triggers the export-celf-bundle edge function, downloads the resulting JSON
- * to the user's device, and marks the audit row as 'downloaded'.
- *
- * The bundle shape matches CELF v0.2 (Russell Shapiro ingestion format):
- *   { meta, subject[], source_documents[], observations[], feature_state[] }
- *
- * Use the returned `lastResult` to render coverage/counts in the UI.
+ * - View-as aware: when admin is impersonating, passes ?user_id=<viewed>
+ *   so the bundle targets the viewed patient, not the admin's own account.
+ * - Surfaces 409 (subject_identity_missing) cleanly for UI display.
  */
 export function useCelfExport() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDiagnostic, setErrorDiagnostic] = useState<CelfExportErrorDiagnostic | null>(null);
   const [lastResult, setLastResult] = useState<CelfExportResult | null>(null);
 
-  const exportBundle = useCallback(async (opts: { download?: boolean } = {}) => {
-    setIsExporting(true);
-    setError(null);
+  const { effectiveUserId, isViewingAs } = useViewAs();
+  const viewAsUserId = isViewingAs ? effectiveUserId : null;
 
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke<CelfExportResult>(
-        "export-celf-bundle",
-        { body: {} }
-      );
+  const exportBundle = useCallback(
+    async (opts: { download?: boolean } = {}) => {
+      setIsExporting(true);
+      setError(null);
+      setErrorDiagnostic(null);
 
-      if (invokeError) throw invokeError;
-      if (!data) throw new Error("Empty response from export-celf-bundle");
+      try {
+        const qs = viewAsUserId ? `?user_id=${encodeURIComponent(viewAsUserId)}` : "";
 
-      setLastResult(data);
+        // We must use direct fetch — supabase.functions.invoke strips query strings.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("Not authenticated");
 
-      if (opts.download !== false) {
-        // Download JSON
-        const blob = new Blob([JSON.stringify(data.bundle, null, 2)], {
-          type: "application/json",
+        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+        const endpoint = `${SUPABASE_URL}/functions/v1/export-celf-bundle${qs}`;
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({}),
         });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        a.download = `celf_bundle_${ts}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
 
-        // Mark audit row as downloaded (fire-and-forget)
-        supabase
-          .from("celf_exports")
-          .update({ status: "downloaded", downloaded_at: new Date().toISOString() })
-          .eq("id", data.export_id)
-          .then(() => {}, (err) => console.warn("[useCelfExport] status update failed", err));
+        const payload = await response.json();
+
+        if (!response.ok) {
+          const msg = payload?.message ?? payload?.error ?? `Export failed (${response.status})`;
+          setError(msg);
+          if (payload?.diagnostic) setErrorDiagnostic(payload.diagnostic);
+          throw new Error(msg);
+        }
+
+        const data = payload as CelfExportResult;
+        setLastResult(data);
+
+        if (opts.download !== false) {
+          const blob = new Blob([JSON.stringify(data.bundle, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+          const viewAsTag =
+            data.is_view_as_export && data.target_user_id
+              ? `_viewas-${data.target_user_id.slice(0, 8)}`
+              : "";
+          a.download = `celf_bundle_${ts}${viewAsTag}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          supabase
+            .from("celf_exports")
+            .update({ status: "downloaded", downloaded_at: new Date().toISOString() })
+            .eq("id", data.export_id)
+            .then(
+              () => {},
+              (err) => console.warn("[useCelfExport] status update failed", err),
+            );
+        }
+
+        return data;
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        setError((prev) => prev ?? msg);
+        throw e;
+      } finally {
+        setIsExporting(false);
       }
-
-      return data;
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      setError(msg);
-      throw e;
-    } finally {
-      setIsExporting(false);
-    }
-  }, []);
+    },
+    [viewAsUserId],
+  );
 
   return {
     exportBundle,
     isExporting,
     error,
+    errorDiagnostic,
     lastResult,
+    isViewAsActive: Boolean(viewAsUserId),
+    viewAsUserId,
   };
 }
