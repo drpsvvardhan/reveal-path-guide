@@ -6,6 +6,12 @@ import {
   checkContentDuplicate,
   recordRejection,
 } from "../_shared/uploadGuards.ts";
+import {
+  loadOntology,
+  formatOntologyForPrompt,
+  validateConceptId,
+  type Ontology,
+} from "../_shared/ontology.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -440,6 +446,13 @@ interface ExtractedObservation {
   ref_low: number | null;
   ref_high: number | null;
   flag: string;
+  // NEW — LLM canonicalization fields (v0.9)
+  canonical_concept_id: string | null;
+  proposed_concept_id: string | null;
+  proposed_label: string | null;
+  canonical_unit: string | null;
+  source_unit_conversion_factor: number | null;
+  classification_confidence: number | null;
 }
 
 interface ExtractionResult {
@@ -487,6 +500,12 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
       ref_low: typeof obs.ref_low === "number" ? obs.ref_low : null,
       ref_high: typeof obs.ref_high === "number" ? obs.ref_high : null,
       flag,
+      canonical_concept_id: typeof obs.canonical_concept_id === "string" ? obs.canonical_concept_id : null,
+      proposed_concept_id: typeof obs.proposed_concept_id === "string" ? obs.proposed_concept_id : null,
+      proposed_label: typeof obs.proposed_label === "string" ? obs.proposed_label : null,
+      canonical_unit: typeof obs.canonical_unit === "string" ? obs.canonical_unit : null,
+      source_unit_conversion_factor: typeof obs.source_unit_conversion_factor === "number" ? obs.source_unit_conversion_factor : null,
+      classification_confidence: typeof obs.classification_confidence === "number" ? obs.classification_confidence : null,
     });
   }
 
@@ -569,11 +588,73 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
 
     // Detect if this is an InBody report
     const isInBody = isInBodyReport(upload.original_filename);
-    const systemPrompt = isInBody ? INBODY_EXTRACTION_SYSTEM_PROMPT : EXTRACTION_SYSTEM_PROMPT;
+    const baseSystemPrompt = isInBody ? INBODY_EXTRACTION_SYSTEM_PROMPT : EXTRACTION_SYSTEM_PROMPT;
 
-    console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}`);
+    // ------------------------------------------------------------------
+    // STEP 2.5 — Load ontology and append canonicalization instructions
+    // ------------------------------------------------------------------
+    let ontology: Ontology | null = null;
+    let systemPrompt = baseSystemPrompt;
+    try {
+      ontology = await loadOntology(SUPABASE_URL);
+      const ontologyBlock = formatOntologyForPrompt(ontology, isInBody ? "inbody" : "lab");
+      systemPrompt = baseSystemPrompt + `
 
-    // Call Claude vision with appropriate prompt
+═══════════════════════════════════════════════════════════════════════════
+CANONICALIZATION — ADDITIONAL REQUIRED FIELDS (v0.9 LLM CANONICALIZATION)
+═══════════════════════════════════════════════════════════════════════════
+
+${ontologyBlock}
+
+For EACH observation, in addition to raw_name/value/unit/ref_low/ref_high/flag,
+you MUST also include these 6 additional fields:
+
+  "canonical_concept_id": "string — the concept id from the ontology list above, OR 'unknown' if no concept fits",
+  "proposed_concept_id": "string — if canonical_concept_id is 'unknown', propose a new id in snake_case (e.g. 'lipid_apoe_epsilon4'), else null",
+  "proposed_label": "string — if canonical_concept_id is 'unknown', a human-readable label, else null",
+  "canonical_unit": "string — the canonical unit from the ontology entry (just copy it), or null if unknown",
+  "source_unit_conversion_factor": "number — multiplicative factor to convert the observation's source unit to canonical unit (1.0 if already canonical, 1000 if 10^3/µL → cells/µL, 100 if ng/mL → ng/dL, etc.)",
+  "classification_confidence": "number 0-1 — your confidence that canonical_concept_id is correct. Be conservative. Anything <0.80 goes to human review."
+
+CLASSIFICATION RULES:
+
+RULE C1 — USE ONTOLOGY IDS EXACTLY. canonical_concept_id must be an exact string
+from the ontology list, or 'unknown'. Do not invent new ids unless the concept
+truly is not in the ontology.
+
+RULE C2 — UNIT CONVERSION. When the source unit differs from the canonical unit,
+compute the multiplicative factor that converts source to canonical. Common cases:
+  - 10^3/µL or 10³/µL or X 10³/µL → cells/µL: factor 1000
+  - ng/mL → ng/dL: factor 100
+  - pg/mL → ng/L: factor 1
+  - mg/L ↔ mcg/L: factor 1000 (check direction!)
+  - mmol/L → mg/dL for glucose: factor 18.0
+  When source and canonical units are the same: factor 1.0.
+  When uncertain: emit factor 1.0 and set classification_confidence below 0.8.
+
+RULE C3 — ALIASES ARE HINTS, NOT LIMITS. The 'known_aliases' in the ontology
+are examples of raw_name strings seen before. If the raw_name you extract is
+similar in meaning but spelled differently, still match it to the concept id —
+you have world knowledge about biomarker synonyms.
+
+RULE C4 — AMBIGUITY. If an observation could match multiple concepts, pick the
+best match and reduce confidence to 0.70. Human review decides.
+
+RULE C5 — SKIP BEFORE FORCING. If you cannot determine a canonical concept at
+all with reasonable confidence, set canonical_concept_id to 'unknown' and
+propose a new concept in snake_case. Never force a wrong match just to avoid
+'unknown'.
+`;
+      console.log(`Loaded ontology v${ontology.ontology_version} with ${ontology.concepts.length} concepts`);
+    } catch (e) {
+      console.warn(`Ontology load failed; falling back to non-canonicalized extraction:`, e instanceof Error ? e.message : e);
+      ontology = null;
+      systemPrompt = baseSystemPrompt;
+    }
+
+    console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}, ontology=${ontology ? 'loaded' : 'unavailable'}`);
+
+    // Call Gemini vision with appropriate prompt
     const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
     const parsed = extractJsonFromText(rawOutput);
     const extracted = validateAndCleanExtraction(parsed);
@@ -603,8 +684,6 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
     }).eq("id", uploadId);
 
     if (identityOverride) {
-      // Caller has explicitly confirmed identity from the UI. Bypass the gate
-      // and record what they confirmed.
       const validKind =
         identityOverride.kind === "unknown_accepted" ||
         identityOverride.kind === "mismatch_overridden";
@@ -618,7 +697,6 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
         identity_confirmation_kind: identityOverride.kind,
       }).eq("id", uploadId);
     } else if (identity.status === "mismatch") {
-      // Hard mismatch — pause for the user to either override (typed name) or reject.
       await supabase.from("patient_lab_uploads").update({
         status: "awaiting_identity_confirmation",
         name_match_status: "needs_confirmation_mismatch",
@@ -627,12 +705,10 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
       return;
     } else if (identity.status === "unknown") {
       if (identity.reason === "no_name_extracted") {
-        // No name on the report — record as pending and proceed (we can't ask the user "is this you?" with no name to show).
         await supabase.from("patient_lab_uploads").update({
           name_match_status: "pending",
         }).eq("id", uploadId);
       } else {
-        // We have a name but score is borderline — pause for a simple yes/no.
         await supabase.from("patient_lab_uploads").update({
           status: "awaiting_identity_confirmation",
           name_match_status: "needs_confirmation_unknown",
@@ -647,16 +723,14 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
     }
 
     // ------------------------------------------------------------------
-    // STEP 4 — Continue with existing observation write logic
+    // STEP 4 — Write observations (now with LLM-canonicalized fields)
     // ------------------------------------------------------------------
 
-    // Also detect InBody from the LLM response
     const detectedInBody = isInBody || extracted.meta.is_inbody === true;
 
     const collectionDate = extracted.meta.collection_date || new Date().toISOString().slice(0, 10);
     const sourceLab = detectedInBody ? "InBody" : extracted.meta.source_lab;
 
-    // Update upload metadata
     await supabase
       .from("patient_lab_uploads")
       .update({
@@ -667,32 +741,69 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
       })
       .eq("id", uploadId);
 
-    // Insert observations with deduplication
     let inserted = 0;
     let duplicates = 0;
+    let queuedForReview = 0;
 
     for (const obs of extracted.observations) {
-      // Use InBody canonical names for InBody reports, standard mapping otherwise
       const canonicalName = detectedInBody
         ? normalizeInBodyName(obs.raw_name)
         : normalizeAnalyteName(obs.raw_name);
 
-      const { error: insertError } = await supabase
+      // Validate the LLM's proposed concept against the ontology.
+      const validation = ontology
+        ? validateConceptId(ontology, obs.canonical_concept_id)
+        : { valid: false } as ReturnType<typeof validateConceptId>;
+
+      const factor = obs.source_unit_conversion_factor ?? 1;
+      const confidence = obs.classification_confidence ?? 0;
+      const isLowConfidence = confidence < 0.80;
+
+      let writeRow: Record<string, unknown> = {
+        user_id: upload.user_id,
+        upload_id: uploadId,
+        raw_name: obs.raw_name,
+        canonical_name: canonicalName,
+        display_name: obs.raw_name,
+        value: obs.value,
+        unit: obs.unit,
+        ref_low: obs.ref_low,
+        ref_high: obs.ref_high,
+        flag: obs.flag,
+        collection_date: collectionDate,
+        source: sourceLab,
+      };
+
+      if (ontology && validation.valid && validation.concept) {
+        writeRow = {
+          ...writeRow,
+          canonical_concept_id: validation.concept.id,
+          canonical_unit: validation.concept.unit,
+          canonical_value: obs.value != null ? obs.value * factor : null,
+          classification_confidence: confidence,
+          biomarker_class: validation.concept.biomarker_class,
+          classification_method: isLowConfidence ? "pending" : "llm_at_ingest",
+        };
+      } else if (ontology) {
+        // Unknown concept — write with concept='unknown' and queue for review
+        writeRow = {
+          ...writeRow,
+          canonical_concept_id: "unknown",
+          canonical_unit: null,
+          canonical_value: null,
+          classification_confidence: confidence,
+          biomarker_class: null,
+          classification_method: "pending",
+        };
+      }
+      // If ontology is null (load failure), we write the original row shape
+      // and the new canonical_* columns simply remain null.
+
+      const { data: insertedRow, error: insertError } = await supabase
         .from("patient_lab_observations")
-        .insert({
-          user_id: upload.user_id,
-          upload_id: uploadId,
-          raw_name: obs.raw_name,
-          canonical_name: canonicalName,
-          display_name: obs.raw_name,
-          value: obs.value,
-          unit: obs.unit,
-          ref_low: obs.ref_low,
-          ref_high: obs.ref_high,
-          flag: obs.flag,
-          collection_date: collectionDate,
-          source: sourceLab,
-        });
+        .insert(writeRow)
+        .select("id")
+        .single();
 
       if (insertError) {
         if (insertError.message?.includes("duplicate") || insertError.code === "23505") {
@@ -700,10 +811,68 @@ async function processUpload(uploadId: string, identityOverride?: IdentityOverri
         } else {
           console.error("Insert error for observation:", obs.raw_name, insertError);
         }
-      } else {
-        inserted++;
+        continue;
+      }
+      inserted++;
+
+      // Queue low-confidence (but valid concept) for review
+      if (ontology && validation.valid && isLowConfidence) {
+        const { error: queueErr } = await supabase
+          .from("observation_review_queue")
+          .insert({
+            user_id: upload.user_id,
+            upload_id: uploadId,
+            observation_id: insertedRow!.id,
+            raw_name: obs.raw_name,
+            raw_value: obs.value,
+            raw_unit: obs.unit,
+            proposed_concept_id: obs.canonical_concept_id,
+            proposed_concept_label: validation.concept!.label,
+            proposed_unit: validation.concept!.unit,
+            classification_confidence: confidence,
+            reject_reason: "low_confidence",
+          });
+        if (queueErr) console.error("Review-queue insert (low_confidence) failed:", queueErr);
+        else queuedForReview++;
+      }
+
+      // Queue unknown concepts for review
+      if (ontology && !validation.valid) {
+        const { error: queueErr } = await supabase
+          .from("observation_review_queue")
+          .insert({
+            user_id: upload.user_id,
+            upload_id: uploadId,
+            observation_id: insertedRow!.id,
+            raw_name: obs.raw_name,
+            raw_value: obs.value,
+            raw_unit: obs.unit,
+            proposed_concept_id: obs.proposed_concept_id ?? null,
+            proposed_concept_label: obs.proposed_label ?? null,
+            classification_confidence: confidence,
+            reject_reason: "unknown_concept",
+          });
+        if (queueErr) console.error("Review-queue insert (unknown_concept) failed:", queueErr);
+        else queuedForReview++;
+
+        // If the LLM proposed a brand-new concept id, track it as a proposal
+        if (obs.proposed_concept_id && obs.proposed_label) {
+          const { error: propErr } = await supabase
+            .from("ontology_concept_proposals")
+            .upsert({
+              proposed_concept_id: obs.proposed_concept_id,
+              proposed_label: obs.proposed_label,
+              proposed_unit: obs.unit,
+              first_seen_observation_id: insertedRow!.id,
+              example_raw_names: [obs.raw_name],
+            }, { onConflict: "proposed_concept_id" });
+          if (propErr) console.error("Ontology proposal upsert failed:", propErr);
+        }
       }
     }
+
+    console.log(`Upload ${uploadId} canonicalization: ${inserted} inserted, ${duplicates} dup, ${queuedForReview} queued for review`);
+
 
     // Mark as complete
     await supabase
