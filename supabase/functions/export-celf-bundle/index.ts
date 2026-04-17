@@ -34,48 +34,52 @@ async function sha256(obj: unknown): Promise<string> {
 }
 
 async function buildSubject(sb: SupabaseClient, userId: string) {
-  const { data: profile } = await sb
+  const { data: profile, error } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, preferred_name, date_of_birth, sex, mrn, age")
-    .eq("id", userId).maybeSingle();
+    .select("id, user_id, first_name, display_name, preferred_name, age, sex")
+    .eq("user_id", userId).maybeSingle();
+  if (error) console.error("[buildSubject] profile lookup error", error);
 
   const candidateName = profile
-    ? (profile.preferred_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim())
+    ? (profile.preferred_name ?? profile.display_name ?? profile.first_name ?? null)
     : null;
   const externalName = candidateName && candidateName.length > 0 ? candidateName : null;
 
   return {
-    ok: Boolean(externalName) || Boolean(profile?.date_of_birth) || Boolean(profile?.sex),
+    ok: Boolean(externalName) || Boolean(profile?.age) || Boolean(profile?.sex),
     subject: [{
       subject_id: userId,
       external_name: externalName ?? "Unnamed Subject",
-      dob: profile?.date_of_birth ?? null,
+      dob: null,
       age: profile?.age ?? null,
       sex: profile?.sex ?? null,
-      mrn: profile?.mrn ?? null,
+      mrn: null,
       source_system: "reveal_path",
     }],
     profileFound: Boolean(profile),
     hasName: Boolean(externalName),
-    hasDob: Boolean(profile?.date_of_birth),
+    hasAge: Boolean(profile?.age),
     hasSex: Boolean(profile?.sex),
   };
 }
 
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, original_filename, document_type, page_count, extraction_confidence, uploaded_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
+    .select("id, original_filename, document_type, created_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256, collection_date, source_lab")
     .eq("user_id", userId)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: true });
+    .order("created_at", { ascending: true });
+  if (error) console.error("[buildSourceDocuments] error", error);
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
     source_name: u.original_filename ?? "unnamed_upload",
-    pages: u.page_count ?? null,
+    pages: null,
     document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    ingest_confidence: null,
+    ingested_at: u.created_at,
+    collection_date: u.collection_date ?? null,
+    source_lab: u.source_lab ?? null,
     status: u.status,
     identity_verified: u.name_match_status === "match",
     identity_match_score: u.name_match_score ?? null,
@@ -85,16 +89,17 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 }
 
 async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: string) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from("patient_lab_observations")
     .select(`
-      id, upload_id, canonical_name, original_name,
-      value, value_text, unit, flag, reference_range_text,
-      specimen_type, collection_date, page_number, extraction_confidence,
+      id, upload_id, canonical_name, raw_name, display_name,
+      value, original_value, unit, flag, ref_low, ref_high,
+      specimen_type, collection_date,
       canonical_concept_id, canonical_unit, canonical_value,
-      classification_confidence, biomarker_class, classification_method
+      classification_confidence, biomarker_class, classification_method, source
     `)
     .eq("user_id", userId);
+  if (error) console.error("[buildLabAndFibroscanObservations] error", error);
 
   const obs: any[] = [];
   const excluded: any[] = [];
