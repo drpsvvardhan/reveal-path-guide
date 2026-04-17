@@ -234,7 +234,10 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
         expires_at: payload.expires_at,
       };
       setSession(newSession);
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ ...newSession, admin_user_id: authUserId }),
+      );
       toast.success("View-as session started", {
         description: `Expires in ${payload.duration_minutes} minutes. Every data access is logged.`,
       });
