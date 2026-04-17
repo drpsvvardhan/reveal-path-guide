@@ -120,19 +120,19 @@ async function buildSubject(sb: SupabaseClient, userId: string) {
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, file_name, document_type, page_count, extraction_confidence, uploaded_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
+    .select("id, original_filename, source_lab, created_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
     .eq("user_id", userId)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: true });
+    .order("created_at", { ascending: true });
   if (error) throw new Error(`lab_uploads load failed: ${error.message}`);
 
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
-    source_name: u.file_name ?? "unnamed_upload",
-    pages: u.page_count ?? null,
-    document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    source_name: u.original_filename ?? "unnamed_upload",
+    pages: null,
+    document_type: u.source_lab === "fibroscan" ? "fibroscan_pdf" : "lab_pdf",
+    ingest_confidence: null,
+    ingested_at: u.created_at,
     status: u.status,
     identity_verified: u.name_match_status === "match",
     identity_match_score: u.name_match_score ?? null,
@@ -143,53 +143,68 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 
 // ----------------------------------------------------------------------------
 async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: string, map: FeatureMap) {
+  // Only include observations whose parent upload is NOT rejected/failed.
+  const { data: activeUploads, error: uErr } = await sb
+    .from("patient_lab_uploads")
+    .select("id, source_lab")
+    .eq("user_id", userId)
+    .not("status", "in", "(rejected_identity,rejected_duplicate,failed)");
+  if (uErr) throw new Error(`lab_uploads filter failed: ${uErr.message}`);
+
+  const activeUploadIds = new Set((activeUploads ?? []).map((u: any) => u.id));
+  const uploadSourceLab = new Map<string, string | null>(
+    (activeUploads ?? []).map((u: any) => [u.id, u.source_lab ?? null]),
+  );
+
+  if (activeUploadIds.size === 0) return [];
+
   const { data, error } = await sb
     .from("patient_lab_observations")
-    .select("id, upload_id, canonical_name, original_name, value_numeric, value_text, unit, flag, reference_range_text, specimen_type, collected_at, page_number, extraction_confidence")
-    .eq("user_id", userId);
+    .select("id, upload_id, canonical_name, raw_name, display_name, value, original_value, unit, flag, ref_low, ref_high, source, collection_date")
+    .eq("user_id", userId)
+    .in("upload_id", Array.from(activeUploadIds));
   if (error) throw new Error(`lab_observations load failed: ${error.message}`);
 
   const obs: any[] = [];
   for (const r of data ?? []) {
-    // Source class routing:
-    //   fibroscan    -> specimen_type = 'fibroscan'
-    //   inbody       -> specimen_type = 'body_composition'
-    //   lab          -> everything else
+    const sourceLab = uploadSourceLab.get(r.upload_id);
+    const isFibroscan = sourceLab === "fibroscan" || r.source === "fibroscan";
+
     let sourceClass: "lab" | "inbody" | "fibroscan" = "lab";
     let subSys = "lab";
-    if (r.specimen_type === "fibroscan") { sourceClass = "fibroscan"; subSys = "fibroscan"; }
-    else if (r.specimen_type === "body_composition") { sourceClass = "inbody"; subSys = "inbody"; }
+    if (isFibroscan) { sourceClass = "fibroscan"; subSys = "fibroscan"; }
 
-    const f = lookupFeature(map, subSys, r.canonical_name ?? r.original_name ?? "");
+    const f = lookupFeature(map, subSys, r.canonical_name ?? r.raw_name ?? "");
+    const refRange = (r.ref_low != null && r.ref_high != null) ? `${r.ref_low}–${r.ref_high}` : null;
 
     obs.push({
       observation_id: r.id,
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: sourceClass,
-      collection_date: r.collected_at,
-      observed_at_precision: r.collected_at ? "date" : "unknown",
+      collection_date: r.collection_date,
+      observed_at_precision: r.collection_date ? "date" : "unknown",
       category: sourceClass,
       domain: f.domain,
       panel_group: f.panel_group,
       panel_original: null,
       analyte_name: f.feature_label,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name,
       twin_feature_name: f.twin_feature_name,
-      result_display: r.value_text ?? (r.value_numeric != null ? String(r.value_numeric) : null),
+      result_display: r.value != null ? String(r.value) : null,
       value_operator: null,
-      value_numeric: r.value_numeric,
-      value_text: r.value_text,
+      value_numeric: r.value,
+      value_text: null,
       unit_normalized: f.unit_canonical ?? r.unit,
       unit_original: r.unit,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
-      specimen_type: r.specimen_type,
+      reference_range_text: refRange,
+      specimen_type: isFibroscan ? "fibroscan" : null,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
+      page_number: null,
+      ocr_confidence: null,
       needs_pdf_verification: f.needs_verification,
       raw_notes: null,
     });
