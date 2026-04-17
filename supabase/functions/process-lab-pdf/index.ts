@@ -655,9 +655,15 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}, ontology=${ontology ? 'loaded' : 'unavailable'}`);
 
     // Call Gemini vision with appropriate prompt
+    const llmStartedAt = Date.now();
     const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    const llmMs = Date.now() - llmStartedAt;
+    console.log(`[timing] upload=${uploadId} llm_call_ms=${llmMs} model=google/gemini-3-flash-preview`);
+
+    const parseStartedAt = Date.now();
     const parsed = extractJsonFromText(rawOutput);
     const extracted = validateAndCleanExtraction(parsed);
+    console.log(`[timing] upload=${uploadId} parse_ms=${Date.now() - parseStartedAt} observations=${extracted?.observations?.length ?? 0}`);
 
     if (!extracted) {
       throw new Error("Extracted data did not match expected schema");
