@@ -105,9 +105,6 @@ serve(async (req) => {
       if (!target_user_id) {
         return json({ error: "target_user_id required" }, 400);
       }
-      if (target_user_id === adminUserId) {
-        return json({ error: "cannot impersonate self" }, 400);
-      }
       if (!reason || reason.trim().length < MIN_REASON_LENGTH) {
         return json({
           error: "reason required",
@@ -121,11 +118,19 @@ serve(async (req) => {
       );
       const expiresAt = new Date(Date.now() + duration * 60 * 1000).toISOString();
 
-      // Verify target user exists
+      // Accept either profiles.user_id (preferred) or profiles.id, then normalize to user_id.
       const { data: targetProfile } = await sb
-        .from("profiles").select("id").eq("id", target_user_id).maybeSingle();
-      if (!targetProfile) {
+        .from("profiles")
+        .select("id, user_id")
+        .or(`user_id.eq.${target_user_id},id.eq.${target_user_id}`)
+        .maybeSingle();
+      if (!targetProfile?.user_id) {
         return json({ error: "target user not found" }, 404);
+      }
+
+      const normalizedTargetUserId = targetProfile.user_id;
+      if (normalizedTargetUserId === adminUserId) {
+        return json({ error: "cannot impersonate self" }, 400);
       }
 
       // Revoke any existing active sessions for this admin→target pair (one at a time)
@@ -137,7 +142,7 @@ serve(async (req) => {
           revoke_reason: "superseded by new session",
         })
         .eq("admin_user_id", adminUserId)
-        .eq("target_user_id", target_user_id)
+        .eq("target_user_id", normalizedTargetUserId)
         .is("revoked_at", null);
 
       // Mint new session
@@ -145,7 +150,7 @@ serve(async (req) => {
         .from("admin_view_as_sessions")
         .insert({
           admin_user_id: adminUserId,
-          target_user_id,
+          target_user_id: normalizedTargetUserId,
           reason: reason.trim(),
           expires_at: expiresAt,
         })
