@@ -94,26 +94,42 @@ async function buildFeatureMap(sb: SupabaseClient): Promise<FeatureMap> {
 }
 
 // ----------------------------------------------------------------------------
+// Subject build — returns identity-gate metadata so the caller can refuse to
+// emit a bundle for an account with no demographic information.
+// Schema note: profiles has first_name, preferred_name, age, sex
+// (no last_name / date_of_birth / mrn columns on this project).
+// ----------------------------------------------------------------------------
 async function buildSubject(sb: SupabaseClient, userId: string) {
-  const { data: profile } = await sb
+  // Match by user_id (the auth uuid), NOT by profiles.id (which is a separate PK).
+  const { data: profile, error } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, preferred_name, date_of_birth, sex, mrn, age")
-    .eq("id", userId)
+    .select("id, user_id, first_name, preferred_name, display_name, sex, age, name_aliases")
+    .eq("user_id", userId)
     .maybeSingle();
 
-  const externalName = profile
-    ? (profile.preferred_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim()) || "Unnamed Subject"
-    : "Unnamed Subject";
+  if (error) throw new Error(`profile load failed: ${error.message}`);
 
-  return [{
-    subject_id: userId,
-    external_name: externalName,
-    dob: profile?.date_of_birth ?? null,
-    age: profile?.age ?? null,
-    sex: profile?.sex ?? null,
-    mrn: profile?.mrn ?? null,
-    source_system: "reveal_path",
-  }];
+  const candidateName = profile
+    ? (profile.preferred_name ?? profile.first_name ?? profile.display_name ?? "").trim()
+    : "";
+  const externalName = candidateName.length > 0 ? candidateName : null;
+
+  return {
+    ok: Boolean(externalName) && Boolean(profile?.age) && Boolean(profile?.sex),
+    subject: [{
+      subject_id: userId,
+      external_name: externalName ?? "Unnamed Subject",
+      dob: null,
+      age: profile?.age ?? null,
+      sex: profile?.sex ?? null,
+      mrn: null,
+      source_system: "reveal_path",
+    }],
+    profileFound: Boolean(profile),
+    hasName: Boolean(externalName),
+    hasAge: Boolean(profile?.age),
+    hasSex: Boolean(profile?.sex),
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -447,23 +463,25 @@ serve(async (req) => {
     const url = new URL(req.url);
     const requestedUserId = url.searchParams.get("user_id");
     let targetUserId = callerUserId;
+    let isViewAsExport = false;
 
     if (requestedUserId && requestedUserId !== callerUserId) {
       const { data: roleData } = await userClient
         .from("user_roles").select("role").eq("user_id", callerUserId).eq("role", "admin").maybeSingle();
       if (!roleData) {
-        return new Response(JSON.stringify({ error: "forbidden" }), {
+        return new Response(JSON.stringify({ error: "forbidden", message: "Admin role required to export another user's bundle." }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       targetUserId = requestedUserId;
+      isViewAsExport = true;
     }
 
     const sb = createClient(supabaseUrl, serviceKey);
 
     const featureMap = await buildFeatureMap(sb);
 
-    const [subject, sourceDocs, labLikeObs, cieObs, identityAudit] = await Promise.all([
+    const [subjectResult, sourceDocs, labLikeObs, cieObs, identityAudit] = await Promise.all([
       buildSubject(sb, targetUserId),
       buildSourceDocuments(sb, targetUserId),
       buildLabAndFibroscanObservations(sb, targetUserId, featureMap),
@@ -471,6 +489,34 @@ serve(async (req) => {
       buildIdentityAudit(sb, targetUserId),
     ]);
 
+    // ------------------------------------------------------------------------
+    // SUBJECT IDENTITY GATE
+    //   Refuse to emit a bundle for an account missing demographics. This
+    //   prevents the view-as confusion where the UI shows one patient but
+    //   the export silently runs against a different (empty) account.
+    // ------------------------------------------------------------------------
+    if (!subjectResult.ok) {
+      return new Response(JSON.stringify({
+        error: "subject_identity_missing",
+        message: "Cannot export a bundle for an account with no demographic information. Please complete the profile (name, age, sex) before exporting.",
+        diagnostic: {
+          target_user_id: targetUserId,
+          caller_user_id: callerUserId,
+          is_view_as_export: isViewAsExport,
+          profile_found: subjectResult.profileFound,
+          has_name: subjectResult.hasName,
+          has_age: subjectResult.hasAge,
+          has_sex: subjectResult.hasSex,
+          source_documents_found: sourceDocs.length,
+          observations_found: labLikeObs.length + cieObs.length,
+        },
+      }, null, 2), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const subject = subjectResult.subject;
     const observations = [...labLikeObs, ...cieObs];
     const featureState = computeFeatureState(observations);
     const timelines    = computeTimelines(observations);
@@ -487,7 +533,10 @@ serve(async (req) => {
         generated_at: new Date().toISOString(),
         phi_level: "full_phi",
         source: "reveal_path",
-        generator: "vizzhy_reveal_path_celf_adapter_v1.2",
+        generator: "vizzhy_reveal_path_celf_adapter_v1.3",
+        caller_user_id: callerUserId,
+        target_user_id: targetUserId,
+        is_view_as_export: isViewAsExport,
       },
       subject,
       source_documents: sourceDocs,
@@ -525,6 +574,9 @@ serve(async (req) => {
       export_id: auditRow.id,
       generated_at: auditRow.generated_at,
       content_sha256: contentHash,
+      is_view_as_export: isViewAsExport,
+      caller_user_id: callerUserId,
+      target_user_id: targetUserId,
       coverage: { labs: hasLabs, inbody: hasInbody, cie: hasCie, fibroscan: hasFibroscan },
       counts: {
         subject: subject.length,
