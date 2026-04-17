@@ -98,22 +98,41 @@ export function useCelfExport() {
         setLastResult(data);
 
         if (opts.download !== false) {
-          const blob = new Blob([JSON.stringify(data.bundle, null, 2)], {
-            type: "application/json",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
+          const json = JSON.stringify(data.bundle, null, 2);
           const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
           const viewAsTag =
             data.is_view_as_export && data.target_user_id
               ? `_viewas-${data.target_user_id.slice(0, 8)}`
               : "";
-          a.download = `celf_bundle_${ts}${viewAsTag}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          const filename = `celf_bundle_${ts}${viewAsTag}.json`;
+
+          // iOS Safari (and many in-app browsers) silently ignore programmatic
+          // downloads from blob: URLs. Detect those environments and open the
+          // JSON in a new tab so the user can use the system share sheet.
+          const ua = navigator.userAgent || "";
+          const isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+          const isInAppBrowser = /(FBAN|FBAV|Instagram|Line|Twitter|LinkedIn|WhatsApp)/i.test(ua);
+
+          if (isIOS || isInAppBrowser) {
+            // data: URL works inside iOS Safari & in-app webviews where blob downloads silently fail.
+            const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(json);
+            const win = window.open(dataUrl, "_blank");
+            if (!win) {
+              // Pop-up blocked → navigate current tab so user still gets the file.
+              window.location.href = dataUrl;
+            }
+          } else {
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.rel = "noopener";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }
 
           supabase
             .from("celf_exports")
