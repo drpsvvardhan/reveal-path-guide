@@ -629,7 +629,7 @@ async function processUpload(
       .update({ content_sha256: contentSha256 })
       .eq("id", uploadId);
 
-    const base64Data = arrayBufferToBase64(arrayBuffer);
+    const base64Data = arrayBufferToBase64(pdfBytes.buffer as ArrayBuffer);
     const mimeType = detectMimeFromPath(upload.storage_path);
 
     // Detect if this is an InBody report
