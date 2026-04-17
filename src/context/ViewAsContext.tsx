@@ -65,6 +65,8 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [allProfiles, setAllProfiles] = useState<ProfileSummary[]>([]);
 
   // Tick every second so time-remaining renders update, and we can detect expiry
   useEffect(() => {
