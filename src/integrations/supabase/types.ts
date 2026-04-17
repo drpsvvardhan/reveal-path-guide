@@ -91,6 +91,86 @@ export type Database = {
           },
         ]
       }
+      admin_view_as_audit: {
+        Row: {
+          admin_user_id: string
+          created_at: string
+          event_detail: Json
+          event_type: string
+          id: string
+          session_id: string | null
+          target_user_id: string
+        }
+        Insert: {
+          admin_user_id: string
+          created_at?: string
+          event_detail?: Json
+          event_type: string
+          id?: string
+          session_id?: string | null
+          target_user_id: string
+        }
+        Update: {
+          admin_user_id?: string
+          created_at?: string
+          event_detail?: Json
+          event_type?: string
+          id?: string
+          session_id?: string | null
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_view_as_audit_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "admin_view_as_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_view_as_sessions: {
+        Row: {
+          access_count: number
+          admin_user_id: string
+          expires_at: string
+          granted_at: string
+          id: string
+          last_accessed_at: string | null
+          reason: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          target_user_id: string
+        }
+        Insert: {
+          access_count?: number
+          admin_user_id: string
+          expires_at: string
+          granted_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          reason: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          target_user_id: string
+        }
+        Update: {
+          access_count?: number
+          admin_user_id?: string
+          expires_at?: string
+          granted_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          reason?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       celf_exports: {
         Row: {
           bundle: Json
@@ -1355,6 +1435,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      has_valid_view_as_session: {
+        Args: { p_admin_user_id: string; p_target_user_id: string }
         Returns: boolean
       }
       next_action_plan_version: { Args: { p_user_id: string }; Returns: number }
