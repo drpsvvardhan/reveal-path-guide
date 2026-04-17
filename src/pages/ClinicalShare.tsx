@@ -18,6 +18,11 @@ const ClinicalShare: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const [cs, setCs] = useState<any>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [patient, setPatient] = useState<{
+    name: string | null;
+    age: number | null;
+    sex: string | null;
+  }>({ name: null, age: null, sex: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,15 +31,25 @@ const ClinicalShare: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        // Find user by terrain_share_token
+        // Find user by terrain_share_token + grab demographics for the header
         const { data: profile, error: pErr } = await supabase
           .from("profiles")
-          .select("user_id")
+          .select("user_id, first_name, preferred_name, display_name, age, sex")
           .eq("terrain_share_token", token)
           .maybeSingle();
 
         if (pErr) throw pErr;
         if (!profile) { setError("Invalid or expired link."); return; }
+
+        setPatient({
+          name:
+            profile.preferred_name ||
+            profile.first_name ||
+            profile.display_name ||
+            null,
+          age: profile.age ?? null,
+          sex: profile.sex ?? null,
+        });
 
         // Fetch active terrain render
         const { data: render, error: rErr } = await supabase
