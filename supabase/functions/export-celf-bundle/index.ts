@@ -338,7 +338,7 @@ serve(async (req) => {
           is_view_as_export: isViewAsExport,
           profile_found: subjectResult.profileFound,
           has_name: subjectResult.hasName,
-          has_dob: subjectResult.hasDob, has_sex: subjectResult.hasSex,
+          has_age: subjectResult.hasAge, has_sex: subjectResult.hasSex,
           source_documents_found: sourceDocs.length,
           observations_found: labResult.observations.length + cieObs.length,
         },
