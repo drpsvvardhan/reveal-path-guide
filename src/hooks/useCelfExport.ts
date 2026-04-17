@@ -107,20 +107,34 @@ export function useCelfExport() {
               : "";
           const filename = `celf_bundle_${ts}${viewAsTag}.json`;
 
-          // iOS Safari (and many in-app browsers) silently ignore programmatic
-          // downloads from blob: URLs. Detect those environments and open the
-          // JSON in a new tab so the user can use the system share sheet.
+          // iOS Safari and in-app browsers often ignore anchor downloads, and
+          // very large data: URLs can open as a blank page. Prefer the native
+          // share sheet when available, otherwise open a blob URL in a new tab.
           const ua = navigator.userAgent || "";
           const isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
           const isInAppBrowser = /(FBAN|FBAV|Instagram|Line|Twitter|LinkedIn|WhatsApp)/i.test(ua);
 
           if (isIOS || isInAppBrowser) {
-            // data: URL works inside iOS Safari & in-app webviews where blob downloads silently fail.
-            const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(json);
-            const win = window.open(dataUrl, "_blank");
-            if (!win) {
-              // Pop-up blocked → navigate current tab so user still gets the file.
-              window.location.href = dataUrl;
+            const file = new File([json], filename, { type: "application/json" });
+            const canNativeShare =
+              typeof navigator !== "undefined" &&
+              typeof navigator.share === "function" &&
+              typeof navigator.canShare === "function" &&
+              navigator.canShare({ files: [file] });
+
+            if (canNativeShare) {
+              await navigator.share({
+                files: [file],
+                title: filename,
+              });
+            } else {
+              const blob = new Blob([json], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const win = window.open(url, "_blank", "noopener,noreferrer");
+              if (!win) {
+                window.location.assign(url);
+              }
+              setTimeout(() => URL.revokeObjectURL(url), 60_000);
             }
           } else {
             const blob = new Blob([json], { type: "application/json" });
