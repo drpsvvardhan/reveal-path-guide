@@ -252,7 +252,7 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: string, map: FeatureMap) {
   const { data, error } = await sb
     .from("patient_lab_observations")
-    .select("id, upload_id, canonical_name, original_name, value, value_text, unit, flag, reference_range_text, specimen_type, collection_date, page_number, extraction_confidence")
+    .select("id, upload_id, canonical_name, raw_name, display_name, value, unit, flag, ref_low, ref_high, specimen_type, collection_date")
     .eq("user_id", userId);
   if (error) throw new Error(`lab_observations load failed: ${error.message}`);
 
@@ -263,7 +263,7 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
     if (r.specimen_type === "fibroscan") { sourceClass = "fibroscan"; subSys = "fibroscan"; }
     else if (r.specimen_type === "body_composition") { sourceClass = "inbody"; subSys = "inbody"; }
 
-    const f = lookupFeature(map, subSys, r.canonical_name ?? r.original_name ?? "", r.unit);
+    const f = lookupFeature(map, subSys, r.canonical_name ?? r.raw_name ?? "", r.unit);
 
     // Apply unit normalization
     const rawValue = r.value;
@@ -271,12 +271,16 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       ? rawValue * f.unit_factor + f.unit_offset
       : null;
 
+    const refRangeText = (r.ref_low != null || r.ref_high != null)
+      ? `${r.ref_low ?? ""}-${r.ref_high ?? ""}`
+      : null;
+
     obs.push({
       observation_id: r.id,
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: sourceClass,
       collection_date: r.collection_date,
       observed_at_precision: r.collection_date ? "date" : "unknown",
@@ -285,24 +289,24 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       panel_group: f.panel_group,
       panel_original: null,
       analyte_name: f.feature_label,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name ?? r.display_name,
       twin_feature_name: f.twin_feature_name,
-      result_display: r.value_text ?? (normalizedValue != null ? String(normalizedValue) : null),
+      result_display: normalizedValue != null ? String(normalizedValue) : null,
       value_operator: null,
       value_numeric: normalizedValue,
-      value_raw: rawValue,                    // NEW — preserved raw value
-      value_text: r.value_text,
+      value_raw: rawValue,
+      value_text: null,
       unit_normalized: f.unit_canonical ?? r.unit,
       unit_original: r.unit,
-      unit_factor: f.unit_factor,             // NEW — transparency about conversion
+      unit_factor: f.unit_factor,
       unit_offset: f.unit_offset,
-      unit_normalized_applied: f.unit_normalized_applied,  // NEW
+      unit_normalized_applied: f.unit_normalized_applied,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
+      reference_range_text: refRangeText,
       specimen_type: r.specimen_type,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
+      page_number: null,
+      ocr_confidence: null,
       needs_pdf_verification: f.needs_verification,
       raw_notes: null,
     });
