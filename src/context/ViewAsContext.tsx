@@ -80,11 +80,22 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
       try {
         const { data: u } = await supabase.auth.getUser();
         if (!u.user) return;
+        setAuthUserId(u.user.id);
 
         const { data: role } = await supabase
           .from("user_roles").select("role")
           .eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-        setIsAdmin(Boolean(role));
+        const adminFlag = Boolean(role);
+        setIsAdmin(adminFlag);
+
+        // Admin profile picker support
+        if (adminFlag) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, display_name, age, sex")
+            .order("created_at", { ascending: false });
+          if (profiles) setAllProfiles(profiles as ProfileSummary[]);
+        }
 
         const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (stored) {
