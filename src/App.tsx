@@ -74,6 +74,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/share/:token" element={<SharedQueue />} />
               <Route path="/clinical/:token" element={<ClinicalShare />} />
+              <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ViewAsProvider>
