@@ -229,18 +229,18 @@ async function buildSubject(sb: SupabaseClient, userId: string) {
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, original_filename, document_type, page_count, extraction_confidence, uploaded_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
+    .select("id, original_filename, document_type, created_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
     .eq("user_id", userId)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: true });
+    .order("created_at", { ascending: true });
   if (error) throw new Error(`lab_uploads load failed: ${error.message}`);
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
     source_name: u.original_filename ?? "unnamed_upload",
-    pages: u.page_count ?? null,
+    pages: null,
     document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    ingest_confidence: null,
+    ingested_at: u.created_at,
     status: u.status,
     identity_verified: u.name_match_status === "match",
     identity_match_score: u.name_match_score ?? null,
