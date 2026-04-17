@@ -199,29 +199,29 @@ async function buildFeatureMap(sb: SupabaseClient): Promise<FeatureMap> {
 async function buildSubject(sb: SupabaseClient, userId: string) {
   const { data: profile } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, preferred_name, date_of_birth, sex, mrn, age")
-    .eq("id", userId)
+    .select("id, first_name, preferred_name, display_name, sex, age")
+    .eq("user_id", userId)
     .maybeSingle();
 
   const candidateName = profile
-    ? (profile.preferred_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim())
+    ? (profile.preferred_name ?? profile.display_name ?? profile.first_name ?? null)
     : null;
   const externalName = candidateName && candidateName.length > 0 ? candidateName : null;
 
   return {
-    ok: Boolean(externalName) || Boolean(profile?.date_of_birth) || Boolean(profile?.sex),
+    ok: Boolean(externalName) || Boolean(profile?.age) || Boolean(profile?.sex),
     subject: [{
       subject_id: userId,
       external_name: externalName ?? "Unnamed Subject",
-      dob: profile?.date_of_birth ?? null,
+      dob: null,
       age: profile?.age ?? null,
       sex: profile?.sex ?? null,
-      mrn: profile?.mrn ?? null,
+      mrn: null,
       source_system: "reveal_path",
     }],
     profileFound: Boolean(profile),
     hasName: Boolean(externalName),
-    hasDob: Boolean(profile?.date_of_birth),
+    hasDob: false,
     hasSex: Boolean(profile?.sex),
   };
 }
@@ -229,18 +229,18 @@ async function buildSubject(sb: SupabaseClient, userId: string) {
 async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, original_filename, document_type, page_count, extraction_confidence, uploaded_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
+    .select("id, original_filename, document_type, created_at, status, name_match_status, name_match_score, extracted_patient_name, content_sha256")
     .eq("user_id", userId)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
-    .order("uploaded_at", { ascending: true });
+    .order("created_at", { ascending: true });
   if (error) throw new Error(`lab_uploads load failed: ${error.message}`);
   return (data ?? []).map((u: any) => ({
     source_doc_id: u.id,
     source_name: u.original_filename ?? "unnamed_upload",
-    pages: u.page_count ?? null,
+    pages: null,
     document_type: u.document_type ?? "lab_pdf",
-    ingest_confidence: u.extraction_confidence ?? null,
-    ingested_at: u.uploaded_at,
+    ingest_confidence: null,
+    ingested_at: u.created_at,
     status: u.status,
     identity_verified: u.name_match_status === "match",
     identity_match_score: u.name_match_score ?? null,
@@ -252,7 +252,7 @@ async function buildSourceDocuments(sb: SupabaseClient, userId: string) {
 async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: string, map: FeatureMap) {
   const { data, error } = await sb
     .from("patient_lab_observations")
-    .select("id, upload_id, canonical_name, original_name, value, value_text, unit, flag, reference_range_text, specimen_type, collection_date, page_number, extraction_confidence")
+    .select("id, upload_id, canonical_name, raw_name, display_name, value, unit, flag, ref_low, ref_high, specimen_type, collection_date")
     .eq("user_id", userId);
   if (error) throw new Error(`lab_observations load failed: ${error.message}`);
 
@@ -263,7 +263,7 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
     if (r.specimen_type === "fibroscan") { sourceClass = "fibroscan"; subSys = "fibroscan"; }
     else if (r.specimen_type === "body_composition") { sourceClass = "inbody"; subSys = "inbody"; }
 
-    const f = lookupFeature(map, subSys, r.canonical_name ?? r.original_name ?? "", r.unit);
+    const f = lookupFeature(map, subSys, r.canonical_name ?? r.raw_name ?? "", r.unit);
 
     // Apply unit normalization
     const rawValue = r.value;
@@ -271,12 +271,16 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       ? rawValue * f.unit_factor + f.unit_offset
       : null;
 
+    const refRangeText = (r.ref_low != null || r.ref_high != null)
+      ? `${r.ref_low ?? ""}-${r.ref_high ?? ""}`
+      : null;
+
     obs.push({
       observation_id: r.id,
       subject_id: userId,
       encounter_id: null,
       source_doc_id: r.upload_id,
-      source_name: r.original_name ?? r.canonical_name,
+      source_name: r.display_name ?? r.raw_name ?? r.canonical_name,
       source_class: sourceClass,
       collection_date: r.collection_date,
       observed_at_precision: r.collection_date ? "date" : "unknown",
@@ -285,24 +289,24 @@ async function buildLabAndFibroscanObservations(sb: SupabaseClient, userId: stri
       panel_group: f.panel_group,
       panel_original: null,
       analyte_name: f.feature_label,
-      test_name_original: r.original_name,
+      test_name_original: r.raw_name ?? r.display_name,
       twin_feature_name: f.twin_feature_name,
-      result_display: r.value_text ?? (normalizedValue != null ? String(normalizedValue) : null),
+      result_display: normalizedValue != null ? String(normalizedValue) : null,
       value_operator: null,
       value_numeric: normalizedValue,
-      value_raw: rawValue,                    // NEW — preserved raw value
-      value_text: r.value_text,
+      value_raw: rawValue,
+      value_text: null,
       unit_normalized: f.unit_canonical ?? r.unit,
       unit_original: r.unit,
-      unit_factor: f.unit_factor,             // NEW — transparency about conversion
+      unit_factor: f.unit_factor,
       unit_offset: f.unit_offset,
-      unit_normalized_applied: f.unit_normalized_applied,  // NEW
+      unit_normalized_applied: f.unit_normalized_applied,
       flag: r.flag,
-      reference_range_text: r.reference_range_text,
+      reference_range_text: refRangeText,
       specimen_type: r.specimen_type,
       status: "final",
-      page_number: r.page_number,
-      ocr_confidence: r.extraction_confidence,
+      page_number: null,
+      ocr_confidence: null,
       needs_pdf_verification: f.needs_verification,
       raw_notes: null,
     });
@@ -314,7 +318,7 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
   const out: any[] = [];
   const { data: assessments, error: aErr } = await sb
     .from("cie_assessments")
-    .select("id, user_id, assessed_at, completed_at, created_at")
+    .select("id, user_id, full_completed_at, layer1_completed_at, created_at")
     .eq("user_id", userId);
   if (aErr || !assessments || assessments.length === 0) return out;
 
@@ -322,18 +326,18 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
 
   const { data: domainScores } = await sb
     .from("cie_domain_scores")
-    .select("id, assessment_id, domain_id, score, completion_pct, computed_at")
+    .select("id, assessment_id, domain_id, final_score, created_at")
     .in("assessment_id", assessmentIds);
   const { data: gateScores } = await sb
     .from("cie_gate_scores")
-    .select("id, assessment_id, gate_id, score, status, computed_at")
+    .select("id, assessment_id, gate_id, score, traffic_light, created_at")
     .in("assessment_id", assessmentIds);
 
   const aById = new Map(assessments.map((a: any) => [a.id, a]));
 
   for (const r of domainScores ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
-    const dt = a.assessed_at ?? a.completed_at ?? a.created_at ?? r.computed_at;
+    const dt = a.full_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     const f = lookupFeature(map, "cie_domain", r.domain_id, null);
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
@@ -342,21 +346,21 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       category: "cie", domain: f.domain, panel_group: f.panel_group,
       panel_original: "CIE v2.2", analyte_name: f.feature_label,
       test_name_original: `Domain ${r.domain_id}`, twin_feature_name: f.twin_feature_name,
-      result_display: r.score != null ? String(r.score) : null,
-      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: null,
+      result_display: r.final_score != null ? String(r.final_score) : null,
+      value_operator: null, value_numeric: r.final_score, value_raw: r.final_score, value_text: null,
       unit_normalized: "score_0_100", unit_original: "score",
       unit_factor: 1, unit_offset: 0, unit_normalized_applied: false,
       flag: null, reference_range_text: null,
       specimen_type: "self_report",
-      status: (r.completion_pct ?? 1) >= 1.0 ? "final" : "preliminary",
+      status: "final",
       page_number: null, ocr_confidence: null,
       needs_pdf_verification: false,
-      raw_notes: JSON.stringify({ completion_pct: r.completion_pct }),
+      raw_notes: null,
     });
   }
   for (const r of gateScores ?? []) {
     const a: any = aById.get(r.assessment_id) ?? {};
-    const dt = a.assessed_at ?? a.completed_at ?? a.created_at ?? r.computed_at;
+    const dt = a.full_completed_at ?? a.layer1_completed_at ?? a.created_at ?? r.created_at;
     const f = lookupFeature(map, "cie_gate", r.gate_id, null);
     out.push({
       observation_id: r.id, subject_id: userId, encounter_id: r.assessment_id,
@@ -366,10 +370,10 @@ async function buildCieObservations(sb: SupabaseClient, userId: string, map: Fea
       panel_original: "CIE v2.2 Gates", analyte_name: f.feature_label,
       test_name_original: r.gate_id, twin_feature_name: f.twin_feature_name,
       result_display: r.score != null ? String(r.score) : null,
-      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: r.status,
+      value_operator: null, value_numeric: r.score, value_raw: r.score, value_text: r.traffic_light,
       unit_normalized: "score_0_100", unit_original: "score",
       unit_factor: 1, unit_offset: 0, unit_normalized_applied: false,
-      flag: r.status, reference_range_text: null,
+      flag: r.traffic_light, reference_range_text: null,
       specimen_type: "self_report", status: "final",
       page_number: null, ocr_confidence: null,
       needs_pdf_verification: false, raw_notes: null,
