@@ -21,6 +21,7 @@ import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
 import { CelfExportButton } from "@/components/CelfExportButton";
 import IdentityConfirmModal, { IdentityConfirmRequest } from "@/components/records/IdentityConfirmModal";
+import PreUploadConfirmModal from "@/components/records/PreUploadConfirmModal";
 
 /* ── Tier ordering ── */
 const TIER_ORDER: { tier: ClusterTier; label: string }[] = [
