@@ -16,6 +16,7 @@ export type CelfExportCounts = {
   feature_state: number;
   timelines?: number;
   identity_events?: number;
+  excluded?: number;
 };
 
 export type CelfExportResult = {
