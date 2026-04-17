@@ -136,6 +136,14 @@ const PatientShell: React.FC = () => {
                           <Users className="h-3.5 w-3.5 text-muted-foreground" />
                           Start view-as session…
                         </button>
+                        <Link
+                          to="/admin/profiles"
+                          onClick={() => setProfileOpen(false)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                          All profiles
+                        </Link>
                       </div>
                     )}
 
