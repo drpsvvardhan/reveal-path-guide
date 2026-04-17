@@ -38,8 +38,35 @@ const JourneySection: React.FC = () => {
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
   const [topAction, setTopAction] = useState<ActionPlanAction | null>(null);
+  const [greetingName, setGreetingName] = useState<string | null>(null);
 
   const userId = effectiveUserId || user?.id;
+
+  // Fetch a friendly first/preferred name for the greeting
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("preferred_name, first_name, display_name")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const name =
+        data?.preferred_name ||
+        data?.first_name ||
+        (data?.display_name ? data.display_name.split(" ")[0] : null);
+      setGreetingName(name && name.length > 0 ? name : null);
+    })();
+  }, [userId]);
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 5) return "Still up";
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    if (h < 21) return "Good evening";
+    return "Good night";
+  }, []);
 
   const hasTerrainRender = !!activeRender?.patient_portrait;
   const hasAssessment = !!currentAssessment;
@@ -246,6 +273,13 @@ const JourneySection: React.FC = () => {
         />
       }
     >
+      {/* PERSONAL GREETING */}
+      {greetingName && (
+        <p className="text-eyebrow text-muted-foreground -mb-2">
+          {greeting}, <span className="text-foreground">{greetingName}</span>.
+        </p>
+      )}
+
       {/* TODAY BLOCK — prefer action plan, fall back to terrain portrait */}
       {(topAction || portrait?.the_one_action) && (
         <motion.div

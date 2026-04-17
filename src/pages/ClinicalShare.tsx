@@ -18,6 +18,11 @@ const ClinicalShare: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const [cs, setCs] = useState<any>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [patient, setPatient] = useState<{
+    name: string | null;
+    age: number | null;
+    sex: string | null;
+  }>({ name: null, age: null, sex: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,15 +31,25 @@ const ClinicalShare: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        // Find user by terrain_share_token
+        // Find user by terrain_share_token + grab demographics for the header
         const { data: profile, error: pErr } = await supabase
           .from("profiles")
-          .select("user_id")
+          .select("user_id, first_name, preferred_name, display_name, age, sex")
           .eq("terrain_share_token", token)
           .maybeSingle();
 
         if (pErr) throw pErr;
         if (!profile) { setError("Invalid or expired link."); return; }
+
+        setPatient({
+          name:
+            profile.preferred_name ||
+            profile.first_name ||
+            profile.display_name ||
+            null,
+          age: profile.age ?? null,
+          sex: profile.sex ?? null,
+        });
 
         // Fetch active terrain render
         const { data: render, error: rErr } = await supabase
@@ -94,7 +109,22 @@ const ClinicalShare: React.FC = () => {
 
       {/* Content */}
       <main className="max-w-3xl mx-auto px-6 py-10 space-y-8">
-        <h1 className="font-serif text-2xl text-[#3A2F3F]">Clinical handoff</h1>
+        <div className="space-y-2">
+          <h1 className="font-serif text-2xl text-[#3A2F3F]">Clinical handoff</h1>
+          {(patient.name || patient.age || patient.sex) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#5B4A5F]">
+              {patient.name && (
+                <span className="font-medium text-[#1E1A1F]">{patient.name}</span>
+              )}
+              {patient.age != null && (
+                <span>· {patient.age} years</span>
+              )}
+              {patient.sex && (
+                <span className="capitalize">· {patient.sex.replace(/_/g, " ")}</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Terrain overview */}
         <p className="text-base text-[#1E1A1F]/85 leading-relaxed">{cs.terrain_overview}</p>
