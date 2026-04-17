@@ -244,7 +244,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
       toast.error("Failed to start session", { description: e?.message });
     }
-  }, [isAdmin]);
+  }, [isAdmin, authUserId]);
 
   const exitViewAs = useCallback(async (reason = "admin exited view-as") => {
     if (!session) return;
