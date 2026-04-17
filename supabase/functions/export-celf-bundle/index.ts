@@ -23,8 +23,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const BUNDLE_VERSION = "celf-v0.4";
-const MAP_VERSION    = "celf-v0.4";
+const BUNDLE_VERSION = "celf-v0.5";
+const MAP_VERSION    = "celf-v0.5";
 
 type FeatureMap = Map<string, {
   celf_feature_name: string;
@@ -533,7 +533,7 @@ serve(async (req) => {
         generated_at: new Date().toISOString(),
         phi_level: "full_phi",
         source: "reveal_path",
-        generator: "vizzhy_reveal_path_celf_adapter_v1.3",
+        generator: "vizzhy_reveal_path_celf_adapter_v1.4",
         caller_user_id: callerUserId,
         target_user_id: targetUserId,
         is_view_as_export: isViewAsExport,
