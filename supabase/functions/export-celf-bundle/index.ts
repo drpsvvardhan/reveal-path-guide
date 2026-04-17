@@ -202,7 +202,7 @@ async function buildCieObservations(sb: SupabaseClient, userId: string) {
       value_numeric: r.score, value_raw: r.score, unit_normalized: "score_0_100",
       classification_method: "structured_intake",
       classification_confidence: 1.0,
-      flag: r.traffic_light, specimen_type: "self_server", status: "final",
+      flag: r.traffic_light, specimen_type: "self_report", status: "final",
     });
   }
   return out;
