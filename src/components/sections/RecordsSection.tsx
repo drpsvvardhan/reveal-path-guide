@@ -89,6 +89,7 @@ const RecordsSection: React.FC = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
   const [identityRequest, setIdentityRequest] = useState<IdentityConfirmRequest | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{ file: File; kind: "lab" | "fibro" } | null>(null);
   const { navigateTo } = useNavigation();
 
   // Surface confirmation modal whenever an upload lands in awaiting state.
