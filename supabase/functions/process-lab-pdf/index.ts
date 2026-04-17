@@ -561,17 +561,48 @@ async function processUpload(
     .eq("id", uploadId);
 
   try {
-    // Download the file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("lab-uploads")
-      .download(upload.storage_path);
+    // Download the file from Supabase Storage with retry + signed URL fallback
+    let pdfBytes: Uint8Array | null = null;
+    let lastErr: string | null = null;
 
-    if (downloadError || !fileData) {
-      throw new Error(`Failed to download file from storage: ${downloadError?.message}`);
+    for (let attempt = 1; attempt <= 3 && !pdfBytes; attempt++) {
+      try {
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from("lab-uploads")
+          .download(upload.storage_path);
+        if (downloadError || !fileData) {
+          lastErr = downloadError?.message || "no data";
+          throw new Error(lastErr);
+        }
+        const arrayBuffer = await fileData.arrayBuffer();
+        pdfBytes = new Uint8Array(arrayBuffer);
+        console.log(`[download] SDK succeeded on attempt ${attempt}, size=${pdfBytes.length}`);
+      } catch (e) {
+        lastErr = (e as Error).message;
+        console.warn(`[download] SDK attempt ${attempt} failed: ${lastErr}`);
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
+      }
     }
 
-    const arrayBuffer = await fileData.arrayBuffer();
-    const pdfBytes = new Uint8Array(arrayBuffer);
+    // Fallback: use signed URL if SDK download keeps failing
+    if (!pdfBytes) {
+      console.warn(`[download] SDK exhausted, trying signed URL fallback`);
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("lab-uploads")
+        .createSignedUrl(upload.storage_path, 60);
+      if (signErr || !signed?.signedUrl) {
+        throw new Error(`Failed to download file from storage: ${lastErr || signErr?.message}`);
+      }
+      const resp = await fetch(signed.signedUrl);
+      if (!resp.ok) {
+        throw new Error(`Signed URL download failed: HTTP ${resp.status}`);
+      }
+      const buf = await resp.arrayBuffer();
+      pdfBytes = new Uint8Array(buf);
+      console.log(`[download] Signed URL fallback succeeded, size=${pdfBytes.length}`);
+    }
 
     // ------------------------------------------------------------------
     // STEP 2 — Content hash + dedup guard (BEFORE Gemini extraction)
