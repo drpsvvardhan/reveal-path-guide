@@ -199,29 +199,29 @@ async function buildFeatureMap(sb: SupabaseClient): Promise<FeatureMap> {
 async function buildSubject(sb: SupabaseClient, userId: string) {
   const { data: profile } = await sb
     .from("profiles")
-    .select("id, first_name, last_name, preferred_name, date_of_birth, sex, mrn, age")
-    .eq("id", userId)
+    .select("id, first_name, preferred_name, display_name, sex, age")
+    .eq("user_id", userId)
     .maybeSingle();
 
   const candidateName = profile
-    ? (profile.preferred_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim())
+    ? (profile.preferred_name ?? profile.display_name ?? profile.first_name ?? null)
     : null;
   const externalName = candidateName && candidateName.length > 0 ? candidateName : null;
 
   return {
-    ok: Boolean(externalName) || Boolean(profile?.date_of_birth) || Boolean(profile?.sex),
+    ok: Boolean(externalName) || Boolean(profile?.age) || Boolean(profile?.sex),
     subject: [{
       subject_id: userId,
       external_name: externalName ?? "Unnamed Subject",
-      dob: profile?.date_of_birth ?? null,
+      dob: null,
       age: profile?.age ?? null,
       sex: profile?.sex ?? null,
-      mrn: profile?.mrn ?? null,
+      mrn: null,
       source_system: "reveal_path",
     }],
     profileFound: Boolean(profile),
     hasName: Boolean(externalName),
-    hasDob: Boolean(profile?.date_of_birth),
+    hasDob: false,
     hasSex: Boolean(profile?.sex),
   };
 }
