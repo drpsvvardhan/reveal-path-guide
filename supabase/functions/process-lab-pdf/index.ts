@@ -750,6 +750,7 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     let inserted = 0;
     let duplicates = 0;
     let queuedForReview = 0;
+    const writeStartedAt = Date.now();
 
     for (const obs of extracted.observations) {
       const canonicalName = detectedInBody
