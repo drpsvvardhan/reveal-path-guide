@@ -942,6 +942,28 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
     console.log(`[timing] upload=${uploadId} db_write_ms=${writeMs} inserted=${inserted} dup=${duplicates} queued=${queuedForReview}`);
     console.log(`Upload ${uploadId} canonicalization: ${inserted} inserted, ${duplicates} dup, ${queuedForReview} queued for review`);
 
+    // If nothing numeric was extracted AND nothing was inserted, mark as failed with
+    // a friendly explanation. This typically happens for qualitative-only reports
+    // (e.g., stool routine, urine microscopy, culture reports) where every result
+    // is "Absent / Present / Negative / Brownish" rather than a number we can chart.
+    if (extracted.observations.length === 0 || inserted === 0) {
+      const friendlyMsg =
+        extracted.observations.length === 0
+          ? "This report doesn't contain any numeric biomarkers we can chart (it looks like a qualitative report — e.g. stool routine, culture, or microscopy). Nothing was added to your timeline."
+          : "We read this report but couldn't add any new biomarkers to your timeline (all values may already be on file or were not recognized).";
+      await supabase
+        .from("patient_lab_uploads")
+        .update({
+          status: "failed",
+          error_message: friendlyMsg,
+          processing_completed_at: new Date().toISOString(),
+          observations_inserted: 0,
+          observations_duplicates: duplicates,
+        })
+        .eq("id", uploadId);
+      console.log(`Upload ${uploadId} marked failed (no numeric biomarkers): extracted=${extracted.observations.length}, inserted=${inserted}`);
+      return;
+    }
 
     // Mark as complete
     await supabase
