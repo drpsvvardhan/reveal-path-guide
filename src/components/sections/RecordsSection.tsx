@@ -196,10 +196,10 @@ const RecordsSection: React.FC = () => {
     setLastResult(result);
   };
 
-  const handleFibroFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFibroFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
     if (fibroFileInputRef.current) fibroFileInputRef.current.value = "";
+    if (!file) return;
     setFibroResult(null);
     if (file.type !== "application/pdf") {
       setFibroResult({ success: false, message: "FibroScan reports must be PDF files." });
@@ -209,6 +209,10 @@ const RecordsSection: React.FC = () => {
       setFibroResult({ success: false, message: "File too large (20 MB max)." });
       return;
     }
+    setPendingUpload({ file, kind: "fibro" });
+  };
+
+  const runFibroUpload = async (file: File) => {
     const targetUserId = effectiveUserId || user?.id;
     if (!targetUserId) {
       setFibroResult({ success: false, message: "Not authenticated." });
@@ -294,6 +298,19 @@ const RecordsSection: React.FC = () => {
       setFibroUploading(false);
     }
   };
+
+  // Called when the user confirms ownership in PreUploadConfirmModal.
+  const handlePendingConfirm = useCallback(async () => {
+    if (!pendingUpload) return;
+    const { file, kind } = pendingUpload;
+    setPendingUpload(null);
+    if (kind === "lab") {
+      await runLabUpload(file);
+    } else {
+      await runFibroUpload(file);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUpload]);
 
   const triggerFilePicker = () => fileInputRef.current?.click();
   const triggerFibroFilePicker = () => fibroFileInputRef.current?.click();
