@@ -446,6 +446,13 @@ interface ExtractedObservation {
   ref_low: number | null;
   ref_high: number | null;
   flag: string;
+  // NEW — LLM canonicalization fields (v0.9)
+  canonical_concept_id: string | null;
+  proposed_concept_id: string | null;
+  proposed_label: string | null;
+  canonical_unit: string | null;
+  source_unit_conversion_factor: number | null;
+  classification_confidence: number | null;
 }
 
 interface ExtractionResult {
@@ -493,6 +500,12 @@ function validateAndCleanExtraction(raw: any): ExtractionResult | null {
       ref_low: typeof obs.ref_low === "number" ? obs.ref_low : null,
       ref_high: typeof obs.ref_high === "number" ? obs.ref_high : null,
       flag,
+      canonical_concept_id: typeof obs.canonical_concept_id === "string" ? obs.canonical_concept_id : null,
+      proposed_concept_id: typeof obs.proposed_concept_id === "string" ? obs.proposed_concept_id : null,
+      proposed_label: typeof obs.proposed_label === "string" ? obs.proposed_label : null,
+      canonical_unit: typeof obs.canonical_unit === "string" ? obs.canonical_unit : null,
+      source_unit_conversion_factor: typeof obs.source_unit_conversion_factor === "number" ? obs.source_unit_conversion_factor : null,
+      classification_confidence: typeof obs.classification_confidence === "number" ? obs.classification_confidence : null,
     });
   }
 
