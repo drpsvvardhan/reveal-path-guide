@@ -23,6 +23,14 @@ type ViewAsSession = {
   expires_at: string;
 };
 
+type ProfileSummary = {
+  user_id: string;
+  first_name: string | null;
+  display_name: string | null;
+  age: number | null;
+  sex: string | null;
+};
+
 type ViewAsState = {
   viewingUserId: string | null;
   sessionId: string | null;
@@ -32,6 +40,20 @@ type ViewAsState = {
   enterViewAs: (targetUserId: string, reason: string, durationMinutes?: number) => Promise<void>;
   exitViewAs: (reason?: string) => Promise<void>;
   timeRemainingMs: number | null;
+  // ---- Legacy compatibility shim (v1 API) ----
+  /** Effective user id for data fetching: target if viewing-as, else self. */
+  effectiveUserId: string | null;
+  /** Whether an active view-as session exists. */
+  isViewingAs: boolean;
+  /** Profiles available to admins for impersonation. */
+  allProfiles: ProfileSummary[];
+  /**
+   * Legacy switch: prompts for a reason and mints a session.
+   * Prefer `enterViewAs(id, reason, minutes)` for new code.
+   */
+  viewAs: (userId: string) => Promise<void>;
+  /** Legacy reset: revokes the active session. */
+  resetViewAs: () => Promise<void>;
 };
 
 const ViewAsContext = createContext<ViewAsState | null>(null);
@@ -43,6 +65,8 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [allProfiles, setAllProfiles] = useState<ProfileSummary[]>([]);
 
   // Tick every second so time-remaining renders update, and we can detect expiry
   useEffect(() => {
@@ -56,11 +80,22 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
       try {
         const { data: u } = await supabase.auth.getUser();
         if (!u.user) return;
+        setAuthUserId(u.user.id);
 
         const { data: role } = await supabase
           .from("user_roles").select("role")
           .eq("user_id", u.user.id).eq("role", "admin").maybeSingle();
-        setIsAdmin(Boolean(role));
+        const adminFlag = Boolean(role);
+        setIsAdmin(adminFlag);
+
+        // Admin profile picker support
+        if (adminFlag) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, first_name, display_name, age, sex")
+            .order("created_at", { ascending: false });
+          if (profiles) setAllProfiles(profiles as ProfileSummary[]);
+        }
 
         const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
         if (stored) {
@@ -181,8 +216,24 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     ? Math.max(0, new Date(session.expires_at).getTime() - now)
     : null;
 
+  const viewingUserId = session?.target_user_id ?? null;
+  const isViewingAs = !!session;
+
+  // Legacy shim: prompt for a reason, then mint a session.
+  const viewAs = useCallback(async (userId: string) => {
+    const reason = typeof window !== "undefined"
+      ? window.prompt("Reason for viewing as this patient (min 10 chars, audit-logged):")
+      : null;
+    if (!reason) return;
+    await enterViewAs(userId, reason, 60);
+  }, [enterViewAs]);
+
+  const resetViewAs = useCallback(async () => {
+    await exitViewAs();
+  }, [exitViewAs]);
+
   const value: ViewAsState = {
-    viewingUserId: session?.target_user_id ?? null,
+    viewingUserId,
     sessionId: session?.session_id ?? null,
     sessionExpiresAt: session?.expires_at ?? null,
     isAdmin,
@@ -190,6 +241,12 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     enterViewAs,
     exitViewAs,
     timeRemainingMs,
+    // Legacy compatibility
+    effectiveUserId: viewingUserId ?? authUserId,
+    isViewingAs,
+    allProfiles,
+    viewAs,
+    resetViewAs,
   };
 
   return <ViewAsContext.Provider value={value}>{children}</ViewAsContext.Provider>;
