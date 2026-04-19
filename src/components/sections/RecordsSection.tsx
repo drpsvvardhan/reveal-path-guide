@@ -604,6 +604,31 @@ const RecordsSection: React.FC = () => {
             ))}
           </div>
 
+          {/* How your terrain is organized — collapsible (was hero CoherenceMap) */}
+          <div className="pt-6 border-t border-border mt-6">
+            <button
+              onClick={() => setCoherenceOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
+              {coherenceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              How your terrain is organized
+            </button>
+            <AnimatePresence>
+              {coherenceOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden mt-3"
+                >
+                  <div className="py-4 flex flex-col items-center">
+                    <CoherenceMap clusters={clusters} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {/* Unclustered observations accordion */}
           {unclusteredObs.length > 0 && (
             <div className="pt-6 border-t border-border mt-6">
