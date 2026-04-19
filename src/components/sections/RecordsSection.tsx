@@ -16,6 +16,7 @@ import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import BiomarkerTimeline from "@/components/visuals/BiomarkerTimeline";
 import CoherenceMap from "@/components/clusters/CoherenceMap";
 import ClusterCard from "@/components/clusters/ClusterCard";
+import TerrainPortraitHero from "@/components/terrain/TerrainPortraitHero";
 import { ClusterTier } from "@/types/clusters";
 import { useNavigation } from "@/context/NavigationContext";
 import { ArrowRight } from "lucide-react";
@@ -86,6 +87,7 @@ const RecordsSection: React.FC = () => {
   const [editingObs, setEditingObs] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [uploadsOpen, setUploadsOpen] = useState(false);
+  const [coherenceOpen, setCoherenceOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateMsg, setRegenerateMsg] = useState<string | null>(null);
   const [identityRequest, setIdentityRequest] = useState<IdentityConfirmRequest | null>(null);
@@ -555,10 +557,21 @@ const RecordsSection: React.FC = () => {
       {/* ════════════════ CLUSTER TERRAIN SECTION ════════════════ */}
       {hasClusters && (
         <>
-          {/* Coherence Map — centered with breathing room */}
-          <div className="py-8 flex flex-col items-center">
-            <CoherenceMap clusters={clusters} />
-          </div>
+          {/* Hero: framework-compliant prose portrait */}
+          <TerrainPortraitHero />
+
+          {/* Confidence distribution summary (derived from cluster tiers) */}
+          {(() => {
+            const supported = clustersByTier.robust.length + clustersByTier.supported.length;
+            const developing = clustersByTier.developing.length;
+            const emerging = clustersByTier.tentative.length + clustersByTier.emerging.length;
+            if (supported + developing + emerging === 0) return null;
+            return (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                Across your findings: {supported} supported, {developing} developing, {emerging} emerging.
+              </p>
+            );
+          })()}
 
           {/* Cluster Cards */}
           <div className="space-y-3">
@@ -589,6 +602,31 @@ const RecordsSection: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* How your terrain is organized — collapsible (was hero CoherenceMap) */}
+          <div className="pt-6 border-t border-border mt-6">
+            <button
+              onClick={() => setCoherenceOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
+              {coherenceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              How your terrain is organized
+            </button>
+            <AnimatePresence>
+              {coherenceOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden mt-3"
+                >
+                  <div className="py-4 flex flex-col items-center">
+                    <CoherenceMap clusters={clusters} />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Unclustered observations accordion */}
