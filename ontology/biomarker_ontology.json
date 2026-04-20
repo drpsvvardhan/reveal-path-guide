@@ -1,1 +1,2388 @@
-
+{
+  "ontology_version": "celf-ontology-v1.0",
+  "generated_at": "2026-04-17",
+  "description": "Biomarker ontology for the Vizzhy CELF adapter. Each concept has a stable id, canonical unit, and a list of known aliases that have been observed in real lab reports. The LLM extractor uses this as a constrained vocabulary at ingestion time.",
+  "concepts": [
+    {
+      "id": "autoimmune_ana",
+      "label": "ANA",
+      "unit": "titer",
+      "domain": "autoimmune",
+      "biomarker_class": "Autoimmune Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ANTI NUCLEAR ANTIBODIES (ANA)"
+      ]
+    },
+    {
+      "id": "autoimmune_ccp",
+      "label": "Anti-CCP",
+      "unit": "U/mL",
+      "domain": "autoimmune",
+      "biomarker_class": "Autoimmune Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ANTI CCP (ACCP)"
+      ]
+    },
+    {
+      "id": "body_bmi",
+      "label": "Body Mass Index",
+      "unit": "kg/m2",
+      "domain": "body_composition",
+      "biomarker_class": "Body Composition",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BMI",
+        "bmi"
+      ]
+    },
+    {
+      "id": "body_bmr",
+      "label": "Basal Metabolic Rate",
+      "unit": "kcal/day",
+      "domain": "metabolic",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Basal Metabolic Rate",
+        "basal_metabolic_rate"
+      ]
+    },
+    {
+      "id": "body_dry_lean_mass",
+      "label": "Dry Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Dry Lean Mass",
+        "dry_lean_mass"
+      ]
+    },
+    {
+      "id": "body_ecw",
+      "label": "Extracellular Water",
+      "unit": "lb",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Extracellular Water",
+        "extracellular_water"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw",
+      "label": "ECW/TBW Ratio",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "ECW/TBW",
+        "ecw_tbw_ratio"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw_left_arm",
+      "label": "Left Arm ECW/TBW",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Left Arm ECW/TBW",
+        "segmental_ecw_tbw_left_arm"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw_left_leg",
+      "label": "Left Leg ECW/TBW",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Left Leg ECW/TBW",
+        "segmental_ecw_tbw_left_leg"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw_right_arm",
+      "label": "Right Arm ECW/TBW",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Right Arm ECW/TBW",
+        "segmental_ecw_tbw_right_arm"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw_right_leg",
+      "label": "Right Leg ECW/TBW",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Right Leg ECW/TBW",
+        "segmental_ecw_tbw_right_leg"
+      ]
+    },
+    {
+      "id": "body_ecw_tbw_trunk",
+      "label": "Trunk ECW/TBW",
+      "unit": "ratio",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Trunk ECW/TBW",
+        "segmental_ecw_tbw_trunk"
+      ]
+    },
+    {
+      "id": "body_fat_free_mass",
+      "label": "Fat Free Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Fat Free Mass",
+        "fat_free_mass"
+      ]
+    },
+    {
+      "id": "body_fat_mass",
+      "label": "Body Fat Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Body Fat Mass",
+        "body_fat_mass"
+      ]
+    },
+    {
+      "id": "body_fat_pct",
+      "label": "Percent Body Fat",
+      "unit": "%",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Percent Body Fat",
+        "body_fat_percent"
+      ]
+    },
+    {
+      "id": "body_icw",
+      "label": "Intracellular Water",
+      "unit": "lb",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Intracellular Water",
+        "intracellular_water"
+      ]
+    },
+    {
+      "id": "body_lean_left_arm",
+      "label": "Left Arm Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Left Arm Lean Mass",
+        "segmental_lean_left_arm"
+      ]
+    },
+    {
+      "id": "body_lean_left_leg",
+      "label": "Left Leg Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Left Leg Lean Mass",
+        "segmental_lean_left_leg"
+      ]
+    },
+    {
+      "id": "body_lean_right_arm",
+      "label": "Right Arm Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Right Arm Lean Mass",
+        "segmental_lean_right_arm"
+      ]
+    },
+    {
+      "id": "body_lean_right_leg",
+      "label": "Right Leg Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Right Leg Lean Mass",
+        "segmental_lean_right_leg"
+      ]
+    },
+    {
+      "id": "body_lean_trunk",
+      "label": "Trunk Lean Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Trunk Lean Mass",
+        "segmental_lean_trunk"
+      ]
+    },
+    {
+      "id": "body_smm",
+      "label": "Skeletal Muscle Mass",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Skeletal Muscle Mass",
+        "skeletal_muscle_mass"
+      ]
+    },
+    {
+      "id": "body_tbw",
+      "label": "Total Body Water",
+      "unit": "lb",
+      "domain": "hydration",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Total Body Water",
+        "total_body_water"
+      ]
+    },
+    {
+      "id": "body_visceral_fat_area",
+      "label": "Visceral Fat Area",
+      "unit": "cm2",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Visceral Fat Area",
+        "visceral_fat_area"
+      ]
+    },
+    {
+      "id": "body_weight",
+      "label": "Body Weight",
+      "unit": "lb",
+      "domain": "body_composition",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Weight",
+        "weight"
+      ]
+    },
+    {
+      "id": "cardiac_troponin_i",
+      "label": "Troponin I",
+      "unit": "ng/mL",
+      "domain": "cardiac",
+      "biomarker_class": "Cardiac Biomarkers",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "TROPONIN I HEART ATTACK RISK"
+      ]
+    },
+    {
+      "id": "cbc_basophils_abs",
+      "label": "Absolute Basophils",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ABSOLUTE BASOPHILS",
+        "Absolute Basophil Count",
+        "BASOPHILS - ABSOLUTE COUNT"
+      ]
+    },
+    {
+      "id": "cbc_eosinophils_abs",
+      "label": "Absolute Eosinophils",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ABSOLUTE EOSINOPHILS",
+        "Absolute Eosinophil Count",
+        "EOSINOPHILS - ABSOLUTE COUNT"
+      ]
+    },
+    {
+      "id": "cbc_hematocrit",
+      "label": "Hematocrit",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HEMATOCRIT(PCV)",
+        "PCV"
+      ]
+    },
+    {
+      "id": "cbc_hemoglobin",
+      "label": "Hemoglobin",
+      "unit": "g/dL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Hemoglobin"
+      ]
+    },
+    {
+      "id": "cbc_ig",
+      "label": "Immature Granulocytes",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Absolute Immature Granulocyte Count",
+        "IMMATURE GRANULOCYTES(IG)",
+        "Immature Granulocyte Count"
+      ]
+    },
+    {
+      "id": "cbc_ig_pct",
+      "label": "Immature Granulocyte %",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "IMMATURE GRANULOCYTE PERCENTAGE(IG%)"
+      ]
+    },
+    {
+      "id": "cbc_lymphocytes_abs",
+      "label": "Absolute Lymphocytes",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ABSOLUTE LYMPHOCYTES",
+        "Absolute Lymphocyte Count",
+        "LYMPHOCYTES - ABSOLUTE COUNT"
+      ]
+    },
+    {
+      "id": "cbc_lymphocytes_pct",
+      "label": "Lymphocytes",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LYMPHOCYTE",
+        "LYMPHOCYTE PERCENTAGE"
+      ]
+    },
+    {
+      "id": "cbc_mch",
+      "label": "MCH",
+      "unit": "pg",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MEAN CORPUSCULAR HEMOGLOBIN(MCH)"
+      ]
+    },
+    {
+      "id": "cbc_mchc",
+      "label": "MCHC",
+      "unit": "g/dL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MEAN CORP.HEMO.CONC(MCHC)"
+      ]
+    },
+    {
+      "id": "cbc_mcv",
+      "label": "MCV",
+      "unit": "fL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MEAN CORPUSCULAR VOLUME (MCV)",
+        "MEAN CORPUSCULAR VOLUME(MCV)"
+      ]
+    },
+    {
+      "id": "cbc_monocytes_abs",
+      "label": "Absolute Monocytes",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ABSOLUTE MONOCYTES",
+        "Absolute Monocyte Count",
+        "MONOCYTES - ABSOLUTE COUNT"
+      ]
+    },
+    {
+      "id": "cbc_mpv",
+      "label": "MPV",
+      "unit": "fL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MEAN PLATELET VOLUME(MPV)"
+      ]
+    },
+    {
+      "id": "cbc_neutrophils_abs",
+      "label": "Absolute Neutrophils",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC Diff",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ABSOLUTE NEUTROPHILS",
+        "Absolute Neutrophil Count",
+        "NEUTROPHILS - ABSOLUTE COUNT"
+      ]
+    },
+    {
+      "id": "cbc_nrbc",
+      "label": "Nucleated RBC",
+      "unit": "count",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "NUCLEATED RED BLOOD CELLS"
+      ]
+    },
+    {
+      "id": "cbc_nrbc_pct",
+      "label": "Nucleated RBC %",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "NUCLEATED RED BLOOD CELLS %"
+      ]
+    },
+    {
+      "id": "cbc_pct",
+      "label": "Plateletcrit",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "PLATELETCRIT(PCT)"
+      ]
+    },
+    {
+      "id": "cbc_pdw",
+      "label": "PDW",
+      "unit": "fL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "PDW",
+        "PLATELET DISTRIBUTION WIDTH(PDW)"
+      ]
+    },
+    {
+      "id": "cbc_platelets",
+      "label": "Platelets",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Platelet Count"
+      ]
+    },
+    {
+      "id": "cbc_plcr",
+      "label": "Platelet Large Cell Ratio",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "PLATELET TO LARGE CELL RATIO(PLCR)"
+      ]
+    },
+    {
+      "id": "cbc_rbc",
+      "label": "Red Blood Cell Count",
+      "unit": "10^6/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "RBC Count",
+        "TOTAL RBC"
+      ]
+    },
+    {
+      "id": "cbc_rdw_cv",
+      "label": "RDW-CV",
+      "unit": "%",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "RDW-CV",
+        "RED CELL DISTRIBUTION WIDTH (RDW-CV)"
+      ]
+    },
+    {
+      "id": "cbc_rdw_sd",
+      "label": "RDW-SD",
+      "unit": "fL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "RDW-SD",
+        "RED CELL DISTRIBUTION WIDTH - SD(RDW-SD)"
+      ]
+    },
+    {
+      "id": "cbc_wbc",
+      "label": "White Blood Cell Count",
+      "unit": "10^3/uL",
+      "domain": "hematology",
+      "biomarker_class": "CBC",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "TOTAL LEUCOCYTES COUNT",
+        "TOTAL LEUCOCYTES COUNT (WBC)",
+        "Total Leucocyte Count",
+        "WBC Count"
+      ]
+    },
+    {
+      "id": "fibroscan_cap",
+      "label": "Controlled Attenuation Parameter (steatosis)",
+      "unit": "dB/m",
+      "domain": "liver",
+      "biomarker_class": "FibroScan",
+      "source_systems": [
+        "fibroscan",
+        "lab"
+      ],
+      "known_aliases": [
+        "CAP (dB/m)"
+      ]
+    },
+    {
+      "id": "fibroscan_lsm",
+      "label": "Liver Stiffness Measurement",
+      "unit": "kPa",
+      "domain": "liver",
+      "biomarker_class": "FibroScan",
+      "source_systems": [
+        "fibroscan",
+        "lab"
+      ],
+      "known_aliases": [
+        "E (kPa)",
+        "E(kPa)"
+      ]
+    },
+    {
+      "id": "fibroscan_sws",
+      "label": "Shear Wave Speed",
+      "unit": "m/s",
+      "domain": "liver",
+      "biomarker_class": "FibroScan",
+      "source_systems": [
+        "fibroscan",
+        "lab"
+      ],
+      "known_aliases": [
+        "SWS",
+        "SWS (m/s)",
+        "Shear Wave Speed"
+      ]
+    },
+    {
+      "id": "glucose_abg",
+      "label": "Estimated Average Glucose",
+      "unit": "mg/dL",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "AVERAGE BLOOD GLUCOSE (ABG)",
+        "Average Blood Glucose"
+      ]
+    },
+    {
+      "id": "glucose_fasting",
+      "label": "Fasting Glucose",
+      "unit": "mg/dL",
+      "domain": "glycemic",
+      "biomarker_class": "Basic Metabolic",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "FASTING BLOOD SUGAR",
+        "FASTING BLOOD SUGAR(GLUCOSE)",
+        "FBS",
+        "Fasting Blood Sugar",
+        "Glucose - Fasting Blood",
+        "Glucose, Fasting"
+      ]
+    },
+    {
+      "id": "glucose_fructosamine",
+      "label": "Fructosamine",
+      "unit": "umol/L",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "FRUCTOSAMINE"
+      ]
+    },
+    {
+      "id": "glucose_ir_score",
+      "label": "Insulin Resistance Score",
+      "unit": "score",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "INSULIN RESISTANCE SCORE"
+      ]
+    },
+    {
+      "id": "glucose_ketone",
+      "label": "Blood Ketone",
+      "unit": "mmol/L",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BLOOD KETONE (D3HB)"
+      ]
+    },
+    {
+      "id": "hba1c",
+      "label": "Hemoglobin A1c",
+      "unit": "%",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Glycosylated Hemoglobin (HbA1c)",
+        "HbA1c - (HPLC - NGSP Certified)",
+        "HbA1c - (HPLC)"
+      ]
+    },
+    {
+      "id": "hormone_17_oh_prog",
+      "label": "17-OH Progesterone",
+      "unit": "ng/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "17-HYDROXYPROGESTERONE"
+      ]
+    },
+    {
+      "id": "hormone_androstenedione",
+      "label": "Androstenedione",
+      "unit": "ng/dL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ANDROSTENEDIONE"
+      ]
+    },
+    {
+      "id": "hormone_corticosterone",
+      "label": "Corticosterone",
+      "unit": "ng/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CORTICOSTERONE"
+      ]
+    },
+    {
+      "id": "hormone_deoxycortisol",
+      "label": "11-Deoxycortisol",
+      "unit": "ng/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "DEOXYCORTISOL"
+      ]
+    },
+    {
+      "id": "hormone_dhea",
+      "label": "DHEA",
+      "unit": "ng/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "DEHYDROEPIANDROSTERONE"
+      ]
+    },
+    {
+      "id": "hormone_dhea_s",
+      "label": "DHEA-S",
+      "unit": "ug/dL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "DHEA - SULPHATE (DHEAS)"
+      ]
+    },
+    {
+      "id": "hormone_prolactin",
+      "label": "Prolactin",
+      "unit": "ng/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "PROLACTIN, SERUM",
+        "Prolactin"
+      ]
+    },
+    {
+      "id": "hormone_testosterone_free",
+      "label": "Free Testosterone",
+      "unit": "pg/mL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "FREE TESTOSTERONE",
+        "Free Testosterone",
+        "TESTOSTERONE, FREE",
+        "Testosterone Free",
+        "Testosterone, Free"
+      ]
+    },
+    {
+      "id": "hormone_testosterone_total",
+      "label": "Total Testosterone",
+      "unit": "ng/dL",
+      "domain": "hormones",
+      "biomarker_class": "Hormone Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Total Testosterone"
+      ]
+    },
+    {
+      "id": "inflammation_crp",
+      "label": "CRP",
+      "unit": "mg/L",
+      "domain": "inflammation",
+      "biomarker_class": "Inflammation",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "C-Reactive Protein"
+      ]
+    },
+    {
+      "id": "inflammation_hscrp",
+      "label": "High-Sensitivity CRP",
+      "unit": "mg/L",
+      "domain": "inflammation",
+      "biomarker_class": "Inflammation",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HIGH SENSITIVITY C-REACTIVE PROTEIN (HS-CRP)",
+        "High Sensitivity CRP"
+      ]
+    },
+    {
+      "id": "inflammation_lppla2",
+      "label": "Lp-PLA2 Activity",
+      "unit": "nmol/min/mL",
+      "domain": "inflammation",
+      "biomarker_class": "Cardiovascular Inflammation",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LP-PLA2"
+      ]
+    },
+    {
+      "id": "insulin_fasting",
+      "label": "Fasting Insulin",
+      "unit": "uIU/mL",
+      "domain": "glycemic",
+      "biomarker_class": "Glycemic Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "INSULIN - FASTING"
+      ]
+    },
+    {
+      "id": "iron_serum",
+      "label": "Serum Iron",
+      "unit": "ug/dL",
+      "domain": "iron",
+      "biomarker_class": "Iron Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Iron Serum"
+      ]
+    },
+    {
+      "id": "iron_tibc",
+      "label": "TIBC",
+      "unit": "ug/dL",
+      "domain": "iron",
+      "biomarker_class": "Iron Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "TOTAL IRON BINDING CAPACITY (TIBC)",
+        "Total Iron Binding Capacity (TIBC)"
+      ]
+    },
+    {
+      "id": "iron_transferrin_sat",
+      "label": "Transferrin Saturation",
+      "unit": "%",
+      "domain": "iron",
+      "biomarker_class": "Iron Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "% TRANSFERRIN SATURATION"
+      ]
+    },
+    {
+      "id": "iron_uibc",
+      "label": "UIBC",
+      "unit": "ug/dL",
+      "domain": "iron",
+      "biomarker_class": "Iron Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "UNSAT.IRON-BINDING CAPACITY(UIBC)"
+      ]
+    },
+    {
+      "id": "lipid_apoa1",
+      "label": "Apolipoprotein A1",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Advanced Lipid",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "APOLIPOPROTEIN - A1 (APO-A1)",
+        "APOLIPOPROTEIN - A1 (ΑΡΟ-A1)"
+      ]
+    },
+    {
+      "id": "lipid_apob",
+      "label": "Apolipoprotein B",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Advanced Lipid",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "APOLIPOPROTEIN - B (APO-B)",
+        "APOLIPOPROTEIN - B (ΑΡΟ-Β)"
+      ]
+    },
+    {
+      "id": "lipid_apob_apoa1_ratio",
+      "label": "ApoB/A1 Ratio",
+      "unit": "ratio",
+      "domain": "lipids",
+      "biomarker_class": "Advanced Lipid",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "APO B / APO A1 RATIO (APO B/A1)",
+        "APOLIPOPROTEIN B/A1 RATIO",
+        "АРО В / АРO A1 RATIΟ (ΑΡΟ Β/Α1)"
+      ]
+    },
+    {
+      "id": "lipid_chol_hdl_ratio",
+      "label": "Total/HDL Cholesterol Ratio",
+      "unit": "ratio",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Cholesterol: HDL Cholesterol",
+        "TC/ HDL CHOLESTEROL RATIO",
+        "TC/HDL CHOLESTEROL RATIO"
+      ]
+    },
+    {
+      "id": "lipid_hdl_c",
+      "label": "HDL Cholesterol",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HDL Cholesterol"
+      ]
+    },
+    {
+      "id": "lipid_hdl_direct",
+      "label": "HDL Cholesterol (Direct)",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HDL CHOLESTEROL - DIRECT"
+      ]
+    },
+    {
+      "id": "lipid_hdl_ldl_ratio",
+      "label": "HDL/LDL Ratio",
+      "unit": "ratio",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HDL / LDL RATIO",
+        "HDL/LDL Ratio"
+      ]
+    },
+    {
+      "id": "lipid_hdlfx_pcad",
+      "label": "HDLFX PCAD Score",
+      "unit": "score",
+      "domain": "lipids",
+      "biomarker_class": "Advanced Lipoprotein",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "HDLFX PCAD SCORE"
+      ]
+    },
+    {
+      "id": "lipid_ldl_c",
+      "label": "LDL Cholesterol",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LDL Cholesterol - Calculated",
+        "LDL Cholesterol, Calc"
+      ]
+    },
+    {
+      "id": "lipid_ldl_direct",
+      "label": "LDL Cholesterol (Direct)",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LDL CHOLESTEROL - DIRECT"
+      ]
+    },
+    {
+      "id": "lipid_ldl_hdl_ratio",
+      "label": "LDL/HDL Ratio",
+      "unit": "ratio",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LDL / HDL RATIO",
+        "LDL/HDL Ratio"
+      ]
+    },
+    {
+      "id": "lipid_lp_a",
+      "label": "Lipoprotein (a)",
+      "unit": "nmol/L",
+      "domain": "lipids",
+      "biomarker_class": "Advanced Lipid",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LIPOPROTEIN (A) [LP(A)]",
+        "Lipoprotein (a) [Lp(a)]"
+      ]
+    },
+    {
+      "id": "lipid_total_cholesterol",
+      "label": "Total Cholesterol",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Cholesterol",
+        "Cholesterol, Total"
+      ]
+    },
+    {
+      "id": "lipid_trig_hdl_ratio",
+      "label": "Triglyceride/HDL Ratio",
+      "unit": "ratio",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "TRIG / HDL RATIO"
+      ]
+    },
+    {
+      "id": "lipid_vldl",
+      "label": "VLDL",
+      "unit": "mg/dL",
+      "domain": "lipids",
+      "biomarker_class": "Lipid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VLDL CHOLESTEROL",
+        "VLDL Cholesterol"
+      ]
+    },
+    {
+      "id": "liver_aat",
+      "label": "Alpha-1-Antitrypsin",
+      "unit": "mg/dL",
+      "domain": "liver",
+      "biomarker_class": "Liver Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ALPHA-1-ANTITRYPSIN (AAT)"
+      ]
+    },
+    {
+      "id": "liver_ag_ratio",
+      "label": "Albumin/Globulin Ratio",
+      "unit": "ratio",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SERUM ALB/GLOBULIN RATIO"
+      ]
+    },
+    {
+      "id": "liver_albumin",
+      "label": "Albumin",
+      "unit": "g/dL",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ALBUMIN - SERUM"
+      ]
+    },
+    {
+      "id": "liver_alt",
+      "label": "ALT",
+      "unit": "U/L",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ALANINE TRANSAMINASE (SGPT)",
+        "Alanine Transaminase (SGPT)",
+        "SGPT"
+      ]
+    },
+    {
+      "id": "liver_ast",
+      "label": "AST",
+      "unit": "U/L",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ASPARTATE AMINOTRANSFERASE (SGOT )",
+        "ASPARTATE AMINOTRANSFERASE (SGOT)",
+        "Aspartate Aminotransferase (SGOT)",
+        "SGOT"
+      ]
+    },
+    {
+      "id": "liver_ast_alt_ratio",
+      "label": "AST/ALT Ratio",
+      "unit": "ratio",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SGOT / SGPT RATIO",
+        "SGOT/SGPT",
+        "SGOT/SGPT RATIO"
+      ]
+    },
+    {
+      "id": "liver_bilirubin_direct",
+      "label": "Direct Bilirubin",
+      "unit": "mg/dL",
+      "domain": "liver",
+      "biomarker_class": "Liver Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BILIRUBIN -DIRECT",
+        "Bilirubin-Direct"
+      ]
+    },
+    {
+      "id": "liver_bilirubin_indirect",
+      "label": "Indirect Bilirubin",
+      "unit": "mg/dL",
+      "domain": "liver",
+      "biomarker_class": "Liver Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BILIRUBIN (INDIRECT)",
+        "Bilirubin-Indirect"
+      ]
+    },
+    {
+      "id": "liver_bilirubin_total",
+      "label": "Total Bilirubin",
+      "unit": "mg/dL",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BILIRUBIN - TOTAL",
+        "Bilirubin-Total"
+      ]
+    },
+    {
+      "id": "liver_ggt",
+      "label": "GGT",
+      "unit": "U/L",
+      "domain": "liver",
+      "biomarker_class": "Liver Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "GAMMA GLUTAMYL TRANSFERASE (GGT)",
+        "Gamma Glutamyltransferase (GGT)"
+      ]
+    },
+    {
+      "id": "liver_globulin",
+      "label": "Globulin",
+      "unit": "g/dL",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SERUM GLOBULIN"
+      ]
+    },
+    {
+      "id": "liver_total_protein",
+      "label": "Total Protein",
+      "unit": "g/dL",
+      "domain": "liver",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "PROTEIN - TOTAL"
+      ]
+    },
+    {
+      "id": "metabolic_homocysteine",
+      "label": "Homocysteine",
+      "unit": "umol/L",
+      "domain": "metabolic",
+      "biomarker_class": "Cardiovascular Metabolic",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Homocysteine, Serum"
+      ]
+    },
+    {
+      "id": "metabolic_uric_acid",
+      "label": "Uric Acid",
+      "unit": "mg/dL",
+      "domain": "metabolic",
+      "biomarker_class": "CMP Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Uric Acid, Serum"
+      ]
+    },
+    {
+      "id": "minerals_chromium",
+      "label": "Chromium",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CHROMIUM"
+      ]
+    },
+    {
+      "id": "minerals_cobalt",
+      "label": "Cobalt",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "COBALT"
+      ]
+    },
+    {
+      "id": "minerals_copper",
+      "label": "Serum Copper",
+      "unit": "mcg/dL",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SERUM COPPER"
+      ]
+    },
+    {
+      "id": "minerals_manganese",
+      "label": "Manganese",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MANGANESE"
+      ]
+    },
+    {
+      "id": "minerals_molybdenum",
+      "label": "Molybdenum",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MOLYBDENUM"
+      ]
+    },
+    {
+      "id": "minerals_phosphorus",
+      "label": "Phosphorus",
+      "unit": "mg/dL",
+      "domain": "minerals",
+      "biomarker_class": "CMP Extended",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phosphorus, Serum"
+      ]
+    },
+    {
+      "id": "minerals_selenium",
+      "label": "Selenium",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        " SELENIUM",
+        "SELENIUM",
+        "SELENIUM ",
+        "Selenium"
+      ]
+    },
+    {
+      "id": "minerals_strontium",
+      "label": "Strontium",
+      "unit": "mcg/L",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "STRONTIUM"
+      ]
+    },
+    {
+      "id": "minerals_zinc",
+      "label": "Zinc",
+      "unit": "mcg/dL",
+      "domain": "minerals",
+      "biomarker_class": "Mineral Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SERUM ZINC",
+        "ZINC, SERUM",
+        "Zinc"
+      ]
+    },
+    {
+      "id": "pancreas_amylase",
+      "label": "Amylase",
+      "unit": "U/L",
+      "domain": "pancreas",
+      "biomarker_class": "Pancreas Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Amylase"
+      ]
+    },
+    {
+      "id": "phase_angle_left_arm",
+      "label": "Phase Angle (Left Arm)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Left Arm",
+        "phase_angle_left_arm"
+      ]
+    },
+    {
+      "id": "phase_angle_left_leg",
+      "label": "Phase Angle (Left Leg)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Left Leg",
+        "phase_angle_left_leg"
+      ]
+    },
+    {
+      "id": "phase_angle_right_arm",
+      "label": "Phase Angle (Right Arm)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Right Arm",
+        "phase_angle_right_arm"
+      ]
+    },
+    {
+      "id": "phase_angle_right_leg",
+      "label": "Phase Angle (Right Leg)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Right Leg",
+        "phase_angle_right_leg"
+      ]
+    },
+    {
+      "id": "phase_angle_trunk",
+      "label": "Phase Angle (Trunk)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Trunk",
+        "phase_angle_trunk"
+      ]
+    },
+    {
+      "id": "phase_angle_whole_body",
+      "label": "Phase Angle (Whole Body)",
+      "unit": "degrees",
+      "domain": "cellular_integrity",
+      "biomarker_class": "InBody 970",
+      "source_systems": [
+        "inbody",
+        "lab"
+      ],
+      "known_aliases": [
+        "Phase Angle - Whole Body",
+        "phase_angle_whole_body"
+      ]
+    },
+    {
+      "id": "renal_bun",
+      "label": "Blood Urea Nitrogen",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BLOOD UREA NITROGEN (BUN)",
+        "Urea"
+      ]
+    },
+    {
+      "id": "renal_bun_creatinine_ratio",
+      "label": "BUN/Creatinine Ratio",
+      "unit": "ratio",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BUN / SR.CREATININE RATIO",
+        "BUN/Creatinine Ratio"
+      ]
+    },
+    {
+      "id": "renal_creatinine",
+      "label": "Creatinine",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CREATININE - SERUM",
+        "Creatinine, Serum"
+      ]
+    },
+    {
+      "id": "renal_creatinine_urine",
+      "label": "Urine Creatinine",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CREATININE - URINE",
+        "Urinary Creatinine"
+      ]
+    },
+    {
+      "id": "renal_egfr",
+      "label": "Estimated GFR",
+      "unit": "mL/min/1.73m2",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "EST. GLOMERULAR FILTRATION RATE (eGFR)"
+      ]
+    },
+    {
+      "id": "renal_microalbumin",
+      "label": "Microalbumin",
+      "unit": "mg/L",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINARY MICROALBUMIN"
+      ]
+    },
+    {
+      "id": "renal_uacr",
+      "label": "Urine ACR",
+      "unit": "mg/g",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URI. ALBUMIN/CREATININE RATIO (UA/C)"
+      ]
+    },
+    {
+      "id": "renal_urea",
+      "label": "Urea",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "UREA (CALCULATED)"
+      ]
+    },
+    {
+      "id": "renal_urea_creatinine_ratio",
+      "label": "Urea/Creatinine Ratio",
+      "unit": "ratio",
+      "domain": "renal",
+      "biomarker_class": "CMP",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "UREA / SR.CREATININE RATIO"
+      ]
+    },
+    {
+      "id": "thyroid_t3_total",
+      "label": "Total T3",
+      "unit": "ng/dL",
+      "domain": "thyroid",
+      "biomarker_class": "Thyroid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "T3, Total",
+        "TOTAL TRIIODOTHYRONINE (T3)"
+      ]
+    },
+    {
+      "id": "thyroid_t4_total",
+      "label": "Total T4",
+      "unit": "ug/dL",
+      "domain": "thyroid",
+      "biomarker_class": "Thyroid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "T4, Total",
+        "TOTAL THYROXINE (T4)"
+      ]
+    },
+    {
+      "id": "thyroid_tsh",
+      "label": "TSH",
+      "unit": "uIU/mL",
+      "domain": "thyroid",
+      "biomarker_class": "Thyroid Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "THYROID STIMULATING HORMONE (TSH)",
+        "TSH - ULTRASENSITIVE",
+        "TSH, 3rd Gen",
+        "Thyroid Stimulating Hormone - ULTRA"
+      ]
+    },
+    {
+      "id": "toxic_aluminium",
+      "label": "Aluminium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ALUMINIUM"
+      ]
+    },
+    {
+      "id": "toxic_antimony",
+      "label": "Antimony",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ANTIMONY"
+      ]
+    },
+    {
+      "id": "toxic_arsenic",
+      "label": "Arsenic",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "ARSENIC"
+      ]
+    },
+    {
+      "id": "toxic_barium",
+      "label": "Barium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BARIUM"
+      ]
+    },
+    {
+      "id": "toxic_beryllium",
+      "label": "Beryllium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BERYLLIUM"
+      ]
+    },
+    {
+      "id": "toxic_bismuth",
+      "label": "Bismuth",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "BISMUTH"
+      ]
+    },
+    {
+      "id": "toxic_cadmium",
+      "label": "Cadmium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CADMIUM"
+      ]
+    },
+    {
+      "id": "toxic_caesium",
+      "label": "Caesium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "CAESIUM"
+      ]
+    },
+    {
+      "id": "toxic_lead",
+      "label": "Lead",
+      "unit": "mcg/dL",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "LEAD"
+      ]
+    },
+    {
+      "id": "toxic_mercury",
+      "label": "Mercury",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "MERCURY",
+        "MERCURY, BLOOD"
+      ]
+    },
+    {
+      "id": "toxic_nickel",
+      "label": "Nickel",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "NICKEL"
+      ]
+    },
+    {
+      "id": "toxic_silver",
+      "label": "Silver",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "SILVER"
+      ]
+    },
+    {
+      "id": "toxic_thallium",
+      "label": "Thallium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "THALLIUM"
+      ]
+    },
+    {
+      "id": "toxic_tin",
+      "label": "Tin",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "TIN"
+      ]
+    },
+    {
+      "id": "toxic_uranium",
+      "label": "Uranium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URANIUM"
+      ]
+    },
+    {
+      "id": "toxic_vanadium",
+      "label": "Vanadium",
+      "unit": "mcg/L",
+      "domain": "toxics",
+      "biomarker_class": "Heavy Metals",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VANADIUM"
+      ]
+    },
+    {
+      "id": "urine_bilirubin",
+      "label": "Urine Bilirubin",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINARY BILIRUBIN"
+      ]
+    },
+    {
+      "id": "urine_blood",
+      "label": "Urine Blood",
+      "unit": "category",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINE BLOOD"
+      ]
+    },
+    {
+      "id": "urine_chloride",
+      "label": "Urine Chloride",
+      "unit": "mmol/L",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Urine Chloride"
+      ]
+    },
+    {
+      "id": "urine_glucose",
+      "label": "Urine Glucose",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINARY GLUCOSE"
+      ]
+    },
+    {
+      "id": "urine_ketone",
+      "label": "Urine Ketone",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINE KETONE"
+      ]
+    },
+    {
+      "id": "urine_leucocytes",
+      "label": "Urine Leucocytes",
+      "unit": "/hpf",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINARY LEUCOCYTES (PUS CELLS)"
+      ]
+    },
+    {
+      "id": "urine_potassium",
+      "label": "Urine Potassium",
+      "unit": "mmol/L",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Urine Potassium"
+      ]
+    },
+    {
+      "id": "urine_protein",
+      "label": "Urine Protein",
+      "unit": "mg/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "URINARY PROTEIN"
+      ]
+    },
+    {
+      "id": "urine_sodium",
+      "label": "Urine Sodium",
+      "unit": "mmol/L",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "Urine Sodium"
+      ]
+    },
+    {
+      "id": "urine_urobilinogen",
+      "label": "Urobilinogen",
+      "unit": "EU/dL",
+      "domain": "renal",
+      "biomarker_class": "Urinalysis",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "UROBILINOGEN"
+      ]
+    },
+    {
+      "id": "vitamin_a_retinol",
+      "label": "Vitamin A (Retinol)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN A"
+      ]
+    },
+    {
+      "id": "vitamin_b12",
+      "label": "Vitamin B12",
+      "unit": "pg/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B-12",
+        "Vitamin B12"
+      ]
+    },
+    {
+      "id": "vitamin_b1_thiamin",
+      "label": "Vitamin B1 (Thiamin)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B1/THIAMIN"
+      ]
+    },
+    {
+      "id": "vitamin_b2_riboflavin",
+      "label": "Vitamin B2 (Riboflavin)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B2/RIBOFLAVIN"
+      ]
+    },
+    {
+      "id": "vitamin_b3_niacin",
+      "label": "Vitamin B3 (Niacin)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B3/NICOTINIC ACID"
+      ]
+    },
+    {
+      "id": "vitamin_b5_pantothenic",
+      "label": "Vitamin B5 (Pantothenic)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B5/PANTOTHENIC"
+      ]
+    },
+    {
+      "id": "vitamin_b6_p5p",
+      "label": "Vitamin B6 (P5P)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B6/P5P"
+      ]
+    },
+    {
+      "id": "vitamin_b7_biotin",
+      "label": "Vitamin B7 (Biotin)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B7/BIOTIN"
+      ]
+    },
+    {
+      "id": "vitamin_b9_folic",
+      "label": "Vitamin B9 (Folic Acid)",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN B9/FOLIC ACID"
+      ]
+    },
+    {
+      "id": "vitamin_d2",
+      "label": "Vitamin D2",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN D2"
+      ]
+    },
+    {
+      "id": "vitamin_d3",
+      "label": "Vitamin D3",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN D3"
+      ]
+    },
+    {
+      "id": "vitamin_d_25oh",
+      "label": "25-OH Vitamin D",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "25-Hydroxy Vitamin D",
+        "VITAMIN D TOTAL",
+        "Vitamin D (25-OH)"
+      ]
+    },
+    {
+      "id": "vitamin_e_tocopherol",
+      "label": "Vitamin E (Tocopherol)",
+      "unit": "mg/L",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN E"
+      ]
+    },
+    {
+      "id": "vitamin_k",
+      "label": "Vitamin K",
+      "unit": "ng/mL",
+      "domain": "vitamins",
+      "biomarker_class": "Vitamin Panel",
+      "source_systems": [
+        "lab"
+      ],
+      "known_aliases": [
+        "VITAMIN K"
+      ]
+    }
+  ]
+}
