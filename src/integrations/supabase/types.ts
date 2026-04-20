@@ -687,6 +687,60 @@ export type Database = {
         }
         Relationships: []
       }
+      observation_packets: {
+        Row: {
+          biological_timestamp: string
+          context: Json | null
+          created_at: string
+          packet_id: string
+          signal: string
+          source_id: string | null
+          source_method: string | null
+          source_operator: string | null
+          source_row_id: string | null
+          source_table: string | null
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          system_timestamp: string
+          unit: string | null
+          user_id: string
+          value: Json
+        }
+        Insert: {
+          biological_timestamp: string
+          context?: Json | null
+          created_at?: string
+          packet_id?: string
+          signal: string
+          source_id?: string | null
+          source_method?: string | null
+          source_operator?: string | null
+          source_row_id?: string | null
+          source_table?: string | null
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          system_timestamp?: string
+          unit?: string | null
+          user_id: string
+          value: Json
+        }
+        Update: {
+          biological_timestamp?: string
+          context?: Json | null
+          created_at?: string
+          packet_id?: string
+          signal?: string
+          source_id?: string | null
+          source_method?: string | null
+          source_operator?: string | null
+          source_row_id?: string | null
+          source_table?: string | null
+          source_window?: Database["public"]["Enums"]["witness_source_window"]
+          system_timestamp?: string
+          unit?: string | null
+          user_id?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       observation_review_queue: {
         Row: {
           classification_confidence: number | null
@@ -1420,9 +1474,196 @@ export type Database = {
         }
         Relationships: []
       }
+      witness_objects: {
+        Row: {
+          ancestry_witness_ids: string[] | null
+          biological_timestamp: string
+          compression_depth: number
+          confidence_basis: string
+          confidence_value: number
+          conflict_candidates: string[] | null
+          created_at: string
+          derived_from_packet_id: string | null
+          domain_of_access: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role: Database["public"]["Enums"]["witness_epistemic_role"]
+          limitations: string[]
+          observed_unit: string | null
+          observed_value: Json
+          registry_seed_version: string
+          reliability_class: Database["public"]["Enums"]["witness_reliability_class"]
+          signal: string
+          source_row_id: string | null
+          source_table: string | null
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          testimony: string
+          transformation_version: string
+          user_id: string
+          validity_window_seconds: number | null
+          witness_id: string
+        }
+        Insert: {
+          ancestry_witness_ids?: string[] | null
+          biological_timestamp: string
+          compression_depth: number
+          confidence_basis: string
+          confidence_value: number
+          conflict_candidates?: string[] | null
+          created_at?: string
+          derived_from_packet_id?: string | null
+          domain_of_access: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role: Database["public"]["Enums"]["witness_epistemic_role"]
+          limitations: string[]
+          observed_unit?: string | null
+          observed_value: Json
+          registry_seed_version: string
+          reliability_class: Database["public"]["Enums"]["witness_reliability_class"]
+          signal: string
+          source_row_id?: string | null
+          source_table?: string | null
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          testimony: string
+          transformation_version: string
+          user_id: string
+          validity_window_seconds?: number | null
+          witness_id?: string
+        }
+        Update: {
+          ancestry_witness_ids?: string[] | null
+          biological_timestamp?: string
+          compression_depth?: number
+          confidence_basis?: string
+          confidence_value?: number
+          conflict_candidates?: string[] | null
+          created_at?: string
+          derived_from_packet_id?: string | null
+          domain_of_access?: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role?: Database["public"]["Enums"]["witness_epistemic_role"]
+          limitations?: string[]
+          observed_unit?: string | null
+          observed_value?: Json
+          registry_seed_version?: string
+          reliability_class?: Database["public"]["Enums"]["witness_reliability_class"]
+          signal?: string
+          source_row_id?: string | null
+          source_table?: string | null
+          source_window?: Database["public"]["Enums"]["witness_source_window"]
+          testimony?: string
+          transformation_version?: string
+          user_id?: string
+          validity_window_seconds?: number | null
+          witness_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "witness_objects_derived_from_packet_id_fkey"
+            columns: ["derived_from_packet_id"]
+            isOneToOne: false
+            referencedRelation: "observation_packets"
+            referencedColumns: ["packet_id"]
+          },
+          {
+            foreignKeyName: "witness_objects_source_window_signal_fkey"
+            columns: ["source_window", "signal"]
+            isOneToOne: false
+            referencedRelation: "witness_signal_registry"
+            referencedColumns: ["source_window", "signal"]
+          },
+        ]
+      }
+      witness_signal_registry: {
+        Row: {
+          compression_depth: number
+          created_at: string
+          default_confidence_basis: string
+          default_confidence_value: number
+          default_limitations: string[]
+          default_validity_window_seconds: number | null
+          description: string | null
+          domain_of_access: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role: Database["public"]["Enums"]["witness_epistemic_role"]
+          label: string
+          ontology_concept_id: string | null
+          ontology_version: string | null
+          registry_seed_version: string
+          reliability_class: Database["public"]["Enums"]["witness_reliability_class"]
+          signal: string
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          compression_depth: number
+          created_at?: string
+          default_confidence_basis: string
+          default_confidence_value: number
+          default_limitations: string[]
+          default_validity_window_seconds?: number | null
+          description?: string | null
+          domain_of_access: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role: Database["public"]["Enums"]["witness_epistemic_role"]
+          label: string
+          ontology_concept_id?: string | null
+          ontology_version?: string | null
+          registry_seed_version?: string
+          reliability_class: Database["public"]["Enums"]["witness_reliability_class"]
+          signal: string
+          source_window: Database["public"]["Enums"]["witness_source_window"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          compression_depth?: number
+          created_at?: string
+          default_confidence_basis?: string
+          default_confidence_value?: number
+          default_limitations?: string[]
+          default_validity_window_seconds?: number | null
+          description?: string | null
+          domain_of_access?: Database["public"]["Enums"]["witness_domain_of_access"]
+          epistemic_role?: Database["public"]["Enums"]["witness_epistemic_role"]
+          label?: string
+          ontology_concept_id?: string | null
+          ontology_version?: string | null
+          registry_seed_version?: string
+          reliability_class?: Database["public"]["Enums"]["witness_reliability_class"]
+          signal?: string
+          source_window?: Database["public"]["Enums"]["witness_source_window"]
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      v_witness_coverage: {
+        Row: {
+          compression_depth: number | null
+          domain_of_access:
+            | Database["public"]["Enums"]["witness_domain_of_access"]
+            | null
+          earliest_observation: string | null
+          epistemic_role:
+            | Database["public"]["Enums"]["witness_epistemic_role"]
+            | null
+          latest_observation: string | null
+          mean_confidence: number | null
+          signal: string | null
+          source_window:
+            | Database["public"]["Enums"]["witness_source_window"]
+            | null
+          user_id: string | null
+          witness_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "witness_objects_source_window_signal_fkey"
+            columns: ["source_window", "signal"]
+            isOneToOne: false
+            referencedRelation: "witness_signal_registry"
+            referencedColumns: ["source_window", "signal"]
+          },
+        ]
+      }
     }
     Functions: {
       fn_name_match_score: {
@@ -1477,6 +1718,47 @@ export type Database = {
         | "food_log"
         | "imaging"
         | "omics"
+        | "narrative"
+      witness_domain_of_access:
+        | "embodied_perception"
+        | "symptom_continuity"
+        | "biochemical_state_snapshot"
+        | "biochemical_state_dynamic"
+        | "body_composition"
+        | "hepatic_mechanical_state"
+        | "temporal_physiology"
+        | "protein_abundance"
+        | "gene_expression"
+        | "genomic_variant"
+        | "metabolic_flux"
+        | "microbial_ecology"
+        | "lipid_composition"
+        | "structural_anatomy"
+        | "clinical_compression"
+        | "intervention_layer"
+        | "environmental_exposure"
+        | "psychosocial_context"
+      witness_epistemic_role:
+        | "direct_measure"
+        | "self_report"
+        | "dynamic_sensor"
+        | "derived_score"
+        | "compressed_label"
+        | "intervention_context"
+        | "historical_event"
+      witness_reliability_class: "high" | "medium" | "low" | "unknown"
+      witness_source_window:
+        | "cie"
+        | "lab"
+        | "inbody"
+        | "fibroscan"
+        | "sensor"
+        | "wearable"
+        | "omics"
+        | "imaging"
+        | "medication"
+        | "emr"
+        | "history"
         | "narrative"
     }
     CompositeTypes: {
@@ -1624,6 +1906,50 @@ export const Constants = {
         "food_log",
         "imaging",
         "omics",
+        "narrative",
+      ],
+      witness_domain_of_access: [
+        "embodied_perception",
+        "symptom_continuity",
+        "biochemical_state_snapshot",
+        "biochemical_state_dynamic",
+        "body_composition",
+        "hepatic_mechanical_state",
+        "temporal_physiology",
+        "protein_abundance",
+        "gene_expression",
+        "genomic_variant",
+        "metabolic_flux",
+        "microbial_ecology",
+        "lipid_composition",
+        "structural_anatomy",
+        "clinical_compression",
+        "intervention_layer",
+        "environmental_exposure",
+        "psychosocial_context",
+      ],
+      witness_epistemic_role: [
+        "direct_measure",
+        "self_report",
+        "dynamic_sensor",
+        "derived_score",
+        "compressed_label",
+        "intervention_context",
+        "historical_event",
+      ],
+      witness_reliability_class: ["high", "medium", "low", "unknown"],
+      witness_source_window: [
+        "cie",
+        "lab",
+        "inbody",
+        "fibroscan",
+        "sensor",
+        "wearable",
+        "omics",
+        "imaging",
+        "medication",
+        "emr",
+        "history",
         "narrative",
       ],
     },
