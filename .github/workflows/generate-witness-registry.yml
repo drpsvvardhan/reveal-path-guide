@@ -1,0 +1,84 @@
+name: Generate P1a Witness Registry Seed
+
+on:
+  # Manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      commit_seed:
+        description: 'Commit generated seed SQL back to branch (vs. artifact-only)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  generate-seed:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install tsx
+        run: npm install -g tsx@4
+
+      - name: Verify inputs exist
+        run: |
+          test -f ontology/biomarker_ontology.json || { echo "ERROR: ontology/biomarker_ontology.json not found"; exit 1; }
+          test -f src/lib/cieSeedData.ts || { echo "ERROR: src/lib/cieSeedData.ts not found"; exit 1; }
+          test -f src/lib/inbodyToTerrainMap.ts || { echo "ERROR: src/lib/inbodyToTerrainMap.ts not found"; exit 1; }
+          test -f scripts/build-witness-registry.ts || { echo "ERROR: scripts/build-witness-registry.ts not found"; exit 1; }
+          echo "All inputs present."
+
+      - name: Generate witness registry seed SQL
+        run: |
+          mkdir -p supabase/migrations
+          tsx scripts/build-witness-registry.ts \
+            --ontology ./ontology/biomarker_ontology.json \
+            --cie-seed ./src/lib/cieSeedData.ts \
+            --inbody-map ./src/lib/inbodyToTerrainMap.ts \
+            --output ./supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+
+      - name: Summarize generated seed
+        run: |
+          echo "--- Seed SQL head ---"
+          head -30 supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+          echo ""
+          echo "--- Seed SQL stats ---"
+          wc -l supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+          wc -c supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+          echo ""
+          echo "--- Row count by block ---"
+          grep -c "cie.response\." supabase/migrations/20260420000100_p1a_witness_registry_seed.sql | xargs -I {} echo "CIE response entries: {}"
+          grep -c "cie.domain_score\." supabase/migrations/20260420000100_p1a_witness_registry_seed.sql | xargs -I {} echo "CIE domain score entries: {}"
+          grep -c "cie.gate_score\." supabase/migrations/20260420000100_p1a_witness_registry_seed.sql | xargs -I {} echo "CIE gate score entries: {}"
+
+      - name: Upload generated SQL as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: witness-registry-seed-sql
+          path: supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+          retention-days: 30
+
+      - name: Commit generated seed to branch
+        if: ${{ inputs.commit_seed == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+          if git diff --staged --quiet; then
+            echo "No changes to commit (seed already up to date)."
+          else
+            git commit -m "P1a: generate witness registry seed SQL (constitutional artifact, seed_version=p1a_initial)"
+            git push
+          fi
