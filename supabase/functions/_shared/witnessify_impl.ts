@@ -781,7 +781,13 @@ function buildWitnessFromRegistry(args: BuildWitnessArgs): WitnessObject {
   }
 
   const witness: WitnessObject = {
-    witness_id: generateUuid(),
+    witness_id: deriveWitnessId({
+      user_id: args.user_id,
+      source_table: args.source_table,
+      source_row_id: args.source_row_id,
+      derived_from_packet_id: args.derived_from_packet_id,
+      registry_seed_version: entry.registry_seed_version,
+    }),
     user_id: args.user_id,
 
     derived_from_packet_id: args.derived_from_packet_id,
@@ -820,10 +826,177 @@ function buildWitnessFromRegistry(args: BuildWitnessArgs): WitnessObject {
   return witness;
 }
 
-/** Generate a UUID v4. Uses Web Crypto — available in Deno and modern Node. */
-function generateUuid(): string {
-  // `crypto.randomUUID()` is standard as of Node 14.17+/18+ and Deno.
-  return crypto.randomUUID();
+/**
+ * Deterministic witness ID derivation (UUIDv5).
+ *
+ * Per CodexOS (23 Apr 2026): witness IDs must be stable across backfill
+ * re-runs. A random `crypto.randomUUID()` breaks idempotency because
+ * depth-1/2 witnesses declare ancestry by witness_id — if the depth-0
+ * witnesses get new IDs on re-run, the ancestry references dangle and
+ * the `enforce_witness_ancestry_integrity` trigger fires.
+ *
+ * The fix: witness_id is a pure function of the provenance tuple
+ * (user_id, source_table, source_row_id, registry_seed_version).
+ * Same tuple → same UUID, always. Re-runs produce identical IDs,
+ * ancestry references stay stable, ON CONFLICT DO NOTHING works at
+ * every depth.
+ *
+ * NAMESPACE UUID: 2ba3766b-632d-4222-a8f0-152f464cdcd1
+ *   Generated once. Do NOT change after first production use — changing
+ *   this would re-ID every witness in the database on next backfill,
+ *   orphaning every ancestry pointer.
+ *
+ * For packet-derived witnesses (source_row_id is null but
+ * derived_from_packet_id is set), we hash the packet id instead. This
+ * path is not exercised in P1a but is correct-by-construction for P1b.
+ */
+const WITNESS_ID_NAMESPACE = "2ba3766b-632d-4222-a8f0-152f464cdcd1";
+
+interface ProvenanceTuple {
+  user_id: string;
+  source_table: string | null;
+  source_row_id: string | null;
+  derived_from_packet_id: string | null;
+  registry_seed_version: string;
+}
+
+function deriveWitnessId(p: ProvenanceTuple): string {
+  let provenance: string;
+  if (p.source_row_id && p.source_table) {
+    // Source-row-backed: the common case in P1a.
+    provenance = `row|${p.source_table}|${p.source_row_id}`;
+  } else if (p.derived_from_packet_id) {
+    // Packet-backed: P1b territory. Documented, not exercised in P1a.
+    provenance = `packet|${p.derived_from_packet_id}`;
+  } else {
+    throw new Error(
+      "deriveWitnessId: provenance tuple lacks both source_row_id and " +
+        "derived_from_packet_id. Witness cannot have a stable identity."
+    );
+  }
+  const canonical = `${p.user_id}|${provenance}|${p.registry_seed_version}`;
+  return uuidv5(canonical, WITNESS_ID_NAMESPACE);
+}
+
+// ---------------------------------------------------------------------------
+// UUIDv5 implementation (RFC 4122 §4.3).
+// Inlined because supabase functions/_shared must not carry third-party
+// runtime deps unless absolutely necessary. SHA-1 is provided by Web
+// Crypto (available in Deno + modern Node).
+//
+// UUIDv5 is deterministic: same (name, namespace) always yields same UUID.
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a version-5 UUID by hashing `name` in the given `namespace`
+ * (which itself must be a valid UUID string). Uses SubtleCrypto SHA-1.
+ *
+ * This is synchronous in effect — we use a synchronous JS SHA-1
+ * implementation because SubtleCrypto's digest() is async and threading
+ * async through buildWitnessFromRegistry would ripple across the entire
+ * file. A pure-JS SHA-1 is ~60 lines and runs in microseconds for our
+ * input sizes (< 200 chars).
+ */
+function uuidv5(name: string, namespace: string): string {
+  const nsBytes = parseUuidToBytes(namespace);
+  const nameBytes = new TextEncoder().encode(name);
+  const combined = new Uint8Array(nsBytes.length + nameBytes.length);
+  combined.set(nsBytes, 0);
+  combined.set(nameBytes, nsBytes.length);
+
+  const hash = sha1(combined); // 20 bytes
+
+  // Take first 16 bytes, set version (5) and variant bits per RFC 4122.
+  const out = hash.slice(0, 16);
+  out[6] = (out[6] & 0x0f) | 0x50; // version 5 in high nibble of byte 6
+  out[8] = (out[8] & 0x3f) | 0x80; // variant bits in high two bits of byte 8
+
+  return (
+    bytesToHex(out.slice(0, 4)) + "-" +
+    bytesToHex(out.slice(4, 6)) + "-" +
+    bytesToHex(out.slice(6, 8)) + "-" +
+    bytesToHex(out.slice(8, 10)) + "-" +
+    bytesToHex(out.slice(10, 16))
+  );
+}
+
+function parseUuidToBytes(uuid: string): Uint8Array {
+  const hex = uuid.replace(/-/g, "");
+  if (hex.length !== 32) throw new Error(`Invalid namespace UUID: ${uuid}`);
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let hex = "";
+  for (const b of bytes) {
+    hex += b.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+/**
+ * Pure-JS SHA-1. RFC 3174. Returns 20-byte Uint8Array.
+ * Compact, standards-conforming, no deps. Runs in < 1ms for typical
+ * witness-id inputs.
+ */
+function sha1(data: Uint8Array): Uint8Array {
+  // Padding
+  const bitLen = data.length * 8;
+  const withOne = new Uint8Array(data.length + 1);
+  withOne.set(data);
+  withOne[data.length] = 0x80;
+  const padLen = (56 - (withOne.length % 64) + 64) % 64;
+  const padded = new Uint8Array(withOne.length + padLen + 8);
+  padded.set(withOne);
+  // Length as 64-bit big-endian
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, bitLen >>> 0, false);
+  view.setUint32(padded.length - 8, Math.floor(bitLen / 0x100000000), false);
+
+  let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476, h4 = 0xc3d2e1f0;
+  const w = new Uint32Array(80);
+
+  for (let chunk = 0; chunk < padded.length; chunk += 64) {
+    for (let i = 0; i < 16; i++) {
+      w[i] = view.getUint32(chunk + i * 4, false);
+    }
+    for (let i = 16; i < 80; i++) {
+      const v = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
+      w[i] = (v << 1) | (v >>> 31);
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4;
+    for (let i = 0; i < 80; i++) {
+      let f: number, k: number;
+      if (i < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }
+      else if (i < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
+      else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
+      else { f = b ^ c ^ d; k = 0xca62c1d6; }
+      const temp = (((a << 5) | (a >>> 27)) + f + e + k + w[i]) >>> 0;
+      e = d;
+      d = c;
+      c = ((b << 30) | (b >>> 2)) >>> 0;
+      b = a;
+      a = temp;
+    }
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+  }
+
+  const out = new Uint8Array(20);
+  const outView = new DataView(out.buffer);
+  outView.setUint32(0, h0, false);
+  outView.setUint32(4, h1, false);
+  outView.setUint32(8, h2, false);
+  outView.setUint32(12, h3, false);
+  outView.setUint32(16, h4, false);
+  return out;
 }
 
 /**
