@@ -102,7 +102,11 @@ async function loadDbWitnessIdsOnce(): Promise<Set<string>> {
 // GATE P-1: every observation in context has a witness_id
 // ============================================================================
 
-Deno.test("P-1: every observation in PatientTerrainContext has a witness_id", async () => {
+Deno.test({
+  name: "P-1: every observation in PatientTerrainContext has a witness_id",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const missing: string[] = [];
 
@@ -140,13 +144,18 @@ Deno.test("P-1: every observation in PatientTerrainContext has a witness_id", as
     0,
     `P-1 violations (${missing.length}): ${missing.slice(0, 5).join("; ")}${missing.length > 5 ? "..." : ""}`
   );
+  },
 });
 
 // ============================================================================
 // GATE P-2: every witness_id cited is present in witness_objects
 // ============================================================================
 
-Deno.test("P-2: every witness_id cited in context is present in witness_objects", async () => {
+Deno.test({
+  name: "P-2: every witness_id cited in context is present in witness_objects",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const dbIds = await loadDbWitnessIdsOnce();
 
@@ -169,13 +178,18 @@ Deno.test("P-2: every witness_id cited in context is present in witness_objects"
     `P-2 violations: ${unresolved.length} witness_ids cited but not in witness_objects. ` +
       `First few: ${unresolved.slice(0, 3).join(", ")}`
   );
+  },
 });
 
 // ============================================================================
 // GATE P-3: no signal in context that isn't in the active registry
 // ============================================================================
 
-Deno.test("P-3: no signal in context that isn't in witness_signal_registry for active seed", async () => {
+Deno.test({
+  name: "P-3: no signal in context that isn't in witness_signal_registry for active seed",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const registrySignals = await loadRegistrySignalsOnce();
 
@@ -199,6 +213,7 @@ Deno.test("P-3: no signal in context that isn't in witness_signal_registry for a
     `P-3 violations: ${unknownSignals.length} signals in context not in registry. ` +
       `First few: ${unknownSignals.slice(0, 5).join(", ")}`
   );
+  },
 });
 
 // ============================================================================
