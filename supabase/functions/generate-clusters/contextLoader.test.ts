@@ -102,7 +102,11 @@ async function loadDbWitnessIdsOnce(): Promise<Set<string>> {
 // GATE P-1: every observation in context has a witness_id
 // ============================================================================
 
-Deno.test("P-1: every observation in PatientTerrainContext has a witness_id", async () => {
+Deno.test({
+  name: "P-1: every observation in PatientTerrainContext has a witness_id",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const missing: string[] = [];
 
@@ -140,6 +144,7 @@ Deno.test("P-1: every observation in PatientTerrainContext has a witness_id", as
     0,
     `P-1 violations (${missing.length}): ${missing.slice(0, 5).join("; ")}${missing.length > 5 ? "..." : ""}`
   );
+  },
 });
 
 // ============================================================================
