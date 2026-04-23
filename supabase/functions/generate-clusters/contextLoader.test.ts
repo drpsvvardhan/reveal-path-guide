@@ -151,7 +151,11 @@ Deno.test({
 // GATE P-2: every witness_id cited is present in witness_objects
 // ============================================================================
 
-Deno.test("P-2: every witness_id cited in context is present in witness_objects", async () => {
+Deno.test({
+  name: "P-2: every witness_id cited in context is present in witness_objects",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const dbIds = await loadDbWitnessIdsOnce();
 
@@ -174,6 +178,7 @@ Deno.test("P-2: every witness_id cited in context is present in witness_objects"
     `P-2 violations: ${unresolved.length} witness_ids cited but not in witness_objects. ` +
       `First few: ${unresolved.slice(0, 3).join(", ")}`
   );
+  },
 });
 
 // ============================================================================
