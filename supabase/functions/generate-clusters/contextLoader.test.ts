@@ -185,7 +185,11 @@ Deno.test({
 // GATE P-3: no signal in context that isn't in the active registry
 // ============================================================================
 
-Deno.test("P-3: no signal in context that isn't in witness_signal_registry for active seed", async () => {
+Deno.test({
+  name: "P-3: no signal in context that isn't in witness_signal_registry for active seed",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
   const ctx = await loadContextOnce();
   const registrySignals = await loadRegistrySignalsOnce();
 
@@ -209,6 +213,7 @@ Deno.test("P-3: no signal in context that isn't in witness_signal_registry for a
     `P-3 violations: ${unknownSignals.length} signals in context not in registry. ` +
       `First few: ${unknownSignals.slice(0, 5).join(", ")}`
   );
+  },
 });
 
 // ============================================================================
