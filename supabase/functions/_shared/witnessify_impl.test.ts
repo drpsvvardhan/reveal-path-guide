@@ -637,5 +637,173 @@ Deno.test("witnessifyCieAssessment: every ancestry_witness_id in emitted batch r
 });
 
 // ============================================================================
+// TEST 9-12 — Deterministic witness_id (UUIDv5 fix, 23 Apr 2026)
+// ----------------------------------------------------------------------------
+// Per CodexOS: witness_id must be a pure function of the provenance tuple
+// so that re-runs of the backfill produce stable ancestry references.
+// Random UUIDs would break Pattern Z idempotency at the ancestry layer.
+// ============================================================================
+
+Deno.test("determinism: same direct-observation input → same witness_id", () => {
+  const registry = makeFullRegistry();
+  const input: DirectObservationInput = {
+    user_id: VV001_USER_ID,
+    source_window: "lab",
+    signal: "lab.hba1c",
+    observed_value: 5.3,
+    observed_unit: "%",
+    biological_timestamp: "2026-04-15T08:00:00Z",
+    derived_from_packet_id: null,
+    source_table: "patient_lab_observations",
+    source_row_id: "stable-row-123",
+    testimony:
+      "HbA1c measured at 5.3% on 2026-04-15 via enzyme immunoassay, reference range <5.7%.",
+  };
+  const r1 = witnessifyObservation(input, registry, DEFAULT_OPTS);
+  const r2 = witnessifyObservation(input, registry, DEFAULT_OPTS);
+  assert(r1.witnesses && r2.witnesses);
+  assertEquals(
+    r1.witnesses.witness_id,
+    r2.witnesses.witness_id,
+    "two runs with identical input must produce identical witness_id"
+  );
+});
+
+Deno.test("determinism: different source_row_id → different witness_id", () => {
+  const registry = makeFullRegistry();
+  const base = {
+    user_id: VV001_USER_ID,
+    source_window: "lab" as const,
+    signal: "lab.hba1c",
+    observed_value: 5.3,
+    observed_unit: "%",
+    biological_timestamp: "2026-04-15T08:00:00Z",
+    derived_from_packet_id: null,
+    source_table: "patient_lab_observations",
+    testimony:
+      "HbA1c measured at 5.3% on 2026-04-15 via enzyme immunoassay, reference range <5.7%.",
+  };
+  const r1 = witnessifyObservation(
+    { ...base, source_row_id: "row-aaa" },
+    registry,
+    DEFAULT_OPTS
+  );
+  const r2 = witnessifyObservation(
+    { ...base, source_row_id: "row-bbb" },
+    registry,
+    DEFAULT_OPTS
+  );
+  assert(r1.witnesses && r2.witnesses);
+  assert(
+    r1.witnesses.witness_id !== r2.witnesses.witness_id,
+    "different source_row_id must yield different witness_ids"
+  );
+});
+
+Deno.test("determinism: full CIE batch — witness_ids AND ancestry pointers stable across runs", () => {
+  const registry = makeFullRegistry();
+  const assessment: CieAssessmentInput = {
+    user_id: VV001_USER_ID,
+    assessment_id: "assess-determ-001",
+    biological_timestamp: "2026-04-15T10:00:00Z",
+    source_table: "cie_assessments",
+    assessment_row_id: "arow-determ-001",
+    responses: [
+      {
+        question_id: "A1Q1",
+        response_value: "sometimes",
+        response_unit: null,
+        source_row_id: "rd1",
+        testimony:
+          "Patient self-reported 'sometimes' for post-fatty-meal digestive discomfort during intake on 2026-04-15.",
+      },
+      {
+        question_id: "A1Q2",
+        response_value: "mild",
+        response_unit: null,
+        source_row_id: "rd2",
+        testimony:
+          "Patient self-reported 'mild' severity for morning grogginess during intake on 2026-04-15.",
+      },
+    ],
+    domain_scores: [
+      {
+        domain_id: "A1",
+        score_value: 72,
+        score_unit: "score_0_100",
+        source_row_id: "dd1",
+        testimony:
+          "CIE Domain A1 score 72 aggregated from two responses on 2026-04-15 intake.",
+        contributing_question_ids: ["A1Q1", "A1Q2"],
+      },
+    ],
+    gate_scores: [
+      {
+        gate_id: "CLI",
+        score_value: 68,
+        score_unit: "score_0_100",
+        source_row_id: "gd1",
+        testimony:
+          "CIE Gate CLI score 68 aggregated from contributing domain A1 on 2026-04-15.",
+        contributing_domain_ids: ["A1"],
+      },
+    ],
+  };
+  const r1 = witnessifyCieAssessment(assessment, registry, DEFAULT_OPTS);
+  const r2 = witnessifyCieAssessment(assessment, registry, DEFAULT_OPTS);
+
+  assertEquals(r1.witnesses.length, r2.witnesses.length);
+
+  // witness_ids match across runs
+  const ids1 = r1.witnesses.map((w) => `${w.signal}=${w.witness_id!}`).sort();
+  const ids2 = r2.witnesses.map((w) => `${w.signal}=${w.witness_id!}`).sort();
+  assertEquals(ids1, ids2);
+
+  // Critical: ancestry pointers must resolve identically — this is the
+  // actual invariant Pattern Z idempotency depends on.
+  const ancPairs1 = r1.witnesses
+    .filter((w) => w.ancestry_witness_ids && w.ancestry_witness_ids.length)
+    .flatMap((w) =>
+      w.ancestry_witness_ids!.map((aid) => `${w.witness_id}<-${aid}`)
+    )
+    .sort();
+  const ancPairs2 = r2.witnesses
+    .filter((w) => w.ancestry_witness_ids && w.ancestry_witness_ids.length)
+    .flatMap((w) =>
+      w.ancestry_witness_ids!.map((aid) => `${w.witness_id}<-${aid}`)
+    )
+    .sort();
+  assertEquals(ancPairs1, ancPairs2);
+});
+
+Deno.test("determinism: witness_id is a structurally valid UUIDv5", () => {
+  const registry = makeFullRegistry();
+  const r = witnessifyObservation(
+    {
+      user_id: VV001_USER_ID,
+      source_window: "lab",
+      signal: "lab.hba1c",
+      observed_value: 5.3,
+      observed_unit: "%",
+      biological_timestamp: "2026-04-15T08:00:00Z",
+      derived_from_packet_id: null,
+      source_table: "patient_lab_observations",
+      source_row_id: "uuid-format-check",
+      testimony:
+        "HbA1c measured at 5.3% on 2026-04-15 via enzyme immunoassay, reference range <5.7%.",
+    },
+    registry,
+    DEFAULT_OPTS
+  );
+  const wid = r.witnesses!.witness_id!;
+  const uuidv5Re =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  assert(
+    uuidv5Re.test(wid),
+    `witness_id ${wid} is not a valid UUIDv5 (version byte or variant bits wrong)`
+  );
+});
+
+// ============================================================================
 // END OF witnessify_impl.test.ts
 // ============================================================================
