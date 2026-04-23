@@ -220,7 +220,7 @@ export async function loadPatientContext(
     );
   }
 
-  const witnesses: WitnessRow[] = (witnessRows ?? []) as WitnessRow[];
+  const witnesses: WitnessRow[] = (witnessRows ?? []) as unknown as WitnessRow[];
 
   // Partition witnesses by source_window + depth for clean assembly.
   const partitioned = partitionWitnesses(witnesses);
