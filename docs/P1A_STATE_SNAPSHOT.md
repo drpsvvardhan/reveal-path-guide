@@ -391,7 +391,8 @@ doesn't exist.
 
 ## 11. The cutover plan for Artifact 6
 
-Artifact 6 rewrites `generate-clusters/contextLoader.ts` to read from
+Artifact 6 rewrites `_shared/contextLoader.ts` (consolidated from the
+former `generate-clusters/contextLoader.ts`) to read from
 `witness_objects` instead of raw tables. This is the first P1a-related
 artifact that changes user-visible behavior.
 

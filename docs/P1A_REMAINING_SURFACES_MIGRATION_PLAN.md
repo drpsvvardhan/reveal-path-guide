@@ -145,8 +145,7 @@ modeled on the existing `patient-chat/p1a_migration_guard.test.ts`:
 3. `index.ts` does **not** contain `.from("cie_gate_scores")`,
    `.from("cie_domain_scores")`, or `.from("derived_patterns")`
    (these now flow via the loader).
-4. `index.ts` imports `loadPatientContext` from `../patient-chat/contextLoader.ts`
-   (or its agreed shared location — see "Migration order" below).
+4. `index.ts` imports `loadPatientContext` from `../_shared/contextLoader.ts`.
 5. `index.ts` calls `loadPatientContext(` at least once.
 6. `index.ts` retains the literal default `sequenceExplanation` fallback string.
 7. `index.ts` retains the `{cluster:<cluster_id>}` and `{cluster:none}` citation
