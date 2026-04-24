@@ -12,6 +12,7 @@ import {
   buildRetryFeedbackWithSections,
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -534,15 +535,21 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Fetch profile (need id for cluster fetch)
-    const { data: profile, error: profileErr } = await supabase
-      .from("profiles")
-      .select("id, first_name, age, sex")
-      .eq("user_id", user_id)
-      .single();
-    if (profileErr || !profile) throw new Error("Could not load profile");
+    // 1. P1a: load all reasoning context from the witness layer.
+    // Raw reads of patient_lab_observations, cie_domain_scores,
+    // cie_gate_scores, and cie_responses are forbidden on this surface.
+    const witnessContext = await loadPatientContext(supabaseUrl, serviceKey, user_id);
 
-    // 2. Fetch assessment
+    // Profile fields used downstream by composeUserMessage. The canonical
+    // patient_id (witnessContext.patient_id) replaces the previous
+    // profileData.id lookup for cluster scoping.
+    const profile = {
+      first_name: witnessContext.profile.display_name,
+      age: witnessContext.profile.age,
+      sex: witnessContext.profile.sex,
+    };
+
+    // 2. Fetch assessment (still needed for assessment_id on terrain_renders insert)
     let assessmentFilter = supabase
       .from("cie_assessments")
       .select("id, version, status")
@@ -568,24 +575,61 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Fetch domain scores, gate scores, responses, lab obs, AND clusters in parallel
-    const [domainRes, gateRes, responseRes, labRes, clusterRes] = await Promise.all([
-      supabase.from("cie_domain_scores").select("*").eq("assessment_id", assessment.id),
-      supabase.from("cie_gate_scores").select("*").eq("assessment_id", assessment.id),
-      supabase.from("cie_responses").select("question_id, domain_id, raw_response, score").eq("assessment_id", assessment.id),
-      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id)
-        .gte("collection_date", new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10))
-        .order("collection_date", { ascending: false })
-        .limit(50),
-      supabase.from("clusters").select("*").eq("patient_id", profile.id).eq("status", "active")
-        .order("confidence_score", { ascending: false }),
-    ]);
+    // 3. Derive reasoning arrays from witnessContext; fetch only clusters from db.
+    const domainScores = witnessContext.cie.domain_scores;
+    const gateScores = witnessContext.cie.gate_scores;
+    const responses = witnessContext.cie.sample_responses;
 
-    const domainScores = domainRes.data || [];
-    const gateScores = gateRes.data || [];
-    const responses = responseRes.data || [];
-    const labObs = labRes.data || [];
-    const clusters = clusterRes.data || [];
+    // Union the three witness-backed observation streams. Preserve the
+    // legacy `source === "InBody"` semantics so resolveInBodyMapping bucketing
+    // in composeUserMessage continues to behave identically.
+    const labObsAll = [
+      ...witnessContext.labs.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: o.flag,
+        ref_low: o.ref_low,
+        ref_high: o.ref_high,
+        collection_date: o.collection_date,
+        source: o.source,
+      })),
+      ...witnessContext.inbody.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: null as string | null,
+        ref_low: null as number | null,
+        ref_high: null as number | null,
+        collection_date: o.collection_date,
+        source: "InBody",
+      })),
+      ...witnessContext.fibroscan.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: null as string | null,
+        ref_low: null as number | null,
+        ref_high: null as number | null,
+        collection_date: o.collection_date,
+        source: "FibroScan",
+      })),
+    ];
+
+    // Re-apply the legacy 180-day window + newest-first ordering + 50 cap.
+    const cutoff = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10);
+    const labObs = labObsAll
+      .filter((o) => o.collection_date && o.collection_date >= cutoff)
+      .sort((a, b) => (a.collection_date < b.collection_date ? 1 : -1))
+      .slice(0, 50);
+
+    const { data: clustersData } = await supabase
+      .from("clusters")
+      .select("*")
+      .eq("patient_id", witnessContext.patient_id)
+      .eq("status", "active")
+      .order("confidence_score", { ascending: false });
+    const clusters = clustersData || [];
 
     // 4. Build cluster tier map for voice validation
     const clusterTierMap = new Map<string, ClusterTier>();
@@ -597,8 +641,8 @@ Deno.serve(async (req) => {
     const inputData = {
       profile: { first_name: profile.first_name, age: profile.age, sex: profile.sex },
       assessment_id: assessment.id,
-      domain_scores: domainScores.map(d => ({ id: d.domain_id, score: d.final_score })),
-      gate_scores: gateScores.map(g => ({ id: g.gate_id, score: g.score, tl: g.traffic_light })),
+      domain_scores: domainScores.map((d) => ({ id: d.domain_id, score: d.final_score })),
+      gate_scores: gateScores.map((g) => ({ id: g.gate_id, score: g.score, tl: g.traffic_light })),
       lab_count: labObs.length,
       cluster_count: clusters.length,
     };
