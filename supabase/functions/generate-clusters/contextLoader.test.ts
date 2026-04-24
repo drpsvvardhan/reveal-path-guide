@@ -28,7 +28,7 @@
 
 import { assert, assertEquals } from "jsr:@std/assert@1.0.0";
 
-import { loadPatientContext } from "./contextLoader.ts";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ============================================================================

@@ -1,5 +1,5 @@
 // ============================================================================
-// supabase/functions/generate-clusters/contextLoader.ts  (REWRITTEN — P1a Artifact 6)
+// supabase/functions/_shared/contextLoader.ts  (REWRITTEN — P1a Artifact 6)
 // ----------------------------------------------------------------------------
 // REWRITE (23 April 2026): reads from `witness_objects` instead of raw
 // observation tables. The external contract — `PatientTerrainContext`
