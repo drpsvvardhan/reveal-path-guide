@@ -467,25 +467,12 @@ Create `supabase/functions/generate-terrain-render/p1a_migration_guard.test.ts`:
 
 ### Loader location
 
-The loader currently lives at
-`supabase/functions/patient-chat/contextLoader.ts` (note the file's own header
-still references `generate-clusters/contextLoader.ts` — its prior home).
-It is already imported by `generate-clusters` and `patient-chat`.
-
-**Decision required before any surface migrates** (no code change in this plan;
-pick one and document):
-
-- **Option A (preferred):** move the loader to
-  `supabase/functions/_shared/contextLoader.ts` and update the two existing
-  importers. Every remaining surface then imports from `_shared`. This matches
-  how `framework_v2.ts`, `clusterPrompts.ts`, `ontology.ts`, and `witness.ts`
-  are already organized.
-- **Option B:** keep the loader where it is and have all surfaces import from
-  `../patient-chat/contextLoader.ts`. Avoids the move; couples reasoning
-  surfaces to a peer function's directory.
-
-Either choice is compatible with this plan. The guard tests must reflect the
-chosen import path.
+The loader lives at `supabase/functions/_shared/contextLoader.ts` (consolidated
+from the former `generate-clusters/contextLoader.ts` and the duplicate
+`patient-chat/contextLoader.ts`). Every reasoning surface — including the four
+migrating below — imports it as `from "../_shared/contextLoader.ts"`, matching
+the convention already used for `framework_v2.ts`, `clusterPrompts.ts`,
+`ontology.ts`, and `witness.ts`.
 
 ### Profile read collapse
 
@@ -514,7 +501,7 @@ P-3 ("no signal appears in context that isn't in
 
 `narrative.latest` and `prior_patterns.patterns` remain sourced from
 `patient_narratives` and `derived_patterns` respectively (loader source comment,
-`contextLoader.ts` lines 19–22). P1a does not migrate those two reads to the
+`_shared/contextLoader.ts` lines 19–22). P1a does not migrate those two reads to the
 witness layer. Surfaces that consume them inherit the legacy provenance until a
 future seed version absorbs them.
 
