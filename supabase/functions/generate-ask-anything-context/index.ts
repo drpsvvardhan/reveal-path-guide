@@ -1,5 +1,6 @@
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,38 +134,87 @@ Deno.serve(async (req) => {
     }
 
     // Fetch all data in parallel
-    const [labsResult, gatesResult, patternsResult, profileResult] = await Promise.all([
-      supabase
-        .from("patient_lab_observations")
-        .select("canonical_name, display_name, value, unit, flag, ref_low, ref_high, collection_date, source")
-        .eq("user_id", user_id)
-        .order("collection_date", { ascending: false })
-        .limit(200),
-      effectiveAssessmentId
-        ? supabase
-            .from("cie_gate_scores")
-            .select("gate_id, gate_name, score, traffic_light, contributing_domains")
-            .eq("assessment_id", effectiveAssessmentId)
-            .eq("user_id", user_id)
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("derived_patterns")
-        .select("title, severity, category, summary")
-        .eq("user_id", user_id)
-        .eq("status", "active")
-        .order("severity", { ascending: true })
-        .limit(20),
-      supabase
-        .from("profiles")
-        .select("first_name, age, sex")
-        .eq("user_id", user_id)
-        .single(),
-    ]);
+    // P1a: all reasoning context flows through the witness-native loader.
+    // Raw reads of patient_lab_observations / cie_gate_scores /
+    // derived_patterns / profiles are forbidden on this surface.
+    const witnessContext = await loadPatientContext(supabaseUrl, serviceRoleKey, user_id);
 
-    const labs = labsResult.data || [];
-    const gates = gatesResult.data || [];
-    const patterns = patternsResult.data || [];
-    const profile = profileResult.data;
+    // Derive the legacy `labs` shape from the union of witness-backed
+    // observation streams (labs + inbody + fibroscan). Downstream dedupe,
+    // significance scoring, anchor classification, and bucketing logic is
+    // unchanged.
+    const labs = [
+      ...witnessContext.labs.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        display_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: o.flag,
+        ref_low: o.ref_low,
+        ref_high: o.ref_high,
+        collection_date: o.collection_date,
+        source: o.source,
+      })),
+      ...witnessContext.inbody.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        display_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: null as string | null,
+        ref_low: null as number | null,
+        ref_high: null as number | null,
+        collection_date: o.collection_date,
+        source: o.source,
+      })),
+      ...witnessContext.fibroscan.observations.map((o) => ({
+        canonical_name: o.canonical_name,
+        display_name: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        flag: null as string | null,
+        ref_low: null as number | null,
+        ref_high: null as number | null,
+        collection_date: o.collection_date,
+        source: "FibroScan",
+      })),
+    ];
+
+    const gates = witnessContext.cie.gate_scores.map((g) => ({
+      gate_id: g.gate_id,
+      gate_name: g.gate_name,
+      score: g.score,
+      traffic_light: g.traffic_light,
+      contributing_domains: g.contributing_domains,
+    }));
+
+    const SEVERITY_RANK: Record<string, number> = {
+      critical: 0,
+      high: 1,
+      moderate: 2,
+      low: 3,
+      info: 4,
+    };
+    const patterns = [...witnessContext.prior_patterns.patterns]
+      .sort((a, b) => {
+        const ra = SEVERITY_RANK[a.severity?.toLowerCase()] ?? 99;
+        const rb = SEVERITY_RANK[b.severity?.toLowerCase()] ?? 99;
+        return ra - rb;
+      })
+      .slice(0, 20)
+      .map((p) => ({
+        title: p.title,
+        severity: p.severity,
+        category: p.category,
+        // legacy `summary` field is not present in witness layer; downstream
+        // tolerates undefined and only renders if truthy.
+        summary: "",
+      }));
+
+    const profile = {
+      first_name: witnessContext.profile.display_name,
+      age: witnessContext.profile.age,
+      sex: witnessContext.profile.sex,
+    };
 
     // Deduplicate labs — keep most recent per canonical_name
     const seenLabs = new Map<string, typeof labs[0]>();
