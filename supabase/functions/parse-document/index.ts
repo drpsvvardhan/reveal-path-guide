@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +14,7 @@ const corsHeaders = {
  * For simplicity and reliability, we use the AI gateway to read the PDF directly
  * since Gemini models support PDF input natively.
  */
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

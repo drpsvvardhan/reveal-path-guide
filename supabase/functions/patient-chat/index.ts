@@ -31,7 +31,7 @@
 // format headers. The P1a edits are additive and narrow.
 // ============================================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   FRAMEWORK_V2,
@@ -968,7 +968,7 @@ async function queueExtractedQuestions(
 // REQUEST HANDLER
 // ============================================================================
 
-serve(async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

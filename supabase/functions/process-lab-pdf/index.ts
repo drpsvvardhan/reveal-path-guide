@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
   sha256Bytes,
@@ -996,7 +996,7 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
 // REQUEST HANDLER — returns 202 immediately, processes in background
 // ============================================================================
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
