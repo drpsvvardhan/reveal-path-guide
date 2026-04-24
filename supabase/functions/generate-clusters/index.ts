@@ -13,7 +13,7 @@ import {
   criticSystemPrompt,
   reconcilerSystemPrompt,
 } from "../_shared/clusterPrompts.ts";
-import { loadPatientContext, compressContextForCritique } from "./contextLoader.ts";
+import { loadPatientContext, compressContextForCritique } from "../_shared/contextLoader.ts";
 import { validateReconcilerOutput } from "./validator.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };

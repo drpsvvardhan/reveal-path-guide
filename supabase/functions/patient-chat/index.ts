@@ -41,7 +41,7 @@ import {
 import {
   loadPatientContext,
   type PatientTerrainContext,
-} from "./contextLoader.ts";
+} from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
