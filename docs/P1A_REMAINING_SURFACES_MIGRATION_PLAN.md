@@ -17,7 +17,7 @@ touch outside the loader are: `clusters` / `cluster_evidence` (governed derived 
 `supabase/functions/patient-chat/p1a_migration_guard.test.ts`, 9 green).
 
 The loader's public contract — `loadPatientContext(supabaseUrl, serviceRoleKey, userId)
-→ PatientTerrainContext` — is defined in `supabase/functions/patient-chat/contextLoader.ts`
+→ PatientTerrainContext` — is defined in `supabase/functions/_shared/contextLoader.ts`
 (rewritten Artifact 6, 23 April 2026). That contract is the single source of truth for
 everything below.
 
