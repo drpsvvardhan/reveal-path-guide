@@ -203,7 +203,21 @@ function buildClusterContextBlock(clusters: any[] | undefined): string {
   const clusterJson = JSON.stringify(clusterList, null, 2);
 
   const tierLicenseLines = Object.entries(TIER_VOCABULARY_LICENSES)
-    .map(([tier, vocab]) => `  ${tier}: ${(vocab as string[]).join(", ")}`)
+    .map(([tier, vocab]) => {
+      const v = vocab as {
+        allowed_verbs: string[];
+        forbidden_verbs: string[];
+        required_hedging?: string[];
+      };
+      const parts = [`allowed: ${v.allowed_verbs.join(", ")}`];
+      if (v.forbidden_verbs?.length) {
+        parts.push(`forbidden: ${v.forbidden_verbs.join(", ")}`);
+      }
+      if (v.required_hedging?.length) {
+        parts.push(`required hedging: ${v.required_hedging.join(", ")}`);
+      }
+      return `  ${tier}: ${parts.join(" | ")}`;
+    })
     .join("\n");
 
   return `
