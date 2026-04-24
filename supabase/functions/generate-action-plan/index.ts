@@ -9,6 +9,7 @@ import {
   buildRetryFeedback,
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -397,38 +398,52 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Fetch patient data + profile (for clusters) + clusters
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("user_id", user_id)
-      .maybeSingle();
+    // 1. Load witness-native patient terrain context (P1a contract).
+    //    All CIE / lab / pattern signal flows through the governed loader.
+    //    No reasoning surface may read patient_lab_observations, cie_gate_scores,
+    //    cie_domain_scores, or derived_patterns directly.
+    const witnessContext = await loadPatientContext(supabaseUrl, serviceKey, user_id);
 
-    const [gateRes, domainRes, obsRes, patternRes, clusterRes] = await Promise.all([
-      supabase.from("cie_gate_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(50),
-      supabase.from("cie_domain_scores").select("*").eq("user_id", user_id).order("created_at", { ascending: false }).limit(100),
-      supabase.from("patient_lab_observations").select("*").eq("user_id", user_id).order("collection_date", { ascending: false }).limit(1000),
-      supabase.from("derived_patterns").select("rule_id, severity").eq("user_id", user_id).eq("status", "active"),
-      profileData
-        ? supabase.from("clusters").select("id, claim, cluster_kind, confidence_tier, confidence_score").eq("patient_id", profileData.id).eq("status", "active").order("confidence_score", { ascending: false })
-        : Promise.resolve({ data: [] }),
-    ]);
+    // Clusters remain a governed-derived-object read, scoped by the
+    // loader-returned canonical patient_id (= profiles.id).
+    const { data: clusterRows } = await supabase
+      .from("clusters")
+      .select("id, claim, cluster_kind, confidence_tier, confidence_score")
+      .eq("patient_id", witnessContext.patient_id)
+      .eq("status", "active")
+      .order("confidence_score", { ascending: false });
 
-    // Build gate scores map (latest per gate)
-    const gateScores: Record<string, any> = {};
-    for (const g of (gateRes.data || [])) {
-      if (!gateScores[g.gate_id]) gateScores[g.gate_id] = g;
+    // Reconstruct legacy in-memory shapes from witness context. Loader returns
+    // rows in newest-first order, so the "first wins" dedupe rule is preserved.
+    const gateScores: Record<string, { score: number; traffic_light: string; gate_name: string }> = {};
+    for (const g of witnessContext.cie.gate_scores) {
+      if (!gateScores[g.gate_id]) {
+        gateScores[g.gate_id] = {
+          score: g.score,
+          traffic_light: g.traffic_light,
+          gate_name: g.gate_name,
+        };
+      }
     }
 
-    // Build domain scores map (latest per domain)
-    const domainScores: Record<string, any> = {};
-    for (const d of (domainRes.data || [])) {
-      if (!domainScores[d.domain_id]) domainScores[d.domain_id] = d;
+    const domainScores: Record<string, { final_score: number }> = {};
+    for (const d of witnessContext.cie.domain_scores) {
+      if (!domainScores[d.domain_id]) {
+        domainScores[d.domain_id] = { final_score: d.final_score };
+      }
     }
 
-    // Build biomarker map (latest per analyte)
+    // Biomarker map: today's raw query physically held labs + inbody + fibroscan
+    // in patient_lab_observations. The loader splits them by source_window, so
+    // we re-merge here to preserve marker coverage. First-wins dedupe per
+    // normalized analyte name, iterating in returned (date-desc) order.
     const biomarkers: Record<string, { value: number; unit: string }> = {};
-    for (const obs of (obsRes.data || [])) {
+    const allObservations = [
+      ...witnessContext.labs.observations,
+      ...witnessContext.inbody.observations,
+      ...witnessContext.fibroscan.observations,
+    ];
+    for (const obs of allObservations) {
       const key = normalizeBiomarkerName(obs.canonical_name);
       if (!biomarkers[key]) biomarkers[key] = { value: obs.value, unit: obs.unit };
     }
@@ -437,10 +452,13 @@ serve(async (req) => {
       gateScores,
       domainScores,
       biomarkers,
-      patterns: patternRes.data || [],
+      patterns: witnessContext.prior_patterns.patterns.map((p) => ({
+        rule_id: p.rule_id,
+        severity: p.severity,
+      })),
     };
 
-    const clusters = clusterRes.data || [];
+    const clusters = clusterRows || [];
 
     // Build cluster tier map for voice validation
     const clusterTierMap = new Map<string, ClusterTier>();
