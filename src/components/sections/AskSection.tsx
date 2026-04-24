@@ -9,6 +9,7 @@ import { useActiveManifest } from "@/hooks/useActiveManifest";
 import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
 import { useClusters } from "@/hooks/useClusters";
+import { supabase } from "@/integrations/supabase/client";
 import {
   stripClusterMarkers,
   parseProseAndCitations,
@@ -182,11 +183,18 @@ const AskSection: React.FC = () => {
 
     const fetchContext = async () => {
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) {
+          console.warn("Skipping ask-anything context fetch — no auth session");
+          return;
+        }
         const resp = await fetch(CONTEXT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             user_id: effectiveUserId,
@@ -260,6 +268,11 @@ const AskSection: React.FC = () => {
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        throw new Error("Not signed in. Please log in to use Ask Anything.");
+      }
       // Strip cluster markers from prior assistant messages before re-sending
       const allMsgs = [...messages, userMessage].map((m) =>
         m.role === "assistant"
@@ -279,7 +292,8 @@ const AskSection: React.FC = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${accessToken}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({
           messages: allMsgs,
