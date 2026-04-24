@@ -65,8 +65,47 @@ function safeList(
   return items.map(formatter).filter(Boolean).join("\n");
 }
 
-function safeString(s: string | undefined, fallback = "(not on file)"): string {
-  return s && s.trim() ? s : fallback;
+function safeString(s: unknown, fallback = "(not on file)"): string {
+  if (s == null) return fallback;
+
+  if (typeof s === "string") {
+    const trimmed = s.trim();
+    return trimmed ? trimmed : fallback;
+  }
+
+  if (
+    typeof s === "number" ||
+    typeof s === "boolean" ||
+    typeof s === "bigint"
+  ) {
+    return String(s);
+  }
+
+  if (Array.isArray(s)) {
+    const rendered = s
+      .map((item) => {
+        if (item == null) return "";
+        if (typeof item === "string") return item.trim();
+        try {
+          return JSON.stringify(item);
+        } catch {
+          return String(item);
+        }
+      })
+      .filter(Boolean)
+      .join(", ");
+
+    return rendered || fallback;
+  }
+
+  try {
+    const rendered = JSON.stringify(s);
+    return rendered && rendered !== "{}" && rendered !== "[]"
+      ? rendered
+      : fallback;
+  } catch {
+    return String(s);
+  }
 }
 
 // ============================================================================
