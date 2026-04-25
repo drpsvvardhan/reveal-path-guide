@@ -589,12 +589,20 @@ function PatientJourneySection({ m }: { m: ManifestPreview }) {
                       {e.icon && <span aria-hidden>{e.icon}</span>}
                       {e.title}
                     </p>
-                    <span className="text-xs text-muted-foreground font-mono">{e.dateLabel}</span>
+                    {e.dateLabel && e.dateLabel.trim() ? (
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {e.dateLabel}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/60 font-mono italic">
+                        Date not provided
+                      </span>
+                    )}
                   </div>
                   {e.description && (
                     <p className="text-xs text-muted-foreground mt-0.5">{e.description}</p>
                   )}
-                  {tone.label && (
+                  {e.status && tone.label && (
                     <p className={`text-[10px] uppercase tracking-wide font-medium mt-1 ${tone.labelClass}`}>
                       {tone.label}
                     </p>
