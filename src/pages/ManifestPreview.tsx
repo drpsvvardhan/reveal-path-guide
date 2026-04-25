@@ -6,13 +6,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Upload, FileJson, AlertCircle, CheckCircle2,
-  RotateCcw, Sparkles, Download, FileDown, Copy, Printer, GitCompare, Check, Search,
+  RotateCcw, Sparkles, Download, FileDown, Copy, Printer, GitCompare, Check, Search, Info,
 } from "lucide-react";
 import {
   parseManifestJson,
   type FriendlyIssue,
   type ManifestPreview as ManifestData,
 } from "@/lib/manifestSchema";
+import { lintManifest, type ManifestWarning } from "@/lib/manifestLint";
 import {
   RenderManifest,
   sectionMeta,
@@ -273,6 +274,12 @@ export default function ManifestPreviewPage() {
     const changed = diffEntries.filter((d) => d.kind === "changed").length;
     return { added, removed, changed, total: diffEntries.length };
   }, [diffEntries]);
+
+  // Non-blocking guidance warnings produced by the lint pass.
+  const warnings: ManifestWarning[] | null = useMemo(() => {
+    if (state.kind !== "success") return null;
+    return lintManifest(state.data);
+  }, [state]);
 
   // Group diff entries by top-level field, capped at DIFF_CAP rows total
   // so very large manifests don't tank the panel.
@@ -635,6 +642,27 @@ export default function ManifestPreviewPage() {
                   .
                 </AlertDescription>
               </Alert>
+
+              {warnings && warnings.length > 0 && (
+                <Alert className="border-amber-500/40 bg-amber-500/5">
+                  <Info className="h-4 w-4 text-amber-600" />
+                  <AlertTitle>
+                    {warnings.length} warning{warnings.length === 1 ? "" : "s"} (non-blocking)
+                  </AlertTitle>
+                  <AlertDescription className="text-xs mt-1">
+                    <p className="mb-2 text-muted-foreground">
+                      Guidance only — the manifest is valid and will render.
+                    </p>
+                    <ul className="space-y-1 max-h-48 overflow-auto">
+                      {warnings.map((w, i) => (
+                        <li key={i}>
+                          <code className="font-mono">{w.path}</code> — {w.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {requiredChecklist && (
                 <Card>
