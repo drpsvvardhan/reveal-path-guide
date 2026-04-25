@@ -1305,6 +1305,50 @@ export type Database = {
         }
         Relationships: []
       }
+      rae_signal_config: {
+        Row: {
+          candidate_concept_id: string
+          created_at: string
+          engine_version_id: string
+          id: string
+          notes: string | null
+          parameters: Json
+          signal_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          candidate_concept_id: string
+          created_at?: string
+          engine_version_id: string
+          id?: string
+          notes?: string | null
+          parameters?: Json
+          signal_id: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          candidate_concept_id?: string
+          created_at?: string
+          engine_version_id?: string
+          id?: string
+          notes?: string | null
+          parameters?: Json
+          signal_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_signal_config_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reconsideration_events: {
         Row: {
           assessment_id: string
