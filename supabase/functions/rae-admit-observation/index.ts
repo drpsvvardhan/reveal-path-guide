@@ -172,29 +172,63 @@ export function projectPriorObservations(
 }
 
 // ---------------------------------------------------------------------------
-// Admin gate.
-// Performs `public.has_role(auth.uid(),'admin')` via a direct REST call so
-// that the static-scan guard (no `.rpc(`, no `.from(`) is preserved. The
-// user's bearer token is forwarded so auth.uid() resolves correctly.
+// Dependency-injection seam for tests.
+// ----------------------------------------------------------------------------
+// `handle()` accepts an optional `deps` object so the HTTP-level test in
+// `index.test.ts` can swap the auth check, engine loader, orchestrator,
+// gateway and persistence call without touching the network or the DB.
+// Production callers pass nothing; the defaults wire to the real shared
+// modules and the supabase-js client. This seam is the ONLY reason
+// `handle()` is exported.
 // ---------------------------------------------------------------------------
 
-async function assertCallerIsAdmin(
+export interface HandleDeps {
+  /** Resolves the JWT to a user id, or returns null on invalid token. */
+  getUserIdFromJwt: (
+    supabaseUrl: string,
+    anonKey: string,
+    bearerToken: string,
+  ) => Promise<string | null>;
+  /** Returns true iff the caller has the 'admin' role. */
+  hasAdminRole: (
+    supabaseUrl: string,
+    anonKey: string,
+    bearerToken: string,
+    userId: string,
+  ) => Promise<boolean>;
+  /** Engine-binding loader (default = shared edge_loaders). */
+  loadEngineBinding: typeof loadEngineBinding;
+  /** Concept-binding adapter (default = shared concept_binding_adapter). */
+  bindCandidateConceptForAdmission: typeof bindCandidateConceptForAdmission;
+  /** Orchestrator (default = shared orchestrator). */
+  adjudicate: typeof adjudicate;
+  /** Storage entry point (default = shared storage/admit). */
+  persistInitialAdmission: typeof persistInitialAdmission;
+  /** RPC gateway factory (default = shared storage/gateway_rpc). */
+  makeRpcAdmitGateway: typeof makeRpcAdmitGateway;
+  /** Service-role client factory. Returns the opaque client we cast at
+   *  the seam helpers above. */
+  makeServiceClient: (supabaseUrl: string, serviceRoleKey: string) => unknown;
+}
+
+function defaultGetUserIdFromJwt(
   supabaseUrl: string,
   anonKey: string,
   bearerToken: string,
-): Promise<void> {
-  // Validate the JWT and resolve the user id.
+): Promise<string | null> {
   const authClient = createClient(supabaseUrl, anonKey);
-  const { data: authData, error: authError } = await authClient.auth.getUser(
-    bearerToken,
-  );
-  if (authError || !authData?.user) {
-    throw new UnauthenticatedError(
-      "bearer token could not be validated",
-    );
-  }
+  return authClient.auth.getUser(bearerToken).then(({ data, error }) => {
+    if (error || !data?.user) return null;
+    return data.user.id;
+  });
+}
 
-  // Call the SECURITY DEFINER helper as the caller.
+async function defaultHasAdminRole(
+  supabaseUrl: string,
+  anonKey: string,
+  bearerToken: string,
+  userId: string,
+): Promise<boolean> {
   const res = await fetch(`${supabaseUrl}/rest/v1/rpc/has_role`, {
     method: "POST",
     headers: {
@@ -202,36 +236,56 @@ async function assertCallerIsAdmin(
       apikey: anonKey,
       Authorization: `Bearer ${bearerToken}`,
     },
-    body: JSON.stringify({
-      _user_id: authData.user.id,
-      _role: "admin",
-    }),
+    body: JSON.stringify({ _user_id: userId, _role: "admin" }),
   });
   if (!res.ok) {
-    // Treat any non-2xx as a forbidden outcome — we never leak the
-    // underlying status text into the response body.
     await res.text().catch(() => "");
-    throw new ForbiddenError("admin role check failed");
+    return false;
   }
   let payload: unknown;
   try {
     payload = await res.json();
   } catch {
-    throw new ForbiddenError("admin role check returned non-JSON");
+    return false;
   }
-  if (payload !== true) {
-    throw new ForbiddenError("admin role required");
-  }
+  return payload === true;
 }
+
+function defaultMakeServiceClient(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+): unknown {
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+const DEFAULT_DEPS: HandleDeps = {
+  getUserIdFromJwt: defaultGetUserIdFromJwt,
+  hasAdminRole: defaultHasAdminRole,
+  loadEngineBinding,
+  bindCandidateConceptForAdmission,
+  adjudicate,
+  persistInitialAdmission,
+  makeRpcAdmitGateway,
+  makeServiceClient: defaultMakeServiceClient,
+};
 
 // ---------------------------------------------------------------------------
 // Main handler — design §4.
 // ---------------------------------------------------------------------------
 
-async function handle(req: Request): Promise<Response> {
+async function handle(
+  req: Request,
+  depsOverride?: Partial<HandleDeps>,
+): Promise<Response> {
+  const deps: HandleDeps = depsOverride
+    ? { ...DEFAULT_DEPS, ...depsOverride }
+    : DEFAULT_DEPS;
+
   // §4.1 — CORS / method gate.
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
   if (req.method !== "POST") {
     return errorResponse(new MethodNotAllowedError());
@@ -262,6 +316,20 @@ async function handle(req: Request): Promise<Response> {
   }
   const reqBody: AdmitObservationRequest = parsed.data;
 
+  // Pairing precheck: back_annotation override REQUIRES a witness id.
+  // The schema permits the witness id independently; we enforce the
+  // pairing here so callers see a single 400 instead of a downstream 500.
+  if (
+    reqBody.policy_override === "back_annotation" &&
+    !reqBody.back_annotation_witness_id
+  ) {
+    return errorResponse(
+      new InvalidRequestError(
+        "policy_override='back_annotation' requires back_annotation_witness_id",
+      ),
+    );
+  }
+
   // §4.4 — auth (JWT) and §4.5 — admin gate.
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -280,23 +348,44 @@ async function handle(req: Request): Promise<Response> {
     );
   }
 
+  // JWT resolution.
+  let userId: string | null;
   try {
-    await assertCallerIsAdmin(supabaseUrl, anonKey, bearerToken);
+    userId = await deps.getUserIdFromJwt(supabaseUrl, anonKey, bearerToken);
   } catch (e) {
     return errorResponse(e);
+  }
+  if (!userId) {
+    return errorResponse(
+      new UnauthenticatedError("bearer token could not be validated"),
+    );
+  }
+
+  // Admin gate.
+  let isAdmin: boolean;
+  try {
+    isAdmin = await deps.hasAdminRole(
+      supabaseUrl,
+      anonKey,
+      bearerToken,
+      userId,
+    );
+  } catch (e) {
+    return errorResponse(e);
+  }
+  if (!isAdmin) {
+    return errorResponse(new ForbiddenError("admin role required"));
   }
 
   // §4.6 — service-role client. Used for engine binding reads + the single
   // admission RPC call. Never used for user-scoped RLS.
-  const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  });
+  const serviceClient = deps.makeServiceClient(supabaseUrl, serviceRoleKey);
 
   try {
     // §4.7 — load engine binding.
     // toReadOnlyDbClient narrows the supabase-js client to the shared
     // loader's structural subset. The cast is confined to that helper.
-    const binding = await loadEngineBinding(toReadOnlyDbClient(serviceClient), {
+    const binding = await deps.loadEngineBinding(toReadOnlyDbClient(serviceClient), {
       engine_version_id: reqBody.engine_version_id,
       candidate_concept_id: reqBody.candidate_concept.concept_id,
     });
@@ -320,7 +409,7 @@ async function handle(req: Request): Promise<Response> {
       reqBody.candidate_concept,
     );
 
-    const bound = bindCandidateConceptForAdmission({
+    const bound = deps.bindCandidateConceptForAdmission({
       candidate_concept: candidateConceptForOrchestrator,
       binding_lookup_concept_id: reqBody.candidate_concept.concept_id,
       binding: {
@@ -339,7 +428,7 @@ async function handle(req: Request): Promise<Response> {
     const { rows: priorObservations, dropped: dropped_prior_observations } =
       projectPriorObservations(reqBody.prior_observations);
 
-    const decision = adjudicate({
+    const decision = deps.adjudicate({
       claim: reqBody.claim,
       candidate_concept: bound.candidate_concept,
       signal_config: bound.binding.signal_config,
@@ -357,11 +446,11 @@ async function handle(req: Request): Promise<Response> {
     // §4.11 — construct the gateway and persist via the RPC.
     // toRpcCapableClient narrows the supabase-js client to the gateway's
     // structural subset. The cast is confined to that helper.
-    const runInTxn = makeRpcAdmitGateway(toRpcCapableClient(serviceClient), {
+    const runInTxn = deps.makeRpcAdmitGateway(toRpcCapableClient(serviceClient), {
       witnessPayloadAdapter,
     });
 
-    const persistResult = await persistInitialAdmission(
+    const persistResult = await deps.persistInitialAdmission(
       {
         decision,
         reason: `rae:initial_admission:${reqBody.engine_version_id}`,
