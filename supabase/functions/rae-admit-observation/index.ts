@@ -103,7 +103,7 @@ function errorResponse(err: unknown): Response {
  * `conversion_id` is synthesized deterministically per unit key so the
  * orchestrator's audit trail is stable for repeated requests.
  */
-function projectCandidateConcept(
+export function projectCandidateConcept(
   cc: AdmitObservationRequest["candidate_concept"],
 ): OrchestratorCandidateConcept {
   return {
@@ -129,7 +129,7 @@ function projectCandidateConcept(
  * `diagnostics.dropped_siblings`. We never fabricate a concept_id from
  * the candidate concept.
  */
-function projectSiblings(
+export function projectSiblings(
   siblings: AdmitObservationRequest["siblings"],
 ): { rows: Array<{ observation_id: string; concept_id: string }>; dropped: number } {
   const rows: Array<{ observation_id: string; concept_id: string }> = [];
@@ -152,7 +152,7 @@ function projectSiblings(
  * rows. Drops entries missing a finite numeric raw_value; that count is
  * surfaced as `diagnostics.dropped_prior_observations`.
  */
-function projectPriorObservations(
+export function projectPriorObservations(
   priors: AdmitObservationRequest["prior_observations"],
 ): { rows: Array<{ witness_id: string; value: number; observed_at: string }>; dropped: number } {
   const rows: Array<{ witness_id: string; value: number; observed_at: string }> = [];
