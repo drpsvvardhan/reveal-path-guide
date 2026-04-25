@@ -17,6 +17,21 @@ remain pure. This layer turns an `AdmissionDecision` (CAW draft +
 contract, and hands off witness production to the existing P1a
 `witnessify_impl` path.
 
+**CodexOS-approved revisions (post-review):**
+1. `witnessify_impl` is a pure in-memory builder; the storage layer runs
+   the entire admission inside a single Postgres transaction with no
+   compensating sequence.
+2. Back-annotation tuple verification is hard on
+   `(user_id, source_table, source_row_id)` only; an
+   `ontology_concept_id` mismatch is recorded as a `founder_review_flag`
+   reason and a `limitations` entry, not a rejection.
+3. The storage layer's allowed write set is closed and enumerated; all
+   other tables (config, review queue, proposals, reasoning surfaces)
+   are explicitly forbidden.
+4. Initial-admission persistence and review-action transitions live in
+   the same storage module behind two distinct entry points sharing
+   private helpers.
+
 ---
 
 ## 1. Purpose
@@ -50,31 +65,44 @@ Out of scope for this layer:
 
 ## 2. Transaction boundary
 
-A single admission persistence call is **one logical atomic unit** and
-must commit or roll back as a whole. The unit covers:
+A single admission persistence call is **one logical atomic unit**
+executed inside **one Postgres transaction** that commits or rolls back
+as a whole.
 
-1. **CAW insert** into `concept_assignment_witnesses` (or detection of
-   an existing row by `caw_id` — see §3).
-2. **State transition insert** into `rae_state_transitions`
-   (`from_state = NULL → to_state = current_state`), validated by
-   `evaluateTransition`.
-3. **Witness production handoff** to `witnessify_impl` when
-   `witness_intent = "produce_depth0_witness"`. The handoff runs inside
-   the same logical transaction; the witnessify path is responsible for
-   honoring its own ancestry/limitations/confidence_basis invariants.
-4. **CAW `produced_witness_id` backfill** on the row inserted in step 1,
-   set to the witness id returned by step 3, only after step 3 succeeds.
+`witnessify_impl` is a pure in-memory builder: it returns a validated
+`WitnessObject` value and performs no database I/O of its own. The
+storage layer is therefore free to run the witness build step inline
+within the same transaction that inserts the CAW and the transition,
+then insert the witness row through the approved witnessify insert path
+(the same call site `witnessify-observations` already uses) inside that
+transaction. No two-phase commit, no staging marker, no compensation.
 
-If any step fails, all earlier steps in the same call must roll back.
-No partial CAW row, no orphan transition, no orphan witness, and no CAW
-with a `produced_witness_id` pointing at a witness that was not actually
-produced.
+Per-call ordering inside the single transaction:
 
-The layer must use a single database transaction for steps 1, 2, and 4.
-Step 3 (witnessify) must run inside that transaction; if `witnessify_impl`
-cannot participate in the same transaction, the storage layer must use a
-compensating pattern (see §6) that yields the same observable atomicity:
-a failed witness production leaves no CAW and no transition row.
+1. `BEGIN`.
+2. **Idempotency probe.** Look up `concept_assignment_witnesses` by
+   `caw_id`. If present, `COMMIT` (no-op) and return mode `existing`.
+3. **Witness build (in-memory only)**, when
+   `witness_intent = "produce_depth0_witness"`. Call `witnessify_impl`
+   to obtain a `WitnessObject` value. If it returns a validation
+   failure, raise and roll back; no CAW row is written.
+4. **CAW insert** into `concept_assignment_witnesses`
+   (`produced_witness_id = NULL` at this point).
+5. **Transition insert** into `rae_state_transitions`
+   (`from_state = NULL`, `to_state = current_state`), preceded by an
+   in-process `evaluateTransition` check from `stateMachine.ts`.
+6. **Witness row insert** through the approved witnessify insert path
+   when intent was `produce_depth0_witness`. The
+   `enforce_witness_ancestry_integrity` trigger fires inside this same
+   transaction.
+7. **CAW `produced_witness_id` backfill** with the inserted witness id,
+   inside the same transaction. The
+   `enforce_caw_ancestry_integrity` trigger fires here.
+8. `COMMIT`.
+
+If any step from 3 onward fails, the transaction rolls back: no CAW row,
+no transition row, no witness row, no orphan `produced_witness_id`. No
+partial admission can ever be observed.
 
 ---
 
@@ -149,20 +177,23 @@ The storage layer reads `witness_intent` from the orchestrator's
   - `produced_witness_id` remains `NULL`.
   - No call to `witnessify_impl`.
 - `witness_intent = "produce_depth0_witness"`:
-  - After the CAW row is in place inside the transaction, the layer
-    calls the existing P1a `witnessify_impl` mechanism through its
-    approved entry point. The storage layer passes through:
+  - Inside the same transaction, the layer calls `witnessify_impl`
+    (a pure in-memory builder) to construct the `WitnessObject`,
+    passing through:
     - `user_id`, `source_table`, `source_row_id`,
     - `candidate_concept_id`, `ontology_version`,
     - `engine_version_id`, `registry_seed_version`,
     - `confidence_value`, `confidence_basis`, `limitations`,
     - and any ancestry inputs `witnessify_impl` already requires.
-  - The witness is produced through the approved witnessify path. The
-    storage layer **never** inserts directly into `witness_objects` and
-    **never** constructs a witness payload itself.
+  - The resulting `WitnessObject` is then inserted into
+    `witness_objects` via the **approved witnessify insert path** —
+    the same call site `witnessify-observations` already uses. The
+    storage layer must not construct an `INSERT` against
+    `witness_objects` itself; it must call the shared insert helper so
+    that all P1a invariants and the ancestry trigger run identically.
   - On success, the storage layer backfills
-    `concept_assignment_witnesses.produced_witness_id` with the returned
-    witness id, in the same transaction as the CAW insert.
+    `concept_assignment_witnesses.produced_witness_id` with the
+    inserted witness id, inside the same transaction.
   - On failure, see §6.
 
 The storage layer must reject any input where `witness_intent` is
@@ -201,16 +232,12 @@ All listed failures must leave the database in a state consistent with
    - The winning transaction proceeds normally and returns `created`.
    - Net effect: exactly one CAW row, exactly one initial transition
      row, at most one witness produced.
-6. **Partial witnessify success then commit failure** — must not be
-   possible. If `witnessify_impl` cannot participate in the same DB
-   transaction, the storage layer must implement a compensating
-   sequence: produce the witness first against a staging marker, then
-   commit CAW + transition + `produced_witness_id` together; on commit
-   failure, the witness is invalidated through the existing
-   `witnessify_impl` revoke/cleanup path. The visible invariant is the
-   same: no CAW without its transition, no `produced_witness_id`
-   without a live witness, no live RAE-produced depth-0 witness without
-   a CAW.
+6. **Partial witnessify success then commit failure** — not possible by
+   construction. `witnessify_impl` is a pure in-memory builder and the
+   `witness_objects` insert runs inside the same Postgres transaction
+   as the CAW and transition inserts. Any failure rolls back all
+   writes together. No staging marker, no revoke path, no compensating
+   sequence is permitted.
 
 The layer must not introduce any new "fifth state" to represent partial
 failure. Failed admissions simply have no row.
@@ -245,10 +272,22 @@ When `policy_at_decision = "back_annotation"`:
 
 - The CAW references an **existing** witness via `produced_witness_id`,
   supplied by the caller (typically a calibration/back-fill job).
-- The storage layer must verify that the referenced
-  `produced_witness_id` exists and that its `(user_id, source_table,
-  source_row_id, candidate_concept_id)` tuple is consistent with the
-  CAW being inserted. If not, the insert is rejected (no row written).
+- **Hard verification (rejects on mismatch):** the referenced witness
+  must exist and its `(user_id, source_table, source_row_id)` tuple
+  must equal the CAW's. Any of these failing causes the insert to be
+  rejected with no row written. This is the minimal identity surface
+  guaranteed by the existing P1a witness schema.
+- **Soft verification (does not reject):** if the referenced witness
+  carries a non-null `ontology_concept_id` and it does not equal the
+  CAW's `candidate_concept_id`, the storage layer:
+  - sets `founder_review_flag = true` on the CAW (already required for
+    back-annotation, restated for clarity);
+  - appends an entry to `limitations` of the form
+    `"back_annotation_concept_drift: witness ontology_concept_id <X> != caw candidate_concept_id <Y>"`;
+  - proceeds with the insert.
+  Rationale: legacy P1a depth-0 witnesses predate uniform RAE concept
+  identity. Hard rejection here would make back-annotation unusable
+  against the very rows it exists to recontextualize.
 - The storage layer **never** triggers `witnessify_impl` under
   back-annotation. `witness_intent` for back-annotation is always
   `"none"` from the orchestrator's perspective; the witness already
@@ -298,13 +337,33 @@ by this layer.
    storage layer does not call `witnessify_impl`, the referenced
    witness row is unchanged (byte-for-byte equal pre and post),
    `founder_review_flag = true` on the new CAW, transition row present.
-8. **No direct raw reasoning table writes** — Static or runtime check
-   that the storage layer's code path performs no writes to reasoning
-   surfaces (clusters, derived_patterns, patient_narratives,
-   observation_packets beyond what `witnessify_impl` itself owns, etc.).
-   The storage layer's allowed write set is exactly:
-   `concept_assignment_witnesses`, `rae_state_transitions`, and
-   whatever `witnessify_impl` writes through its approved path.
+8. **Closed write set enforced** — Static source scan over the storage
+   module asserting no `INSERT`, `UPDATE`, `DELETE`, or `UPSERT` (and
+   no `from('<table>').insert/update/delete/upsert` Supabase-client
+   calls, and no raw SQL writes) targeting any table outside the
+   closed allowed set:
+
+   **Allowed (and only these):**
+   - `concept_assignment_witnesses` — insert + `produced_witness_id`
+     update only.
+   - `rae_state_transitions` — insert only.
+   - `witness_objects` — insert only, and only via the approved
+     witnessify insert path (not a hand-written insert).
+
+   **Explicitly forbidden** (the test enumerates these so future drift
+   is caught):
+   - RAE config/audit: `rae_engine_versions`, `rae_signal_config`,
+     `rae_engine_concept_overrides`.
+   - Review/proposal surfaces: `observation_review_queue`,
+     `ontology_concept_proposals`, `review_queue_audit_log`.
+   - Reasoning surfaces: `clusters`, `cluster_evidence`,
+     `derived_patterns`, `patient_narratives`, `action_plans`,
+     `terrain_renders`, `observation_packets`,
+     `patient_lab_observations`, `patient_lab_uploads`.
+   - Identity / auth surfaces: `profiles`, `user_roles`, anything in
+     `auth.*`, `storage.*`, `realtime.*`, `vault.*`.
+
+   Any write to a table not in the allowed set fails this test.
 
 Existing suites that must continue to pass unchanged: all RAE core
 tests (`types`, `stateMachine`, `scoring`, `signals/*`, `orchestrator`,
@@ -327,10 +386,47 @@ This design intentionally does not cover:
   change, work stops and CodexOS is asked to approve a separate
   migration prompt before proceeding.
 - Subsequent state transitions (`needs_review → human_confirmed`,
-  `needs_review → rejected`, etc.) — handled by a later review-action
-  entry point.
+  `needs_review → rejected`, etc.) — handled by a separate
+  review-action entry point in the **same** storage module (see §11);
+  this design prompt covers only the initial-admission entry point's
+  contract.
 - Trajectory/depth-N witness composition.
 - Any product/FHIR/external API framing.
+
+---
+
+## 11. Module shape: shared module, two entry points
+
+The storage layer is one module (working name
+`supabase/functions/_shared/rae/storage/admit.ts`) exposing two
+functions, both running under the service role:
+
+- `persistInitialAdmission(decision: AdmissionDecision): Promise<{
+    mode: "created" | "existing";
+    caw: ConceptAssignmentWitness;
+  }>` — the contract designed in §§1–10 above.
+- `applyReviewAction(request: { caw_id: string;
+    transition: StateTransitionRequest;
+    witness_intent: WitnessIntent;
+  }): Promise<{ caw: ConceptAssignmentWitness }>` — declared here for
+  shape only; full contract is the subject of a later prompt.
+
+Both entry points share private helpers:
+- transaction setup / teardown,
+- `evaluateTransition` invocation and transition-row insert,
+- the approved witnessify insert path,
+- `produced_witness_id` backfill,
+- the closed-write-set guard from §9.8 (one static scan covers both).
+
+Shape constraints (binding on this design, not yet implementation):
+- `applyReviewAction` requires the CAW row to already exist; it must
+  reject if the row is missing rather than create one.
+- `persistInitialAdmission` requires the CAW row to **not** exist for
+  the deterministic `caw_id`; if it does, it returns `existing` per §3
+  rather than mutating the row.
+- `actor_kind = "human"` is allowed only in `applyReviewAction`;
+  `persistInitialAdmission` always carries `actor_kind = "engine"`.
+- Neither entry point ever introduces a fifth admission state.
 
 ---
 
