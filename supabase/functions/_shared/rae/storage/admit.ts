@@ -252,7 +252,7 @@ export async function persistInitialAdmission(
     // Step 1: idempotency probe.
     const probe = await gw.findCawByCawId(draft.caw_id);
     if (probe.found) {
-      return { mode: "created" as const, caw: probe.caw }._asExisting();
+      return { mode: "existing" as const, caw: probe.caw };
     }
 
     // Step 2: validate state transition BEFORE any insert.
@@ -448,23 +448,6 @@ function validateInput(input: PersistInitialAdmissionInput): void {
     );
   }
 }
-
-// Tiny helper to convert mode at the type level. Kept inline to avoid
-// branching the return shape twice. (Also documents intent.)
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  interface Object {
-    _asExisting?: () => PersistInitialAdmissionResult;
-  }
-}
-Object.defineProperty(Object.prototype, "_asExisting", {
-  value: function (this: PersistInitialAdmissionResult) {
-    return { mode: "existing" as const, caw: this.caw };
-  },
-  enumerable: false,
-  configurable: true,
-  writable: true,
-});
 
 // ---------------------------------------------------------------------------
 // Module-level affirmation for the §9.8 closed-write-set static scan.
