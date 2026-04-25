@@ -385,9 +385,9 @@ export function validateReconcilerOutput(
           evidence_id: e.evidence_id,
           layer_type: layer,
           direction,
-          time_point: e.time_point,
+          time_point: (e.time_point ?? null) as string | null,
           text_for_matching: e.value_summary,
-        };
+        } as ClusterEvidenceInput;
       })
       .filter((e): e is ClusterEvidenceInput => e !== null);
 
