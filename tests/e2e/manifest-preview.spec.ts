@@ -31,7 +31,7 @@ test.describe("/manifest-preview", () => {
       page.getByRole("heading", { name: /^sections$/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /jump to patient/i }),
+      page.getByRole("button", { name: /^Jump to Patient \(/ }),
     ).toBeVisible();
 
     // Diff panel toggles open
