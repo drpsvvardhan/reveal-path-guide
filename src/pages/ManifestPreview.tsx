@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Upload, FileJson, AlertCircle, CheckCircle2,
-  RotateCcw, Sparkles, Download,
+  RotateCcw, Sparkles, Download, FileDown,
 } from "lucide-react";
 import {
   parseManifestJson,
@@ -91,6 +91,21 @@ export default function ManifestPreviewPage() {
     validate(raw);
   }, [validate]);
 
+  const onDownloadSample = useCallback(() => {
+    const blob = new Blob(
+      [JSON.stringify(sampleManifestPreview, null, 2)],
+      { type: "application/json" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sample-manifest.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
+
   const onExport = useCallback(() => {
     if (state.kind !== "success") return;
     const blob = new Blob([JSON.stringify(state.data, null, 2)], {
@@ -111,6 +126,48 @@ export default function ManifestPreviewPage() {
     const el = document.getElementById(sectionAnchorId(key));
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // ---------------------------------------------------------------------------
+  // Section completion stats (success state only).
+  // ---------------------------------------------------------------------------
+  const sectionStats = useMemo(() => {
+    if (state.kind !== "success") return null;
+    const data = state.data as Record<string, unknown>;
+    let present = 0;
+    const flags: Record<string, boolean> = {};
+    for (const { key } of sectionMeta) {
+      const ok = key === "patient" ? true : data[key] != null;
+      flags[key] = ok;
+      if (ok) present++;
+    }
+    const total = sectionMeta.length;
+    return {
+      flags,
+      present,
+      total,
+      pct: Math.round((present / total) * 100),
+    };
+  }, [state]);
+
+  // ---------------------------------------------------------------------------
+  // Group validation issues by their top-level field (e.g. "patient",
+  // "careMap", "(root)") so reviewers can scan section-by-section.
+  // ---------------------------------------------------------------------------
+  const groupedIssues = useMemo(() => {
+    if (state.kind !== "error" || !state.issues) return null;
+    const groups = new Map<string, FriendlyIssue[]>();
+    for (const iss of state.issues) {
+      const top = iss.path === "(root)" ? "(root)" : iss.path.split(".")[0];
+      const arr = groups.get(top) ?? [];
+      arr.push(iss);
+      groups.set(top, arr);
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "(root)") return -1;
+      if (b === "(root)") return 1;
+      return a.localeCompare(b);
+    });
+  }, [state]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -149,6 +206,10 @@ export default function ManifestPreviewPage() {
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                   Load sample manifest
                 </Button>
+                <Button size="sm" variant="ghost" onClick={onDownloadSample}>
+                  <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                  Download sample
+                </Button>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -183,9 +244,14 @@ export default function ManifestPreviewPage() {
                   <Download className="h-3.5 w-3.5 mr-1.5" />
                   Export JSON
                 </Button>
-                <Button size="sm" variant="ghost" onClick={onReset}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onReset}
+                  title="Reset input and preview to empty"
+                >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                  Clear
+                  Reset to empty
                 </Button>
               </div>
               <Textarea
@@ -211,14 +277,26 @@ export default function ManifestPreviewPage() {
                 {state.parseError && (
                   <p className="text-xs">{state.parseError}</p>
                 )}
-                {issuesByPath && issuesByPath.length > 0 && (
-                  <ul className="text-xs space-y-1 max-h-48 overflow-auto">
-                    {issuesByPath.map((iss, i) => (
-                      <li key={i}>
-                        <code className="font-mono">{iss.path}</code> — {iss.message}
-                      </li>
+                {groupedIssues && groupedIssues.length > 0 && (
+                  <div className="text-xs max-h-64 overflow-auto space-y-3 pt-1">
+                    {groupedIssues.map(([top, items]) => (
+                      <div key={top}>
+                        <p className="font-medium uppercase tracking-wide text-[10px] opacity-80">
+                          {top}{" "}
+                          <span className="opacity-70">
+                            ({items.length} issue{items.length === 1 ? "" : "s"})
+                          </span>
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {items.map((iss, i) => (
+                            <li key={i}>
+                              <code className="font-mono">{iss.path}</code> — {iss.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </AlertDescription>
             </Alert>
@@ -242,21 +320,48 @@ export default function ManifestPreviewPage() {
               {/* Sticky section nav (shown alongside the input column on lg+). */}
               <Card className="lg:sticky lg:top-4">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Sections
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Sections
+                    </CardTitle>
+                    {sectionStats && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {sectionStats.present}/{sectionStats.total} present · {sectionStats.pct}%
+                      </span>
+                    )}
+                  </div>
+                  {sectionStats && (
+                    <>
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full bg-emerald-500 transition-all"
+                          style={{ width: `${sectionStats.pct}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Present
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                          Missing
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <nav>
                     <ul className="space-y-1">
                       {sectionMeta.map(({ key, label }) => {
-                        const present = (state.data as Record<string, unknown>)[key] != null
-                          || key === "patient";
+                        const present = sectionStats?.flags[key] ?? false;
                         return (
                           <li key={key}>
                             <button
                               type="button"
                               onClick={() => scrollToSection(key)}
+                              aria-label={`Jump to ${label} (${present ? "present" : "missing"})`}
                               className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 transition-colors"
                             >
                               <span className="truncate">{label}</span>
