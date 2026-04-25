@@ -42,22 +42,26 @@ CodexOS approval — would create.
    — creates `public.rae_state_transitions` (append-only audit log of
    every state change with actor, timestamp, prior state, new state,
    reason).
-3. `supabase/migrations/<TS>_rae_signal_registry_extension.sql`
-   — extends `public.witness_signal_registry` (or adds a sibling table
-   `public.rae_signal_config`) with per-concept band parameters,
-   synonyms, plausibility bands, panel associations, dynamics ceilings,
-   and signal weights. Choice between extension and sibling table is a
-   design question (§14, OQ-3).
+3. `supabase/migrations/<TS>_rae_signal_config.sql`
+   — creates `public.rae_signal_config`, a **sibling** table to
+   `public.witness_signal_registry`. Holds RAE-specific per-concept
+   band parameters: synonyms, unit conversions, plausibility bands,
+   known assay methods, reference-range catalogs, panel associations,
+   longitudinal dynamics ceilings, and per-signal weights.
+   `witness_signal_registry` is **not modified**. Rationale: keeps the
+   P1a witness registry stable and preserves RAE extractability
+   (spec §10.2). Resolves OQ-3.
 4. `supabase/migrations/<TS>_rae_engine_versions.sql`
    — creates `public.rae_engine_versions` (engine version metadata:
    id, semver, registry_seed_version, ontology_version, threshold
    parameters, calibration_mode flag, activated_at).
-5. `supabase/migrations/<TS>_rae_back_annotation.sql` (deferred until
-   §11.2 of the spec is exercised) — adds nullable
-   `back_annotated_witness_id` linkage from
-   `concept_assignment_witnesses` into the existing 92 P1a
-   `witness_objects` rows so grandfathered witnesses can carry
-   retrospective admission records without re-admission.
+5. *No separate back-annotation migration.* Per OQ-6 resolution,
+   back-annotation is represented entirely via existing CAW columns:
+   `policy_at_decision = 'back_annotation'`, the `produced_witness_id`
+   fk pointing at the pre-existing witness, a `limitations` entry
+   naming the grandfather status, and (where divergent) the
+   `founder_review_flag` boolean (§1.1). No new state, no new linkage
+   column, no schema change to `witness_objects`.
 
 ### 0.2 Edge functions (proposed; not authored)
 
