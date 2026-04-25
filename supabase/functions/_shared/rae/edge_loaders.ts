@@ -10,6 +10,15 @@
 //   - rae_engine_versions             (SELECT by engine_version_id)
 //   - rae_signal_config               (SELECT by engine_version_id, optional candidate_concept_id)
 //   - rae_engine_concept_overrides    (SELECT by engine_version_id, candidate_concept_id)
+//   - witness_signal_registry         (SELECT by source_window, signal, registry_seed_version)
+//                                       — RAE is a *decision layer* over existing
+//                                         biological witnesses; the four witness
+//                                         ontology fields (source_window,
+//                                         domain_of_access, epistemic_role,
+//                                         reliability_class) for the depth-0
+//                                         RAE admission witness MUST come from
+//                                         the same P1a registry that
+//                                         witnessify-observations consumes.
 //
 // Hard prohibitions enforced by static-scan test:
 //   - No writes (.insert/.update/.delete/.upsert)
@@ -64,7 +73,8 @@ export interface ReadOnlyDbClient {
     table:
       | "rae_engine_versions"
       | "rae_signal_config"
-      | "rae_engine_concept_overrides",
+      | "rae_engine_concept_overrides"
+      | "witness_signal_registry",
   ): DbTable;
 }
 
@@ -94,6 +104,16 @@ interface RaeEngineConceptOverrideRow {
   candidate_concept_id: string;
   lifted: boolean;
   reason: string | null;
+}
+
+interface WitnessSignalRegistryRow {
+  source_window: string;
+  signal: string;
+  domain_of_access: string;
+  epistemic_role: string;
+  reliability_class: string;
+  compression_depth: number;
+  registry_seed_version: string;
 }
 
 // The wildcard row used in rae_signal_config to mean "applies to every
@@ -379,6 +399,84 @@ async function loadConceptOverride(
     engine_version_id: data.engine_version_id,
     candidate_concept_id: data.candidate_concept_id,
     reason: data.reason ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Witness-signal-registry loader.
+//
+// RAE is a decision layer over existing biological witnesses; it does NOT
+// own a witness ontology. The four witness ontology fields
+// (source_window, domain_of_access, epistemic_role, reliability_class) for
+// the depth-0 RAE admission witness must come from the same
+// witness_signal_registry P1a witnessify-observations uses.
+//
+// Lookup key is (source_window, signal, registry_seed_version). The caller
+// derives source_window + signal from the source observation (e.g.
+// patient_lab_observations + ontology concept).
+//
+// On miss: RegistryGapError with the same shape used everywhere else in
+// this module. Never falls back to lab defaults; never invents enum values.
+// ---------------------------------------------------------------------------
+
+export interface RegistryWitnessFields {
+  source_window: string;
+  signal: string;
+  domain_of_access: string;
+  epistemic_role: string;
+  reliability_class: string;
+  compression_depth: number;
+  registry_seed_version: string;
+}
+
+export interface LoadRegistryWitnessFieldsInput {
+  source_window: string;
+  signal: string;
+  registry_seed_version: string;
+}
+
+export async function loadRegistryWitnessFields(
+  client: ReadOnlyDbClient,
+  input: LoadRegistryWitnessFieldsInput,
+): Promise<RegistryWitnessFields> {
+  if (!input || !input.source_window || !input.signal || !input.registry_seed_version) {
+    throw new RegistryGapError(
+      "loadRegistryWitnessFields: source_window, signal, and registry_seed_version are required",
+    );
+  }
+
+  const { data, error } = await client
+    .from("witness_signal_registry")
+    .select(
+      "source_window, signal, domain_of_access, epistemic_role, reliability_class, compression_depth, registry_seed_version",
+    )
+    .eq("source_window", input.source_window)
+    .eq("signal", input.signal)
+    .eq("registry_seed_version", input.registry_seed_version)
+    .maybeSingle() as DbResponse<WitnessSignalRegistryRow>;
+
+  if (error) {
+    throw new RegistryGapError(
+      `witness_signal_registry read failed for ${input.source_window}:${input.signal} ` +
+        `(seed=${input.registry_seed_version}): ${error.message}`,
+    );
+  }
+  if (!data) {
+    throw new RegistryGapError(
+      `witness_signal_registry has no row for source_window=${input.source_window}, ` +
+        `signal=${input.signal}, registry_seed_version=${input.registry_seed_version}. ` +
+        `RAE will not invent ontology fields; seed the registry row before admitting this concept.`,
+    );
+  }
+
+  return {
+    source_window: data.source_window,
+    signal: data.signal,
+    domain_of_access: data.domain_of_access,
+    epistemic_role: data.epistemic_role,
+    reliability_class: data.reliability_class,
+    compression_depth: data.compression_depth,
+    registry_seed_version: data.registry_seed_version,
   };
 }
 
