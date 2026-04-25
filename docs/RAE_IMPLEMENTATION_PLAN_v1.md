@@ -580,22 +580,37 @@ Per spec §11.2, the 92 are grandfathered.
    `witness_objects` rows remain valid.
 2. **Back-annotation, when feasible.** During VV-001 calibration, the
    `rae-backfill-923` function (or a sibling `rae-back-annotate-92`
-   function) runs RAE over each of the 92 source observations,
-   producing a CAW with `produced_witness_id` pointing at the
-   *existing* witness. The CAW's state reflects what RAE would have
-   admitted on:
-   - `auto_admitted` if RAE would have admitted under default policy,
-   - `human_confirmed` if RAE would have routed to review and the
-     founder confirms the existing witness, or
-   - a new state value `back_annotated_divergent` (proposed; OQ-6) if
-     RAE would not have admitted — flagged for founder review without
-     auto-rejection.
+   function) runs RAE over each of the 92 source observations and
+   produces a CAW with:
+   - `policy_at_decision = 'back_annotation'`,
+   - `produced_witness_id` pointing at the *existing* witness
+     (constraint `caw_back_annotation_requires_witness`),
+   - `current_state` selected from the locked four states
+     (constraint `caw_back_annotation_state_valid`):
+     - `auto_admitted` if RAE would have admitted under default
+       policy and the engine disposition matches the grandfathered
+       witness's concept,
+     - `human_confirmed` if RAE would have routed to review and the
+       founder confirms the existing witness,
+     - `rejected` if the founder, on review, agrees the original
+       witness should not stand under the new gate (does **not**
+       remove the existing witness; see step 4),
+   - `founder_review_flag = true` whenever the engine's disposition
+     diverges from the existing witness's concept (the OQ-6
+     resolution: divergence is a flag, not a fifth state),
+   - a `limitations` entry: `"back-annotated to pre-RAE witness;
+     admission did not gate the original write"`.
 3. **No state transition is performed on the existing 92 witnesses
    themselves.** They remain unchanged. Back-annotation is
-   documentation, not re-admission, mirroring spec §11.2.
-4. **A CAW back-annotated to a pre-RAE witness carries a limitation
-   entry**: "back-annotated to pre-RAE witness; admission did not
-   gate the original write".
+   documentation, not re-admission, mirroring spec §11.2. Even when
+   the back-annotation CAW is `rejected`, the underlying
+   `witness_objects` row is not deleted or marked; the CAW records
+   the disagreement and surfaces it for founder action.
+4. **No fifth admission state is introduced.** The four states from
+   spec §6.1 (`auto_admitted`, `needs_review`, `rejected`,
+   `human_confirmed`) are exhaustive and locked. Divergent
+   back-annotations are carried entirely by `founder_review_flag`
+   plus `policy_at_decision` plus `limitations`.
 
 ---
 
