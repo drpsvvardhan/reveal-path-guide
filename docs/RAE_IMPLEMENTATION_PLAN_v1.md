@@ -170,6 +170,9 @@ transitions table is the audit chain.
 - `caw_human_states_require_human_actor` — when
   `current_state = 'human_confirmed'`, `current_state_actor_kind = 'human'`.
 - `caw_signal_results_seven` — `jsonb_array_length(signal_results) = 7`.
+- `caw_policy_at_decision_valid` — `policy_at_decision IN ('default','calibration_all_routes_to_review','back_annotation')`.
+- `caw_back_annotation_requires_witness` — when `policy_at_decision = 'back_annotation'`, `produced_witness_id IS NOT NULL` (back-annotation always points at a pre-existing witness; OQ-6).
+- `caw_back_annotation_state_valid` — when `policy_at_decision = 'back_annotation'`, `current_state IN ('auto_admitted','human_confirmed','rejected')` (no admission state outside the locked four; divergent dispositions are carried by `founder_review_flag`, not by a new state).
 
 **Trigger (proposed):**
 
