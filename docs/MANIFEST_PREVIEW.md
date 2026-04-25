@@ -76,6 +76,11 @@ patientJourney?: {
 If none of `timeline`, `currentPhase`, or `nextStep` are provided, the
 section falls back to the standard `EmptyHint` card.
 
+**Timeline ordering is caller-owned.** The previewer renders events in
+the exact order they appear in the `timeline` array — it does not sort
+by `dateLabel`, `status`, or any other field. If you want chronological
+order, sort the array before handing the manifest to the previewer.
+
 On validation failure, errors are grouped by their top-level field
 (`patient`, `careMap`, etc.) so you can scan section-by-section. A
 required-field checklist is shown in **both** success and error states,
@@ -157,7 +162,12 @@ changes to `/manifest-preview`, walk through this checklist manually:
     top, and event dots are color-coded by status. Then delete
     `patientJourney.currentPhase` and `patientJourney.nextStep`
     from the JSON, click **Validate & preview**, and confirm the
-    "Phase not provided" fallback row appears in their place.
+    "Current journey phase not provided" fallback row appears in
+    their place.
+12. In the JSON, swap two adjacent entries inside
+    `patientJourney.timeline` and click **Validate & preview**.
+    Verify the rendered timeline reflects the new order exactly —
+    the previewer must not reorder events.
 
 ---
 
