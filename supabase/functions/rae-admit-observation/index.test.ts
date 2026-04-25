@@ -316,9 +316,10 @@ function mkPersistedCaw(over: {
   policy?: "default" | "calibration_all_routes_to_review" | "back_annotation";
 } = {}): ConceptAssignmentWitness {
   const state = over.state ?? "auto_admitted";
+  const wid = "produced_witness_id" in over ? over.produced_witness_id! : WITNESS_ID;
   return {
     ...mkDecision({ state, policy: over.policy }).caw,
-    produced_witness_id: over.produced_witness_id ?? WITNESS_ID,
+    produced_witness_id: wid,
     id: "row-id",
     current_state_entered_at: "2025-01-15T10:00:01Z",
     created_at: "2025-01-15T10:00:01Z",
