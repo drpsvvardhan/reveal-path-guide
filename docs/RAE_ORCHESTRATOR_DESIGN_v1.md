@@ -139,12 +139,14 @@ exactly this order. Any failure short-circuits per §9.
    `needs_review`, `rejected`. Engine never produces `human_confirmed`
    (state-machine constraint).
 9. **Build CAW draft** per §6.
-10. **Decide witness production** per §7. If admissible, the orchestrator
-    returns the draft witness payload alongside the CAW; if not,
-    `produced_witness_id` is `null` and no witness payload is returned.
-11. **Return `AdmissionDecision`** `{caw, produced_witness_id}` (the
-    actual witness row insertion, FK linking, and CAW persistence are
-    storage-layer concerns).
+10. **Decide `witness_intent`** per §7. The orchestrator returns a
+    discrete intent (`"produce_depth0_witness"` | `"none"`); it does
+    **not** build a witness payload. `produced_witness_id` on the CAW
+    draft is always `null` at the orchestrator boundary — the witness
+    layer (P1a witnessify) back-fills it after minting.
+11. **Return `AdmissionDecision`** `{caw, witness_intent}` (witness
+    construction, row insertion, FK linking, and CAW persistence are
+    downstream-layer concerns).
 
 The orchestrator does not call the state machine directly on this initial
 pass — the state machine governs **transitions** between persisted CAW
