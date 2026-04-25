@@ -485,6 +485,46 @@ export default function ManifestPreviewPage() {
               <CardTitle className="text-sm">Input</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Compact validation status — visible above the textarea so
+                  users see success/error immediately after Validate without
+                  needing to scroll past a long input. */}
+              {state.kind === "success" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 px-2.5 py-1.5 text-xs text-emerald-700"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Manifest is valid</span>
+                  {sectionStats && (
+                    <span className="ml-auto text-[11px] text-muted-foreground">
+                      {sectionStats.present}/{sectionStats.total} sections
+                    </span>
+                  )}
+                </div>
+              )}
+              {state.kind === "error" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive"
+                >
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>
+                    Validation failed
+                    {state.issues?.length
+                      ? ` · ${state.issues.length} issue${state.issues.length === 1 ? "" : "s"}`
+                      : ""}
+                  </span>
+                </div>
+              )}
+              {state.kind === "loading" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Validating…</span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={onLoadSample}>
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
