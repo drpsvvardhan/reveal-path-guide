@@ -49,6 +49,7 @@ export default function ManifestPreviewPage() {
   const [diffOpen, setDiffOpen] = useState(false);
   const [restored, setRestored] = useState(false);
   const [diffQuery, setDiffQuery] = useState("");
+  const [warningFilter, setWarningFilter] = useState<"all" | "warning" | "info">("all");
 
   const validate = useCallback((raw: string) => {
     setState({ kind: "loading" });
@@ -280,6 +281,21 @@ export default function ManifestPreviewPage() {
     if (state.kind !== "success") return null;
     return lintManifest(state.data);
   }, [state]);
+
+  const warningCounts = useMemo(() => {
+    if (!warnings) return null;
+    return {
+      total: warnings.length,
+      warning: warnings.filter((w) => w.severity === "warning").length,
+      info: warnings.filter((w) => w.severity === "info").length,
+    };
+  }, [warnings]);
+
+  const filteredWarnings = useMemo(() => {
+    if (!warnings) return null;
+    if (warningFilter === "all") return warnings;
+    return warnings.filter((w) => w.severity === warningFilter);
+  }, [warnings, warningFilter]);
 
   // Group diff entries by top-level field, capped at DIFF_CAP rows total
   // so very large manifests don't tank the panel.
@@ -643,23 +659,67 @@ export default function ManifestPreviewPage() {
                 </AlertDescription>
               </Alert>
 
-              {warnings && warnings.length > 0 && (
+              {warnings && warnings.length > 0 && warningCounts && filteredWarnings && (
                 <Alert className="border-amber-500/40 bg-amber-500/5">
                   <Info className="h-4 w-4 text-amber-600" />
                   <AlertTitle>
-                    {warnings.length} warning{warnings.length === 1 ? "" : "s"} (non-blocking)
+                    {warnings.length} lint item{warnings.length === 1 ? "" : "s"} (non-blocking)
                   </AlertTitle>
                   <AlertDescription className="text-xs mt-1">
                     <p className="mb-2 text-muted-foreground">
                       Guidance only — the manifest is valid and will render.
                     </p>
-                    <ul className="space-y-1 max-h-48 overflow-auto">
-                      {warnings.map((w, i) => (
-                        <li key={i}>
-                          <code className="font-mono">{w.path}</code> — {w.message}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      {(
+                        [
+                          { key: "all" as const, label: "All", count: warningCounts.total },
+                          { key: "warning" as const, label: "Warnings", count: warningCounts.warning },
+                          { key: "info" as const, label: "Info", count: warningCounts.info },
+                        ]
+                      ).map((chip) => {
+                        const active = warningFilter === chip.key;
+                        return (
+                          <button
+                            key={chip.key}
+                            type="button"
+                            onClick={() => setWarningFilter(chip.key)}
+                            className={
+                              "rounded-full px-2.5 py-0.5 text-[11px] border transition-colors " +
+                              (active
+                                ? "bg-foreground text-background border-foreground"
+                                : "bg-background text-muted-foreground border-border hover:bg-muted")
+                            }
+                          >
+                            {chip.label}
+                            <span className="ml-1 opacity-70">({chip.count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {filteredWarnings.length === 0 ? (
+                      <p className="text-muted-foreground italic">
+                        No items match this filter.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1 max-h-48 overflow-auto">
+                        {filteredWarnings.map((w, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span
+                              className={
+                                "mt-0.5 inline-block h-1.5 w-1.5 rounded-full shrink-0 " +
+                                (w.severity === "warning"
+                                  ? "bg-amber-500"
+                                  : "bg-sky-500")
+                              }
+                              aria-label={w.severity}
+                            />
+                            <span>
+                              <code className="font-mono">{w.path}</code> — {w.message}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
