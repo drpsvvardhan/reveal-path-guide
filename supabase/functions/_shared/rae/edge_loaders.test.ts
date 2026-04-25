@@ -504,6 +504,9 @@ Deno.test("edge_loaders.ts — closed read set + no writes (static scan)", async
     "rae_engine_versions",
     "rae_signal_config",
     "rae_engine_concept_overrides",
+    // D-9: witness ontology fields are sourced from the same P1a registry
+    // used by witnessification. RAE never invents them; it reads them.
+    "witness_signal_registry",
   ]);
   const fromCalls = [...src.matchAll(/\.from\s*\(\s*["']([^"']+)["']\s*\)/g)];
   assert(fromCalls.length > 0, "edge_loaders.ts must call .from(...) at least once");
