@@ -33,7 +33,7 @@
  *     --ontology ./ontology.json \
  *     --cie-seed ./src/lib/cieSeedData.ts \
  *     --inbody-map ./src/lib/inbodyToTerrainMap.ts \
- *     --output ./supabase/migrations/20260420000100_p1a_witness_registry_seed.sql
+ *     --output ./supabase/migrations/20260420134700_p1a_witness_registry_seed.sql
  *
  *   # 3. Review the emitted SQL. Commit it. That SQL is now the
  *   #    constitutional artifact; this script regenerates it identically
