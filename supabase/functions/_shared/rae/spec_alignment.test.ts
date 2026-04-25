@@ -161,7 +161,18 @@ Deno.test("spec-alignment: RAE shared dir contains only the contracted files", a
     "orchestrator.test.ts",
     "spec_alignment.test.ts",
   ]);
+  const allowedDirs = new Set([
+    "signals",  // seven signal evaluators (see signals/*.ts)
+    "storage",  // storage/persistence layer (admit.ts, admit.test.ts)
+  ]);
   for await (const entry of Deno.readDir(RAE_DIR)) {
+    if (entry.isDirectory) {
+      assert(
+        allowedDirs.has(entry.name),
+        `unexpected directory in supabase/functions/_shared/rae/: ${entry.name}`,
+      );
+      continue;
+    }
     if (!entry.isFile) continue;
     assert(
       allowed.has(entry.name),
