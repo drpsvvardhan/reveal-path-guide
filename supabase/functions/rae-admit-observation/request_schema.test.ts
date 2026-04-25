@@ -152,8 +152,38 @@ Deno.test("request_schema: rejects non-UUID source_row_id and user_id", () => {
   }
 });
 
-Deno.test("request_schema: rejects non-UUID candidate_concept.concept_id", () => {
-  const parsed = CandidateConceptSchema.safeParse(mkConcept({ concept_id: "x" }));
+// ---------------------------------------------------------------------------
+// D-10: concept_id is an ontology identity string, not a row UUID.
+// ---------------------------------------------------------------------------
+
+Deno.test("request_schema: candidate_concept.concept_id accepts \"HbA1c\"", () => {
+  const parsed = CandidateConceptSchema.safeParse(mkConcept({ concept_id: "HbA1c" }));
+  assert(parsed.success, JSON.stringify(parsed));
+});
+
+Deno.test("request_schema: candidate_concept.concept_id accepts \"concept_hba1c\"", () => {
+  const parsed = CandidateConceptSchema.safeParse(
+    mkConcept({ concept_id: "concept_hba1c" }),
+  );
+  assert(parsed.success, JSON.stringify(parsed));
+});
+
+Deno.test("request_schema: candidate_concept.concept_id rejects \"\"", () => {
+  const parsed = CandidateConceptSchema.safeParse(mkConcept({ concept_id: "" }));
+  assert(!parsed.success);
+});
+
+Deno.test("request_schema: sibling concept_id accepts \"LDL_C\"", () => {
+  const parsed = RawObservationClaimSchema.safeParse(
+    mkClaim({ concept_id: "LDL_C" }),
+  );
+  assert(parsed.success, JSON.stringify(parsed));
+});
+
+Deno.test("request_schema: sibling concept_id rejects \"\"", () => {
+  const parsed = RawObservationClaimSchema.safeParse(
+    mkClaim({ concept_id: "" }),
+  );
   assert(!parsed.success);
 });
 
@@ -262,12 +292,6 @@ Deno.test("request_schema: omitting concept_id is still valid", () => {
   );
 });
 
-Deno.test("request_schema: rejects non-uuid concept_id on a claim", () => {
-  const parsed = RawObservationClaimSchema.safeParse(
-    mkClaim({ concept_id: "not-a-uuid" }),
-  );
-  assert(!parsed.success);
-});
 
 Deno.test("request_schema: accepts siblings carrying their own concept_id", () => {
   const parsed = RequestSchema.safeParse(mkRequest({
