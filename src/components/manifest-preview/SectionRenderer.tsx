@@ -64,7 +64,7 @@ function PatientSummary({ m }: { m: ManifestPreview }) {
               </CardContent>
             </Card>
           ) : (
-            <EmptyHint label="Today" />
+            <EmptyHint label="Today" field="todayBar" />
           )}
           {m.weeklySnapshot ? (
             <Card className="bg-muted/30 border-none">
@@ -89,7 +89,7 @@ function PatientSummary({ m }: { m: ManifestPreview }) {
               </CardContent>
             </Card>
           ) : (
-            <EmptyHint label="This week" />
+            <EmptyHint label="This week" field="weeklySnapshot" />
           )}
         </CardContent>
       )}
