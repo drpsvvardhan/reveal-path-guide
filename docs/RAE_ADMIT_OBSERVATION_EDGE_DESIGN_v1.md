@@ -90,29 +90,63 @@ circuits to the error mapper in §9.
    `SUPABASE_SERVICE_ROLE_KEY` client. All subsequent DB I/O uses this
    client only (see §6).
 7. **Load engine binding.**
-   `loadEngineBinding({ client: serviceClient, engine_version_id,
-   candidate_concept_id: req.candidate_concept.concept_id })`.
-   Missing rows → `RegistryGapError` → `422`.
+   **C1.** Call as `loadEngineBinding(serviceClient, { engine_version_id,
+   candidate_concept_id: req.candidate_concept.concept_id })`. Note the
+   two positional arguments: `(client, input)`. `LoadEngineBindingInput`
+   does **not** carry the client. Missing rows → `RegistryGapError` → `422`.
 8. **Bind candidate concept.**
    `bindCandidateConceptForAdmission({ candidate_concept,
    binding_lookup_concept_id: req.candidate_concept.concept_id,
-   binding })`. Mismatch → `400`.
+   binding })`. **C2.** May throw either
+   `CandidateConceptShapeError` (malformed/missing fields → `400
+   candidate_concept_shape`) or `CandidateConceptMismatchError`
+   (`concept_id` ≠ `binding_lookup_concept_id` → `400
+   candidate_concept_mismatch`). Both are surfaced per §9.
 9. **Adjudicate.** `adjudicate({ claim, candidate_concept,
    signal_config: bound.binding.signal_config,
    engine_version: bound.binding.engine_version,
    siblings, prior_observations })`. Engine errors → §9.
-10. **Build witness payload adapter.** `witness_adapters.ts` returns a
-    `WitnessPayloadAdapter` that produces a depth-0 `WitnessRowInput`
-    only when the decision admits (§8). Non-admit → adapter returns
-    `null`.
+10. **Build witness adapters (two distinct adapters — see §8).**
+    `witness_adapters.ts` exports:
+    - `makeRaeDepth0WitnessifyAdapter(engineVersionId): WitnessifyAdapter` —
+      `(decision: AdmissionDecisionV1) => WitnessRowInput`. Consulted by
+      `persistInitialAdmission` **only** when
+      `decision.witness_intent === "produce_depth0_witness"`. The
+      orchestrator owns the skip decision; this adapter is never asked
+      to return `null`.
+    - `makeRaeDepth0WitnessPayloadAdapter(): WitnessPayloadAdapter` —
+      `(row: WitnessRowInput) => WitnessPayloadShape`. Lifts the slim
+      row into the full payload the RPC requires (§8).
 11. **Persist via gateway.**
-    ```
-    const gateway = makeRpcAdmitGateway(serviceClient);
-    const result  = await persistInitialAdmission({
-      decision, gateway, witnessAdapter,
-      actor: { kind: 'engine', id: engine_version_id },
+    ```ts
+    // C4: makeRpcAdmitGateway requires the WitnessPayloadAdapter.
+    const runInTxn = makeRpcAdmitGateway(serviceClient, {
+      witnessPayloadAdapter,
     });
+
+    // C3 + C6: persistInitialAdmission takes (input, runInTransaction);
+    //          input has { decision, reason, witnessify_adapter?,
+    //          back_annotation_witness_id? }. There is no `gateway`,
+    //          no `actor`, and no `witnessAdapter` field.
+    const result = await persistInitialAdmission(
+      {
+        decision,
+        reason: `rae:initial_admission:${engine_version_id}`,
+        witnessify_adapter:
+          decision.witness_intent === "produce_depth0_witness"
+            ? witnessifyAdapter
+            : undefined,
+        back_annotation_witness_id:
+          decision.caw.policy_at_decision === "back_annotation"
+            ? req.back_annotation_witness_id
+            : undefined,
+      },
+      runInTxn,
+    );
     ```
+    Actor identity is **not** a call argument; it is carried on
+    `decision.caw.current_state_actor_kind` / `current_state_actor_id`
+    which the orchestrator already sets to `('engine', engine_version_id)`.
     `persistInitialAdmission` enforces back-annotation (§11) and
     idempotency (§10) internally.
 12. **Merge override limitations.** The response surfaces
