@@ -486,9 +486,13 @@ export function adjudicate(input: OrchestratorInput): AdmissionDecisionV1 {
   const coherence_result = coherenceBand(signal_results);
 
   // Step 9: build CAW draft.
+  // Cast widens narrowed literal type so TS allows the back_annotation
+  // comparison (the value is set by an upstream flow, not this initial
+  // pass; design §3 step 7 + §6 founder_review_flag rule).
+  const policy_widened: CalibrationPolicy = policy_at_decision;
   const founder_review_flag =
     current_state === "needs_review" ||
-    policy_at_decision === "back_annotation";
+    policy_widened === "back_annotation";
 
   const limitations = buildLimitations(
     signal_results,
