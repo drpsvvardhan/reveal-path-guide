@@ -540,6 +540,33 @@ function PatientJourneySection({ m }: { m: ManifestPreview }) {
             )}
           </div>
         )}
+        {events.length > 0 && !j.currentPhase && !j.nextStep && (
+          <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">
+              Phase not provided — add{" "}
+              <code className="font-mono text-[10px]">patientJourney.currentPhase</code>{" "}
+              or{" "}
+              <code className="font-mono text-[10px]">patientJourney.nextStep</code>{" "}
+              to highlight where the patient is now.
+            </p>
+          </div>
+        )}
+        {events.length > 0 && (
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Complete
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              Current
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+              Upcoming
+            </span>
+          </div>
+        )}
         {events.length === 0 ? (
           <p className="text-xs text-muted-foreground">No timeline events listed.</p>
         ) : (

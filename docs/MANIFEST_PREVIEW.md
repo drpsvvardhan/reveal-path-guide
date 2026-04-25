@@ -151,6 +151,13 @@ changes to `/manifest-preview`, walk through this checklist manually:
    input column hidden and only the rendered preview visible.
 10. Click **Download sample** and **Export JSON** (after re-loading
     the sample). Both produce valid downloadable JSON files.
+11. Scroll to the **Patient journey** section. Verify the status
+    legend (Complete / Current / Upcoming) renders above the
+    timeline, the current-phase and next-step cards appear at the
+    top, and event dots are color-coded by status. Then delete
+    `patientJourney.currentPhase` and `patientJourney.nextStep`
+    from the JSON, click **Validate & preview**, and confirm the
+    "Phase not provided" fallback row appears in their place.
 
 ---
 
