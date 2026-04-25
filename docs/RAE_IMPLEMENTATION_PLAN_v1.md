@@ -4,7 +4,14 @@
 `docs/P1A_STATE_SNAPSHOT.md` (substrate state). Governed by Patient Reveal
 THESIS v4.2.*
 
-**Status:** Proposal awaiting CodexOS review.
+**Status:** Approved by CodexOS for schema implementation. Three
+corrections from the CodexOS review have been applied: (1)
+back-annotation does not introduce a fifth admission state; (2) RAE
+signal config lives in a sibling table `rae_signal_config`, not as an
+extension of `witness_signal_registry`; (3) CAW naming is fixed —
+conceptual object `concept_assignment_witness` (singular), table
+`public.concept_assignment_witnesses` (plural). All eight open
+questions are resolved (§13).
 **Scope:** Translate the RAE Design v1 spec into a concrete implementation
 plan: storage objects, type contracts, migrations, tests, and the VV-001
 calibration flow for the 923 unwitnessed observations.
