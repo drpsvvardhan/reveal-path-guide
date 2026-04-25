@@ -155,8 +155,10 @@ Deno.test("spec-alignment: RAE shared dir contains only the contracted files", a
     "types.ts",
     "stateMachine.ts",
     "scoring.ts",
+    "orchestrator.ts",
     "stateMachine.test.ts",
     "scoring.test.ts",
+    "orchestrator.test.ts",
     "spec_alignment.test.ts",
   ]);
   for await (const entry of Deno.readDir(RAE_DIR)) {

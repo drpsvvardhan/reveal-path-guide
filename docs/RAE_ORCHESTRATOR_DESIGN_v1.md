@@ -19,10 +19,18 @@ config, claim, ontology, history, and policy meet.
 The orchestrator converts **one** `RawObservationClaim` plus **one**
 candidate ontology concept into **one** `ConceptAssignmentWitnessDraft`.
 
-It optionally produces a biological witness object **only** when the
-resulting `current_state` is `auto_admitted` (outside calibration mode) or
-`human_confirmed` (handled by a separate review flow, not the initial
-orchestrator pass).
+It does **not** construct a witness payload. Witness construction
+remains the responsibility of the existing P1a witnessify discipline.
+The orchestrator's only output beyond the CAW draft is a discrete
+**`witness_intent`** signal that tells the downstream layer whether a
+depth-0 witness should be minted from this admission:
+
+- `witness_intent = "produce_depth0_witness"` — when `current_state =
+  auto_admitted` AND `policy_at_decision = "default"`.
+- `witness_intent = "none"` — in every other case.
+
+The orchestrator never invents witness IDs, never builds witness shape,
+and never writes to `witness_objects`.
 
 Out of scope for the orchestrator itself:
 - Selecting which candidate concept to evaluate (caller's job, e.g. a
@@ -131,12 +139,14 @@ exactly this order. Any failure short-circuits per §9.
    `needs_review`, `rejected`. Engine never produces `human_confirmed`
    (state-machine constraint).
 9. **Build CAW draft** per §6.
-10. **Decide witness production** per §7. If admissible, the orchestrator
-    returns the draft witness payload alongside the CAW; if not,
-    `produced_witness_id` is `null` and no witness payload is returned.
-11. **Return `AdmissionDecision`** `{caw, produced_witness_id}` (the
-    actual witness row insertion, FK linking, and CAW persistence are
-    storage-layer concerns).
+10. **Decide `witness_intent`** per §7. The orchestrator returns a
+    discrete intent (`"produce_depth0_witness"` | `"none"`); it does
+    **not** build a witness payload. `produced_witness_id` on the CAW
+    draft is always `null` at the orchestrator boundary — the witness
+    layer (P1a witnessify) back-fills it after minting.
+11. **Return `AdmissionDecision`** `{caw, witness_intent}` (witness
+    construction, row insertion, FK linking, and CAW persistence are
+    downstream-layer concerns).
 
 The orchestrator does not call the state machine directly on this initial
 pass — the state machine governs **transitions** between persisted CAW
@@ -260,10 +270,14 @@ that performs this small derivation.
   per signal_id), `coherence_result === "fail"`, calibration mode active,
   and the back-annotation flag if applicable. No blank entries.
 - `policy_at_decision` — §3 step 7.
-- `founder_review_flag` — `true` iff `current_state === "needs_review"`
-  and the trigger was the longitudinal gate (CodexOS OQ-5 audit alert),
-  or `policy_at_decision === "back_annotation"`. Otherwise `false`.
-- `produced_witness_id` — §7.
+- `founder_review_flag` — `true` iff
+  `current_state === "needs_review"` OR
+  `policy_at_decision === "back_annotation"`. Otherwise `false`.
+  All `needs_review` CAWs require founder review, not just the subset
+  triggered by longitudinal gate failure.
+- `produced_witness_id` — always `null` at the orchestrator boundary;
+  back-filled by the witness layer when `witness_intent =
+  "produce_depth0_witness"`. See §7.
 
 `current_state_entered_at`, `created_at`, `updated_at` are storage-layer
 concerns and are not part of the orchestrator's draft.
@@ -272,28 +286,36 @@ concerns and are not part of the orchestrator's draft.
 
 ## 7. Witness Production Boundary
 
-Witness-production decision rules:
+The orchestrator emits a discrete `witness_intent` only — it never
+builds a witness payload, never invents a witness ID, and never writes
+to `witness_objects`. The downstream P1a witnessify layer interprets
+`witness_intent` and is solely responsible for witness construction
+and FK back-fill of `produced_witness_id`.
 
-- `current_state = auto_admitted` AND `policy = default` → **witness produced** (orchestrator emits a witness payload for the storage layer to insert into `witness_objects`).
-- `current_state = auto_admitted` AND `policy = calibration_all_routes_to_review` → **not reachable** — calibration forces `needs_review` (§3 step 7).
-- `current_state = auto_admitted` AND `policy = back_annotation` → **no witness on this pass** — back-annotation references an existing witness separately and never mints a new one in this orchestrator.
-- `current_state = needs_review` (any policy) → **no witness**.
-- `current_state = rejected` (any policy) → **no witness**.
-- `current_state = human_confirmed` → **not reachable** by initial orchestrator (engine cannot produce `human_confirmed`); witness production for human confirmation is the calibration review flow's responsibility.
+`witness_intent` decision rules:
 
-When witness is produced:
-- The witness payload is constructed by the orchestrator from the same
-  unit-normalized value, evidence, and limitations used in the CAW.
-- The witness is FK'd to the CAW via
-  `concept_assignment_witnesses.produced_witness_id` (hard FK already in
-  schema, OQ-2).
-- The witness's `signal_provenance` references the seven `SignalResult`
-  evidence blocks verbatim.
+- `current_state = auto_admitted` AND `policy = default` →
+  `witness_intent = "produce_depth0_witness"`.
+- `current_state = auto_admitted` AND `policy =
+  calibration_all_routes_to_review` → **not reachable** — calibration
+  forces `needs_review` (§3 step 7).
+- `current_state = auto_admitted` AND `policy = back_annotation` →
+  `witness_intent = "none"` (back-annotation references an existing
+  witness separately and never mints a fresh one through RAE).
+- `current_state = needs_review` (any policy) → `witness_intent =
+  "none"`.
+- `current_state = rejected` (any policy) → `witness_intent = "none"`.
+- `current_state = human_confirmed` → **not reachable** by initial
+  orchestrator (engine cannot produce `human_confirmed`); witness
+  production for human confirmation is handled by the calibration
+  review flow, which decides its own intent independently.
 
-`produced_witness_id` on the CAW is `null` until the storage layer
-inserts the witness and back-fills the FK in the same transaction. The
-orchestrator returns a draft witness object **alongside** the CAW so the
-storage layer can perform that two-row insert atomically.
+When the witness layer mints a depth-0 witness from a
+`produce_depth0_witness` intent, it FKs back to the CAW via
+`concept_assignment_witnesses.produced_witness_id` (hard FK already in
+schema, OQ-2). The witness's `signal_provenance` references the seven
+`SignalResult` evidence blocks verbatim from the CAW. None of that
+construction happens in the orchestrator.
 
 ---
 
@@ -355,17 +377,20 @@ after):
 1. **HbA1c happy path.** Canonical unit `%`, value 5.6, exact lexical
    match, HPLC method in known assays, ref range matches, diabetes panel
    complete, prior 5.5 within delta ceiling → `current_state =
-   auto_admitted`, `policy_at_decision = "default"`, witness produced,
+   auto_admitted`, `policy_at_decision = "default"`, `witness_intent =
+   "produce_depth0_witness"`, `produced_witness_id = null`,
    `founder_review_flag = false`.
 2. **HbA1c calibration mode routes to needs_review.** Same inputs as
    test 1 but `engine_version.calibration_mode = true` →
    `current_state = needs_review`, `policy_at_decision =
-   "calibration_all_routes_to_review"`, **no witness produced**, all
-   identity signals still recorded with their original bands.
+   "calibration_all_routes_to_review"`, `witness_intent = "none"`,
+   `founder_review_flag = true`, all identity signals still recorded
+   with their original bands.
 3. **Longitudinal fail forces needs_review.** HbA1c jumps 5.6 → 12.0
    exceeding `delta_ceiling = 1.5` → coherence gate trips,
    `coherence_result = "fail"`, `current_state = needs_review` regardless
-   of identity score, `founder_review_flag = true`, no witness.
+   of identity score, `founder_review_flag = true`, `witness_intent =
+   "none"`.
 4. **Missing config produces RegistryGapError, not rejected.**
    `signal_config` lookup returns null → orchestrator throws
    `RegistryGapError`; **no CAW row is constructed**, no `rejected`
