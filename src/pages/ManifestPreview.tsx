@@ -80,11 +80,6 @@ export default function ManifestPreviewPage() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const issuesByPath = useMemo(() => {
-    if (state.kind !== "error" || !state.issues) return null;
-    return state.issues;
-  }, [state]);
-
   const onLoadSample = useCallback(() => {
     const raw = JSON.stringify(sampleManifestPreview, null, 2);
     setText(raw);
