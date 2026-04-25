@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# rae-admit-observation smoke-test harness
+# rae-admit-observation smoke-test harness (hardened)
 # ----------------------------------------------------------------------------
 # Usage:
 #   SUPABASE_URL=https://<ref>.supabase.co \
@@ -8,8 +8,11 @@
 #   [ADMIN_JWT=<jwt>] \
 #   bash supabase/functions/rae-admit-observation/smoke.sh
 #
-# Exits non-zero if any required test fails. Optional admin test only runs
-# when ADMIN_JWT is set. Secrets are never printed.
+# Hardening:
+#   - curl --connect-timeout 10 --max-time 30
+#   - one retry on transient 5xx / network failure
+#   - body-code assertions on every test
+#   - endpoint echoed; no secrets ever printed
 # ============================================================================
 set -u
 
@@ -22,11 +25,40 @@ trap 'rm -rf "$TMP"' EXIT
 
 PASS=0
 FAIL=0
+SKIP=0
 
 pass() { echo "PASS  $1"; PASS=$((PASS+1)); }
 fail() { echo "FAIL  $1 -- $2"; FAIL=$((FAIL+1)); }
+skip() { echo "SKIP  $1 -- $2"; SKIP=$((SKIP+1)); }
 
-# Schema-valid request body (mirrors request_schema.ts).
+echo "Endpoint: $URL"
+echo "Admin test: $([ -n "${ADMIN_JWT:-}" ] && echo enabled || echo disabled)"
+echo
+
+# ---------------------------------------------------------------------------
+# req <out_file> <method> <extra-curl-args...>
+# Performs request with timeouts; one retry on curl failure or HTTP 5xx.
+# Prints the HTTP code on stdout.
+# ---------------------------------------------------------------------------
+req() {
+  local out="$1"; shift
+  local method="$1"; shift
+  local code rc
+  for attempt in 1 2; do
+    code=$(curl -s -o "$out" -w "%{http_code}" \
+      --connect-timeout 10 --max-time 30 \
+      -X "$method" "$URL" "$@" 2>/dev/null)
+    rc=$?
+    if [ "$rc" -eq 0 ] && [ -n "$code" ] && [ "${code:0:1}" != "5" ]; then
+      echo "$code"; return 0
+    fi
+    [ "$attempt" -eq 1 ] && sleep 1
+  done
+  echo "${code:-000}"
+  return 0
+}
+
+# Schema-valid body (mirrors request_schema.ts).
 VALID_BODY=$(cat <<'JSON'
 {
   "engine_version_id": "00000000-0000-0000-0000-000000000099",
@@ -57,80 +89,85 @@ JSON
 )
 
 # ---------------------------------------------------------------------------
-# 1. OPTIONS -> 204
+# 1. OPTIONS -> 204 (no body)
 # ---------------------------------------------------------------------------
 NAME="1. OPTIONS -> 204"
-CODE=$(curl -s -o "$TMP/b1" -w "%{http_code}" -X OPTIONS "$URL" \
+CODE=$(req "$TMP/b1" OPTIONS \
   -H "apikey: $SUPABASE_ANON_KEY" \
   -H "Access-Control-Request-Method: POST" \
   -H "Origin: https://example.com")
-if [ "$CODE" = "204" ]; then pass "$NAME"; else fail "$NAME" "got $CODE"; fi
+BYTES=$(wc -c < "$TMP/b1" | tr -d ' ')
+if [ "$CODE" = "204" ] && [ "$BYTES" = "0" ]; then
+  pass "$NAME"
+else
+  fail "$NAME" "code=$CODE body_bytes=$BYTES"
+fi
 
 # ---------------------------------------------------------------------------
 # 2. malformed JSON -> 400 invalid_request
 # ---------------------------------------------------------------------------
 NAME="2. malformed JSON -> 400 invalid_request"
-CODE=$(curl -s -o "$TMP/b2" -w "%{http_code}" -X POST "$URL" \
+CODE=$(req "$TMP/b2" POST \
   -H "apikey: $SUPABASE_ANON_KEY" \
   -H "Authorization: Bearer not-a-real-jwt" \
   -H "Content-Type: application/json" \
   -d '{not json')
-if [ "$CODE" = "400" ] && grep -q '"invalid_request"' "$TMP/b2"; then
+if [ "$CODE" = "400" ] && grep -q '"code":"invalid_request"' "$TMP/b2"; then
   pass "$NAME"
 else
-  fail "$NAME" "got $CODE / $(head -c 200 "$TMP/b2")"
+  fail "$NAME" "code=$CODE body=$(head -c 200 "$TMP/b2")"
 fi
 
 # ---------------------------------------------------------------------------
 # 3. valid schema + missing Authorization -> 401 unauthenticated
 # ---------------------------------------------------------------------------
 NAME="3. valid + missing Authorization -> 401 unauthenticated"
-CODE=$(curl -s -o "$TMP/b3" -w "%{http_code}" -X POST "$URL" \
+CODE=$(req "$TMP/b3" POST \
   -H "apikey: $SUPABASE_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d "$VALID_BODY")
-if [ "$CODE" = "401" ] && grep -q '"unauthenticated"' "$TMP/b3"; then
+if [ "$CODE" = "401" ] && grep -q '"code":"unauthenticated"' "$TMP/b3"; then
   pass "$NAME"
 else
-  fail "$NAME" "got $CODE / $(head -c 200 "$TMP/b3")"
+  fail "$NAME" "code=$CODE body=$(head -c 200 "$TMP/b3")"
 fi
 
 # ---------------------------------------------------------------------------
 # 4. valid schema + invalid bearer -> 401 unauthenticated
 # ---------------------------------------------------------------------------
 NAME="4. valid + invalid bearer -> 401 unauthenticated"
-CODE=$(curl -s -o "$TMP/b4" -w "%{http_code}" -X POST "$URL" \
+CODE=$(req "$TMP/b4" POST \
   -H "apikey: $SUPABASE_ANON_KEY" \
   -H "Authorization: Bearer not-a-real-jwt" \
   -H "Content-Type: application/json" \
   -d "$VALID_BODY")
-if [ "$CODE" = "401" ] && grep -q '"unauthenticated"' "$TMP/b4"; then
+if [ "$CODE" = "401" ] && grep -q '"code":"unauthenticated"' "$TMP/b4"; then
   pass "$NAME"
 else
-  fail "$NAME" "got $CODE / $(head -c 200 "$TMP/b4")"
+  fail "$NAME" "code=$CODE body=$(head -c 200 "$TMP/b4")"
 fi
 
 # ---------------------------------------------------------------------------
-# 5. optional admin mode: fake engine_version_id -> 422 registry_gap (or 403)
+# 5. optional admin: fake engine_version_id -> 422 registry_gap | 403 forbidden
 # ---------------------------------------------------------------------------
 NAME="5. admin + fake engine_version_id -> 422 registry_gap | 403 forbidden"
 if [ -n "${ADMIN_JWT:-}" ]; then
-  CODE=$(curl -s -o "$TMP/b5" -w "%{http_code}" -X POST "$URL" \
+  CODE=$(req "$TMP/b5" POST \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $ADMIN_JWT" \
     -H "Content-Type: application/json" \
     -d "$VALID_BODY")
-  if [ "$CODE" = "422" ] && grep -q '"registry_gap"' "$TMP/b5"; then
+  if [ "$CODE" = "422" ] && grep -q '"code":"registry_gap"' "$TMP/b5"; then
     pass "$NAME (422 registry_gap)"
-  elif [ "$CODE" = "403" ] && grep -q '"forbidden"' "$TMP/b5"; then
+  elif [ "$CODE" = "403" ] && grep -q '"code":"forbidden"' "$TMP/b5"; then
     pass "$NAME (403 forbidden -- ADMIN_JWT lacks admin role)"
   else
-    fail "$NAME" "got $CODE / $(head -c 200 "$TMP/b5")"
+    fail "$NAME" "code=$CODE body=$(head -c 200 "$TMP/b5")"
   fi
 else
-  echo "SKIP  $NAME (ADMIN_JWT not set)"
+  skip "$NAME" "ADMIN_JWT not set"
 fi
 
 echo
-echo "Summary: $PASS passed, $FAIL failed"
+echo "Summary: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ]
