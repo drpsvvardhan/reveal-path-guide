@@ -155,7 +155,8 @@ transitions table is the audit chain.
 | `confidence_basis` (text, ≥ 20 chars) | Mirrors the P1a `confidence_basis_meaningful` invariant. |
 | `limitations` (text[], ≥ 1 entry, no blanks) | Mirrors P1a `witness_objects_limitations_nonempty`. |
 | `produced_witness_id` (uuid, nullable, fk → `witness_objects.witness_id`) | Set when state ∈ {`auto_admitted`, `human_confirmed`} and a biological witness was produced. NULL otherwise. |
-| `policy_at_decision` (text) | E.g. `calibration_all_routes_to_review`, `default`. Records the operational policy in force when the decision was made (spec §6.4). |
+| `policy_at_decision` (text) | One of `default`, `calibration_all_routes_to_review`, `back_annotation`. Records the operational policy in force when the decision was made (spec §6.4 + OQ-6). |
+| `founder_review_flag` (boolean, default `false`) | Raised when the CAW requires explicit founder attention without changing its admission state. Used in particular for back-annotated CAWs whose engine disposition diverges from the grandfathered witness (OQ-6). Not a substitute for the four admission states. |
 | `created_at`, `updated_at` (timestamptz) | Standard. |
 
 **Check constraints (proposed):**
