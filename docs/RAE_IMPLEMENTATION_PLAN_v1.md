@@ -645,9 +645,7 @@ work toward them is out of scope for v1:
 
 ---
 
-## 11. Risks and open questions for CodexOS review
-
-### 11.1 Risks
+## 11. Risks
 
 - **R-1: Drift toward RAE-as-reasoner.** The orchestrator will be
   tempted to encode "if downstream cluster X exists, admit." Guard:
@@ -664,54 +662,20 @@ work toward them is out of scope for v1:
 - **R-4: Back-annotation polluting the 92.** If back-annotation
   produces CAWs that look like normal admissions, downstream queries
   may double-count. Mitigation: explicit `policy_at_decision =
-  'back_annotation'` and a CAW-level limitation entry; queries that
-  count admissions filter on policy.
+  'back_annotation'`, the `founder_review_flag` boolean, and a
+  CAW-level limitation entry; queries that count admissions filter
+  on `policy_at_decision = 'default'`.
 - **R-5: Calibration-mode lift error.** Lifting the override before
   the per-concept backlog is zero would silently graduate the engine.
-  Mitigation: a scheduled audit (§8.6) and a check constraint
-  proposal (OQ-5) preventing lift while backlog > 0.
+  Mitigation: a scheduled audit alert (per OQ-5 resolution: audit
+  alert, not DB constraint). The audit job runs on every
+  `rae_engine_versions` policy change and on a daily cadence.
 - **R-6: P1a invariant 4 (readiness) interaction.** A CAW whose
   limitations are severe must still be readable by readiness
   reasoners; if downstream code mistakenly treats severity as
   rejection, recommendations could be silently withheld for valid
   admissions. Spec §4.5 names this; the mitigation is not in RAE but
   in the readiness reasoner. Flag for downstream review only.
-
-### 11.2 Open questions
-
-- **OQ-1.** Is a single CAW table with `current_state` the right
-  shape, or should states live as immutable rows in
-  `rae_state_transitions` only, with the CAW row materialized as a
-  view? Proposed: single table + transitions log. Rationale: cheaper
-  reads, simpler RLS. CodexOS to confirm.
-- **OQ-2.** Should `produced_witness_id` be a fk into
-  `witness_objects.witness_id` (proposed) or a soft reference?
-  Proposed: hard fk, with `ON DELETE RESTRICT` (witnesses cannot be
-  hard-deleted while a CAW references them).
-- **OQ-3.** Per-concept signal config: extend
-  `witness_signal_registry` or add a sibling `rae_signal_config`?
-  Proposed: sibling table, to keep RAE extractable (spec §10.2) and
-  to leave the P1a registry shape untouched.
-- **OQ-4.** Where should "policy" live: per-engine-version
-  (proposed), per-concept-per-engine-version (richer), or per-CAW
-  override? Implementation thread to decide; v1 leans
-  per-engine-version with per-concept lift override.
-- **OQ-5.** A check constraint preventing lift of
-  calibration-all-routes-to-review while founder backlog > 0 — is
-  this enforceable as a DB constraint or only as an audit alert?
-  Defer to implementation thread.
-- **OQ-6.** Is `back_annotated_divergent` a fifth admission state, a
-  flag on a CAW, or a `policy_at_decision` value? Proposed: a
-  `policy_at_decision` value plus a limitation entry. CodexOS to
-  confirm we are not silently introducing a fifth state.
-- **OQ-7.** Should the calibration review surface a hard refusal to
-  bulk-confirm (proposed), or merely warn? Proposed: hard refusal
-  (drift D). CodexOS to confirm.
-- **OQ-8.** The CIE response path is explicitly out of scope (spec
-  §7.8). Should the spec_alignment guard test additionally assert
-  that the orchestrator never reads `cie_responses`,
-  `cie_domain_scores`, `cie_gate_scores`? Proposed: yes, mirror the
-  P1a guard tests already in place.
 
 ---
 
@@ -726,4 +690,70 @@ work toward them is out of scope for v1:
 
 ---
 
-Awaiting CodexOS review before schema implementation.
+## 13. CodexOS resolutions and applied corrections
+
+### 13.1 Three corrections applied from CodexOS review
+
+1. **No fifth admission state.** The four states in spec §6.1 —
+   `auto_admitted`, `needs_review`, `rejected`, `human_confirmed` —
+   are exhaustive and locked. The earlier proposal of
+   `back_annotated_divergent` is withdrawn. Divergent back-annotation
+   is represented by `policy_at_decision = 'back_annotation'` plus
+   `founder_review_flag = true` plus a `limitations` entry. Enforced
+   by check constraints `caw_policy_at_decision_valid` and
+   `caw_back_annotation_state_valid` (§1.1).
+2. **Sibling `rae_signal_config` is mandatory.** RAE-specific signal
+   bands, weights, synonyms, and panel associations live in a new
+   sibling table `public.rae_signal_config`.
+   `public.witness_signal_registry` is **not modified** by RAE.
+   Rationale: keeps the P1a witness registry stable and preserves
+   RAE extractability (spec §10.2).
+3. **CAW naming is fixed.** Conceptual object:
+   `concept_assignment_witness` (singular). Postgres table:
+   `public.concept_assignment_witnesses` (plural). TypeScript types:
+   `ConceptAssignmentWitness` and `ConceptAssignmentWitnessDraft`.
+   The short identifier `caw_id` appears only as a column or local
+   variable name. No mixed naming in any docs, migrations, or code.
+
+### 13.2 Resolved open questions
+
+- **OQ-1 — Approved.** Single `concept_assignment_witnesses` table
+  with `current_state`, plus the append-only `rae_state_transitions`
+  log. The CAW row is the current view; the transitions log is the
+  audit chain.
+- **OQ-2 — Approved.** `produced_witness_id` is a hard fk into
+  `witness_objects.witness_id` with `ON DELETE RESTRICT`. Witnesses
+  cannot be hard-deleted while a CAW references them.
+- **OQ-3 — Approved.** Sibling `rae_signal_config` table.
+  `witness_signal_registry` remains unchanged.
+- **OQ-4 — Approved.** Policy lives at engine-version scope
+  (`rae_engine_versions.calibration_mode`) with a per-concept lift
+  override (proposed: a `rae_engine_concept_overrides` child table
+  recording, per `(engine_version_id, candidate_concept_id)`,
+  whether `calibration_all_routes_to_review` has been lifted). No
+  per-CAW policy override.
+- **OQ-5 — Resolved as audit alert, not DB constraint.** A scheduled
+  audit job (cron-driven) reports any concept whose override was
+  lifted while its founder-review backlog was non-zero. The check
+  constraint earlier proposed in R-5 is withdrawn.
+- **OQ-6 — Resolved as no fifth state.** Carried by
+  `policy_at_decision = 'back_annotation'`, `founder_review_flag`,
+  and a `limitations` entry. See §13.1 #1.
+- **OQ-7 — Approved.** The `rae-calibration-review` function hard-
+  refuses bulk-confirm. Each disposition is one row, one timestamp,
+  one `reason`. Drift D mitigation.
+- **OQ-8 — Approved.** The orchestrator's import-graph and read-set
+  guards explicitly assert it never reads `cie_responses`,
+  `cie_domain_scores`, `cie_gate_scores`, or `derived_patterns`.
+  Mirrors the existing P1a `p1a_migration_guard.test.ts` pattern.
+
+### 13.3 Approval status
+
+With the three corrections in §13.1 applied and the eight open
+questions resolved in §13.2, this plan is **approved by CodexOS for
+schema implementation**. The next thread takes this document as
+input and produces the four migrations enumerated in §0.1, the
+TypeScript contracts in §6, the seven signal modules, the
+orchestrator, the calibration review surface, and the test set in
+§7. No section of this plan is to be revised by the implementation
+thread; revisions return here for CodexOS review.
