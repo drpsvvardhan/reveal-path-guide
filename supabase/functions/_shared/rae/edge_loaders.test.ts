@@ -324,7 +324,7 @@ Deno.test("loadEngineBinding — RegistryGapError when signal_config is empty", 
 // ---------------------------------------------------------------------------
 Deno.test("loadEngineBinding — RegistryGapError when weight is non-finite", async () => {
   const rows = fullSignalConfigRows("*");
-  rows[0] = { ...rows[0], weight: "not-a-number" };
+  (rows[0] as Record<string, unknown>).weight = "not-a-number";
   const { client } = makeFakeClient({
     engine_versions: [engineVersionRow()],
     signal_config: rows,
