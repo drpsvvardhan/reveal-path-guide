@@ -10,6 +10,7 @@ import {
   computeDepth0WitnessId,
   makeRaeDepth0WitnessifyAdapter,
   makeRaeDepth0WitnessPayloadAdapter,
+  RAE_DEPTH0_LAB_DEFAULTS,
   type RaeDepth0Passthrough,
   type RegistryWitnessFields,
 } from "./witness_adapters.ts";
@@ -362,16 +363,57 @@ Deno.test(
 );
 
 Deno.test(
-  "witness_adapters: missing registry row for non-seeded concept -> adapter construction throws (no payload emitted)",
+  "witness_adapters: incomplete registryFields supplied -> adapter construction throws",
   () => {
-    // Simulates the contract upstream of the adapter: when
-    // loadRegistryWitnessFields raises RegistryGapError for a non-seeded
-    // concept, the caller cannot construct a complete RegistryWitnessFields
-    // and therefore cannot construct the adapter at all. The adapter
-    // refuses to fall back to placeholder enum values.
     const incomplete = { source_window: "ct" } as unknown as RegistryWitnessFields;
     assertThrows(() => makeRaeDepth0WitnessifyAdapter(ENGINE_ID, incomplete));
-    // No witness payload can ever be produced for this concept until the
-    // registry seed is expanded; nothing to assert against payloadFn.
+  },
+);
+
+// ---------------------------------------------------------------------------
+// D-9 v1 lab defaults — RAE-produced depth-0 witnesses must use existing
+// P1A witness ontology values; v1 hardcodes the lab defaults until
+// registry-backed domain expansion is implemented.
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "witness_adapters: no registryFields -> v1 lab defaults stamped (lab / biochemical_state_snapshot / direct_measure / high)",
+  () => {
+    const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+    const payloadFn = makeRaeDepth0WitnessPayloadAdapter();
+    const decision = mkDecision("auto_admitted", "produce_depth0_witness");
+    const payload = payloadFn(witnessify(decision));
+
+    assertEquals(payload.source_window, "lab");
+    assertEquals(payload.domain_of_access, "biochemical_state_snapshot");
+    assertEquals(payload.epistemic_role, "direct_measure");
+    assertEquals(payload.reliability_class, "high");
+    assertEquals(payload.compression_depth, 0);
+
+    // v1 defaults match the exported constant verbatim.
+    assertEquals(payload.source_window, RAE_DEPTH0_LAB_DEFAULTS.source_window);
+    assertEquals(payload.domain_of_access, RAE_DEPTH0_LAB_DEFAULTS.domain_of_access);
+    assertEquals(payload.epistemic_role, RAE_DEPTH0_LAB_DEFAULTS.epistemic_role);
+    assertEquals(payload.reliability_class, RAE_DEPTH0_LAB_DEFAULTS.reliability_class);
+
+    // Old invalid hardcoded values must NEVER appear.
+    const blob = JSON.stringify(payload);
+    assert(!blob.includes("rae:initial_admission"));
+    assert(!blob.includes("engine_admitted"));
+    assertEquals(payload.source_window === "rae:initial_admission", false);
+    assertEquals(payload.domain_of_access === "rae", false);
+    assertEquals(payload.epistemic_role === "admission", false);
+    assertEquals(payload.reliability_class === "engine_admitted", false);
+  },
+);
+
+Deno.test(
+  "witness_adapters: v1 lab defaults constant uses valid P1A enum values only",
+  () => {
+    assertEquals(RAE_DEPTH0_LAB_DEFAULTS.source_window, "lab");
+    assertEquals(RAE_DEPTH0_LAB_DEFAULTS.domain_of_access, "biochemical_state_snapshot");
+    assertEquals(RAE_DEPTH0_LAB_DEFAULTS.epistemic_role, "direct_measure");
+    assertEquals(RAE_DEPTH0_LAB_DEFAULTS.reliability_class, "high");
+    assertEquals(RAE_DEPTH0_LAB_DEFAULTS.compression_depth, 0);
   },
 );
