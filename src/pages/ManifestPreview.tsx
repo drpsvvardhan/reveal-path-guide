@@ -706,6 +706,17 @@ export default function ManifestPreviewPage() {
                       {" · "}
                       Info: <strong className="text-foreground">{warningCounts.info}</strong>
                     </p>
+                    <div className="mb-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={onExportLintReport}
+                        title="Export full lint report as JSON (always includes all items)"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Export lint report
+                      </Button>
+                    </div>
                     <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                       {(
                         [
