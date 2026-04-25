@@ -244,7 +244,7 @@ function rewriteHandle(
   authoritative: ConceptAssignmentWitness,
 ): void {
   for (const k of Object.keys(handle)) {
-    delete (handle as Record<string, unknown>)[k];
+    delete (handle as unknown as Record<string, unknown>)[k];
   }
   Object.assign(handle, authoritative);
 }
@@ -396,7 +396,7 @@ export function makeRpcAdmitGateway(
       "mode" in (result as Record<string, unknown>) &&
       "caw" in (result as Record<string, unknown>)
     ) {
-      (result as { mode: "created" | "existing" }).mode = data.mode;
+      (result as unknown as { mode: "created" | "existing" }).mode = data.mode;
     }
 
     return result;
