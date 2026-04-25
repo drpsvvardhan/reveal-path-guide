@@ -95,10 +95,6 @@ function makeRunInTransaction(
       },
       async insertCaw(draft: ConceptAssignmentWitnessDraft) {
         if (hooks.duplicateCawIdRace) {
-          // Simulate a concurrent winner by injecting a row before insert,
-          // then raising unique-violation. The storage layer should NOT
-          // catch this; the higher-level race handler is part of a future
-          // implementation. Here we simply throw to confirm rollback.
           const winner: ConceptAssignmentWitness = {
             ...draft,
             id: crypto.randomUUID(),
@@ -106,7 +102,10 @@ function makeRunInTransaction(
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
-          stores.caws.set(draft.caw_id, winner); // commit winner outside this tx
+          // Simulate a concurrent winner that committed BEFORE this tx
+          // started its rollback. Inject into the snapshot so rollback
+          // restores a state containing the winner.
+          snapshot.caws.set(draft.caw_id, winner);
           throw new Error(`duplicate key value violates unique constraint "concept_assignment_witnesses_caw_id_key"`);
         }
         if (txStores.caws.has(draft.caw_id)) {
