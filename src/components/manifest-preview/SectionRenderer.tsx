@@ -210,7 +210,15 @@ function HelpingFeedingSection({ m }: { m: ManifestPreview }) {
   if (!hf || ((hf.helping ?? []).length === 0 && (hf.feeding ?? []).length === 0)) {
     return <EmptyHint label="Helping vs feeding" />;
   }
-  const Col = ({ title, items, tone }: { title: string; items: { label: string; mechanism: string }[]; tone: "ok" | "warn" }) => (
+  const Col = ({
+    title,
+    items,
+    tone,
+  }: {
+    title: string;
+    items: Array<{ label?: string; mechanism?: string } & Record<string, unknown>>;
+    tone: "ok" | "warn";
+  }) => (
     <div>
       <p className={`text-xs uppercase tracking-wide font-medium ${tone === "ok" ? "text-emerald-600" : "text-amber-600"}`}>
         {title}
