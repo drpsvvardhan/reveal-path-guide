@@ -116,12 +116,50 @@ Deno.test("static_scan: source files do not import witnessify_impl directly or t
   }
 });
 
-Deno.test("static_scan: index.ts not yet created (test-first phase)", async () => {
+Deno.test("static_scan: index.ts exists and passes the source-text guards", async () => {
   let exists = true;
   try {
     await Deno.stat(`${DIR}index.ts`);
   } catch {
     exists = false;
   }
-  assert(!exists, "index.ts should not exist yet — implementation prompt pending");
+  assert(exists, "index.ts must exist after the implementation prompt");
+
+  // index.ts is included in listSourceFiles(); the other Deno.test cases in
+  // this file already enforce the no-forbidden-imports / no-DB-access /
+  // RAE-allow-list / no-witnessify_impl guards across every source file in
+  // this directory. This test only flips the create/exist assertion.
+  const src = stripComments(await read("index.ts"));
+  // Sanity: the wired entry point must reference the public seam helpers
+  // it is required to call (design §4 step list).
+  assert(/loadEngineBinding/.test(src), "index.ts must call loadEngineBinding");
+  assert(
+    /bindCandidateConceptForAdmission/.test(src),
+    "index.ts must call bindCandidateConceptForAdmission",
+  );
+  assert(/adjudicate/.test(src), "index.ts must call adjudicate");
+  assert(
+    /makeRpcAdmitGateway/.test(src),
+    "index.ts must construct the gateway via makeRpcAdmitGateway",
+  );
+  assert(
+    /persistInitialAdmission/.test(src),
+    "index.ts must call persistInitialAdmission",
+  );
+  assert(
+    /makeRaeDepth0WitnessifyAdapter/.test(src),
+    "index.ts must wire makeRaeDepth0WitnessifyAdapter",
+  );
+  assert(
+    /makeRaeDepth0WitnessPayloadAdapter/.test(src),
+    "index.ts must wire makeRaeDepth0WitnessPayloadAdapter",
+  );
+  assert(
+    /mapErrorToResponse/.test(src),
+    "index.ts must surface errors through mapErrorToResponse",
+  );
+  assert(
+    /RequestSchema/.test(src),
+    "index.ts must validate the body via RequestSchema",
+  );
 });
