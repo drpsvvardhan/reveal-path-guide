@@ -1962,6 +1962,11 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      rae_insert_witness_object: { Args: { p_witness: Json }; Returns: string }
+      rae_persist_initial_admission: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       resolve_observation_review_queue_item: {
         Args: {
           p_action: string
