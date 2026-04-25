@@ -45,7 +45,11 @@ import {
   UnauthenticatedError,
 } from "./error_mapping.ts";
 
-import { loadEngineBinding } from "../_shared/rae/edge_loaders.ts";
+import {
+  loadEngineBinding,
+  loadRegistryWitnessFields,
+  type RegistryWitnessFields,
+} from "../_shared/rae/edge_loaders.ts";
 import { bindCandidateConceptForAdmission } from "../_shared/rae/concept_binding_adapter.ts";
 import {
   adjudicate,
@@ -64,6 +68,54 @@ import { makeRpcAdmitGateway } from "../_shared/rae/storage/gateway_rpc.ts";
 
 type ReadOnlyDbClientShape = Parameters<typeof loadEngineBinding>[0];
 type RpcCapableClientShape = Parameters<typeof makeRpcAdmitGateway>[0];
+/**
+ * Map a RAE source observation table + ontology concept id to the
+ * (source_window, signal) pair used to look up the P1a
+ * witness_signal_registry row. RAE never invents these — the lookup
+ * key is the same shape P1a witnessify-observations consumes.
+ *
+ * Pure helper; tested in index.test.ts.
+ */
+export function deriveRegistryLookupKey(
+  source_table: string,
+  candidate_concept_id: string,
+): { source_window: string; signal: string } {
+  let source_window: string;
+  switch (source_table) {
+    case "patient_lab_observations":
+      source_window = "lab";
+      break;
+    case "patient_inbody_metrics":
+    case "patient_inbody_observations":
+      source_window = "inbody";
+      break;
+    case "patient_fibroscan_metrics":
+    case "patient_fibroscan_observations":
+      source_window = "fibroscan";
+      break;
+    default:
+      // Unmapped source table => caller will get RegistryGapError on the
+      // subsequent registry lookup. We do NOT invent a source_window; we
+      // forward the raw value so the gap message is debuggable.
+      source_window = source_table;
+  }
+  return {
+    source_window,
+    signal: `${source_window}.${candidate_concept_id}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Transport → orchestrator projection helpers (P5).
+// ---------------------------------------------------------------------------
+// NOTE (D-10): The request schema is intentionally kept as a thin transport
+// contract over the orchestrator's CandidateConcept/PanelSibling/PriorObservation
+// shapes. The remaining shape drift is confined to the three pure helpers
+// below — projectCandidateConcept, projectSiblings, projectPriorObservations
+// — each of which is unit-tested in index.test.ts. This is the only
+// approved, documented "temporary transport adapter" surface; no schema
+// drift is hidden inline elsewhere in this file.
+//
 
 function toReadOnlyDbClient(client: unknown): ReadOnlyDbClientShape {
   return client as ReadOnlyDbClientShape;
@@ -198,6 +250,8 @@ export interface HandleDeps {
   ) => Promise<boolean>;
   /** Engine-binding loader (default = shared edge_loaders). */
   loadEngineBinding: typeof loadEngineBinding;
+  /** Witness-signal-registry loader (default = shared edge_loaders). */
+  loadRegistryWitnessFields: typeof loadRegistryWitnessFields;
   /** Concept-binding adapter (default = shared concept_binding_adapter). */
   bindCandidateConceptForAdmission: typeof bindCandidateConceptForAdmission;
   /** Orchestrator (default = shared orchestrator). */
@@ -264,6 +318,7 @@ const DEFAULT_DEPS: HandleDeps = {
   getUserIdFromJwt: defaultGetUserIdFromJwt,
   hasAdminRole: defaultHasAdminRole,
   loadEngineBinding,
+  loadRegistryWitnessFields,
   bindCandidateConceptForAdmission,
   adjudicate,
   persistInitialAdmission,
@@ -390,6 +445,22 @@ async function handle(
       candidate_concept_id: reqBody.candidate_concept.concept_id,
     });
 
+    // Registry-derived witness ontology fields. RAE is a decision layer
+    // over existing biological witnesses; the four witness ontology fields
+    // (source_window, domain_of_access, epistemic_role, reliability_class)
+    // come from the same witness_signal_registry P1a uses. Missing row =>
+    // RegistryGapError (mapped to HTTP 422).
+    const registryLookupKey = deriveRegistryLookupKey(
+      reqBody.claim.source_table,
+      reqBody.candidate_concept.concept_id,
+    );
+    const registryFields: RegistryWitnessFields =
+      await deps.loadRegistryWitnessFields(toReadOnlyDbClient(serviceClient), {
+        source_window: registryLookupKey.source_window,
+        signal: registryLookupKey.signal,
+        registry_seed_version: binding.engine_version.registry_seed_version,
+      });
+
     // §7 — caller-supplied policy override. The orchestrator owns the
     // semantics; the edge function only widens the review path. A
     // request-level `back_annotation` value is NOT honored here in v1
@@ -440,6 +511,7 @@ async function handle(
     // §4.10 — build the two adapters (witnessify + payload).
     const witnessifyAdapter = makeRaeDepth0WitnessifyAdapter(
       reqBody.engine_version_id,
+      registryFields,
     );
     const witnessPayloadAdapter = makeRaeDepth0WitnessPayloadAdapter();
 

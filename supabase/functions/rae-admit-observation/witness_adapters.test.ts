@@ -11,6 +11,7 @@ import {
   makeRaeDepth0WitnessifyAdapter,
   makeRaeDepth0WitnessPayloadAdapter,
   type RaeDepth0Passthrough,
+  type RegistryWitnessFields,
 } from "./witness_adapters.ts";
 import {
   computeCawId,
@@ -30,6 +31,19 @@ const USER_ID = "11111111-1111-4111-8111-111111111111";
 const SOURCE_ROW_ID = "22222222-2222-4222-8222-222222222222";
 const CONCEPT_ID = "33333333-3333-4333-8333-333333333333";
 const ENGINE_ID = "44444444-4444-4444-8444-444444444444";
+
+// Mock registry row mirroring what witness_signal_registry returns for a
+// lab/HbA1c-style entry. RAE consumes this verbatim; it never invents
+// the four ontology fields.
+const LAB_REGISTRY_FIELDS: RegistryWitnessFields = {
+  source_window: "lab",
+  signal: "lab.hba1c",
+  domain_of_access: "biochemical_state_snapshot",
+  epistemic_role: "direct_measure",
+  reliability_class: "high",
+  compression_depth: 0,
+  registry_seed_version: "seed@2025-01",
+};
 
 function mkSignals(): SignalResult[] {
   return [
@@ -189,11 +203,20 @@ Deno.test("witness_adapters: computeDepth0WitnessId is deterministic per caw_id"
 // ---------------------------------------------------------------------------
 
 Deno.test("witnessify adapter: throws on empty engineVersionId", () => {
-  assertThrows(() => makeRaeDepth0WitnessifyAdapter(""));
+  assertThrows(() => makeRaeDepth0WitnessifyAdapter("", LAB_REGISTRY_FIELDS));
+});
+
+Deno.test("witnessify adapter: throws when registryFields is missing/incomplete", () => {
+  assertThrows(() =>
+    makeRaeDepth0WitnessifyAdapter(
+      ENGINE_ID,
+      { source_window: "lab" } as unknown as RegistryWitnessFields,
+    ),
+  );
 });
 
 Deno.test("witnessify adapter: builds WitnessRowInput for auto_admitted decision", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision = mkDecision("auto_admitted", "produce_depth0_witness");
   const row = adapter(decision);
   assertEquals(row.user_id, USER_ID);
@@ -204,14 +227,14 @@ Deno.test("witnessify adapter: builds WitnessRowInput for auto_admitted decision
 });
 
 Deno.test("witnessify adapter: builds WitnessRowInput for human_confirmed decision", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision = mkDecision("human_confirmed", "produce_depth0_witness");
   const row = adapter(decision);
   assertEquals(row.witness_id, computeDepth0WitnessId(decision.caw.caw_id));
 });
 
 Deno.test("witnessify adapter: passthrough carries verbatim confidence/limitations", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision = mkDecision("auto_admitted", "produce_depth0_witness");
   const row = adapter(decision);
   const pt = row.passthrough as unknown as RaeDepth0Passthrough;
@@ -223,10 +246,12 @@ Deno.test("witnessify adapter: passthrough carries verbatim confidence/limitatio
   assertEquals(pt.registry_seed_version, decision.caw.registry_seed_version);
   assertEquals(pt.observed_value, 92);
   assertEquals(pt.observed_unit, "mg/dL");
+  // Registry-derived fields stamped verbatim; RAE never invents them.
+  assertEquals(pt.registry_fields, LAB_REGISTRY_FIELDS);
 });
 
 Deno.test("witnessify adapter: two calls with same draft produce identical output (idempotency)", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision = mkDecision("auto_admitted", "produce_depth0_witness");
   const a = adapter(decision);
   const b = adapter(decision);
@@ -235,7 +260,7 @@ Deno.test("witnessify adapter: two calls with same draft produce identical outpu
 });
 
 Deno.test("witnessify adapter: rejects draft with too-short confidence_basis", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision: AdmissionDecisionV1 = {
     caw: mkDraft("auto_admitted", { confidence_basis: "short" }),
     witness_intent: "produce_depth0_witness",
@@ -244,7 +269,7 @@ Deno.test("witnessify adapter: rejects draft with too-short confidence_basis", (
 });
 
 Deno.test("witnessify adapter: rejects draft with empty limitations array", () => {
-  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const adapter = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const decision: AdmissionDecisionV1 = {
     caw: mkDraft("auto_admitted", { limitations: [] }),
     witness_intent: "produce_depth0_witness",
@@ -257,7 +282,7 @@ Deno.test("witnessify adapter: rejects draft with empty limitations array", () =
 // ---------------------------------------------------------------------------
 
 Deno.test("payload adapter: lifts WitnessRowInput into full WitnessPayloadShape", () => {
-  const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const payloadFn = makeRaeDepth0WitnessPayloadAdapter();
   const decision = mkDecision("auto_admitted", "produce_depth0_witness");
   const row = witnessify(decision);
@@ -269,12 +294,14 @@ Deno.test("payload adapter: lifts WitnessRowInput into full WitnessPayloadShape"
   assertEquals(payload.source_table, "patient_lab_observations");
   assertEquals(payload.source_row_id, SOURCE_ROW_ID);
   assertEquals(payload.ancestry_witness_ids, []);
-  assertEquals(payload.source_window, "rae:initial_admission");
-  assertEquals(payload.signal, "rae:depth0");
-  assertEquals(payload.domain_of_access, "rae");
-  assertEquals(payload.epistemic_role, "admission");
-  assertEquals(payload.reliability_class, "engine_admitted");
-  assertEquals(payload.compression_depth, 0);
+  // Registry-derived (lab/HbA1c-like) — sourced from witness_signal_registry,
+  // not invented by RAE.
+  assertEquals(payload.source_window, LAB_REGISTRY_FIELDS.source_window);
+  assertEquals(payload.signal, LAB_REGISTRY_FIELDS.signal);
+  assertEquals(payload.domain_of_access, LAB_REGISTRY_FIELDS.domain_of_access);
+  assertEquals(payload.epistemic_role, LAB_REGISTRY_FIELDS.epistemic_role);
+  assertEquals(payload.reliability_class, LAB_REGISTRY_FIELDS.reliability_class);
+  assertEquals(payload.compression_depth, LAB_REGISTRY_FIELDS.compression_depth);
   assertEquals(payload.observed_value, 92);
   assertEquals(payload.observed_unit, "mg/dL");
   assertEquals(payload.confidence_value, decision.caw.confidence_value);
@@ -299,7 +326,7 @@ Deno.test("payload adapter: rejects passthrough not stamped by RAE depth-0 witne
 });
 
 Deno.test("payload adapter: limitations array is copied (no shared reference)", () => {
-  const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID);
+  const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
   const payloadFn = makeRaeDepth0WitnessPayloadAdapter();
   const decision = mkDecision("auto_admitted", "produce_depth0_witness");
   const row = witnessify(decision);
@@ -308,3 +335,43 @@ Deno.test("payload adapter: limitations array is copied (no shared reference)", 
   assert(payload.limitations !== pt.limitations);
   assertEquals(payload.limitations, pt.limitations);
 });
+
+// ---------------------------------------------------------------------------
+// Registry-derivation guarantees (D-9, task #7).
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "witness_adapters: lab/HbA1c-like registry row -> emitted payload uses registry-returned values",
+  () => {
+    const witnessify = makeRaeDepth0WitnessifyAdapter(ENGINE_ID, LAB_REGISTRY_FIELDS);
+    const payloadFn = makeRaeDepth0WitnessPayloadAdapter();
+    const decision = mkDecision("auto_admitted", "produce_depth0_witness");
+    const payload = payloadFn(witnessify(decision));
+    // Verbatim; not the legacy hardcoded RAE strings.
+    assertEquals(payload.source_window, "lab");
+    assertEquals(payload.signal, "lab.hba1c");
+    assertEquals(payload.domain_of_access, "biochemical_state_snapshot");
+    assertEquals(payload.epistemic_role, "direct_measure");
+    assertEquals(payload.reliability_class, "high");
+    assertEquals(payload.compression_depth, 0);
+    assert(payload.source_window !== "rae:initial_admission");
+    assert(payload.domain_of_access !== "rae");
+    assert(payload.epistemic_role !== "admission");
+    assert(payload.reliability_class !== "engine_admitted");
+  },
+);
+
+Deno.test(
+  "witness_adapters: missing registry row for non-seeded concept -> adapter construction throws (no payload emitted)",
+  () => {
+    // Simulates the contract upstream of the adapter: when
+    // loadRegistryWitnessFields raises RegistryGapError for a non-seeded
+    // concept, the caller cannot construct a complete RegistryWitnessFields
+    // and therefore cannot construct the adapter at all. The adapter
+    // refuses to fall back to placeholder enum values.
+    const incomplete = { source_window: "ct" } as unknown as RegistryWitnessFields;
+    assertThrows(() => makeRaeDepth0WitnessifyAdapter(ENGINE_ID, incomplete));
+    // No witness payload can ever be produced for this concept until the
+    // registry seed is expanded; nothing to assert against payloadFn.
+  },
+);
