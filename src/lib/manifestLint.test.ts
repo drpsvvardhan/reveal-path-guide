@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lintManifest } from "./manifestLint";
+import { lintManifest, buildLintReport } from "./manifestLint";
 import type { ManifestPreview } from "./manifestSchema";
 
 const baseValid: ManifestPreview = {
@@ -136,5 +136,41 @@ describe("lintManifest", () => {
       // First per-event entry should reference index 0.
       expect(indices[0]).toBe(0);
     });
+  });
+});
+
+describe("buildLintReport", () => {
+  const m: ManifestPreview = {
+    schema_version: "1.0.0",
+    patient: { firstName: "Test", age: 40, sex: "Female" },
+    patientJourney: {
+      timeline: [{ title: "Kickoff" }],
+    },
+  };
+
+  it("captures schema_version, generated_at, counts, and ALL items", () => {
+    const items = lintManifest(m);
+    const fixed = new Date("2025-01-02T03:04:05.000Z");
+    const report = buildLintReport(m, items, fixed);
+    expect(report.schema_version).toBe("1.0.0");
+    expect(report.generated_at).toBe("2025-01-02T03:04:05.000Z");
+    expect(report.counts.total).toBe(items.length);
+    expect(report.counts.warning).toBe(items.filter((i) => i.severity === "warning").length);
+    expect(report.counts.info).toBe(items.filter((i) => i.severity === "info").length);
+    expect(report.items).toEqual(items);
+  });
+
+  it("emits null schema_version when undeclared", () => {
+    const m2: ManifestPreview = { patient: m.patient };
+    const report = buildLintReport(m2, lintManifest(m2));
+    expect(report.schema_version).toBeNull();
+  });
+
+  it("does not narrow items even when caller passes a filtered list", () => {
+    // The helper exports whatever items the caller hands it. Document that
+    // the UI must always pass the full unfiltered list.
+    const all = lintManifest(m);
+    const report = buildLintReport(m, all);
+    expect(report.items).toHaveLength(all.length);
   });
 });
