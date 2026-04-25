@@ -1445,6 +1445,50 @@ export type Database = {
           },
         ]
       }
+      rae_state_transitions: {
+        Row: {
+          actor_id: string
+          actor_kind: string
+          caw_id: string
+          created_at: string
+          from_state: Database["public"]["Enums"]["rae_admission_state"] | null
+          id: string
+          policy: string
+          reason: string
+          to_state: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Insert: {
+          actor_id: string
+          actor_kind: string
+          caw_id: string
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["rae_admission_state"] | null
+          id?: string
+          policy?: string
+          reason: string
+          to_state: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Update: {
+          actor_id?: string
+          actor_kind?: string
+          caw_id?: string
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["rae_admission_state"] | null
+          id?: string
+          policy?: string
+          reason?: string
+          to_state?: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_state_transitions_caw_id_fkey"
+            columns: ["caw_id"]
+            isOneToOne: false
+            referencedRelation: "concept_assignment_witnesses"
+            referencedColumns: ["caw_id"]
+          },
+        ]
+      }
       reconsideration_events: {
         Row: {
           assessment_id: string
