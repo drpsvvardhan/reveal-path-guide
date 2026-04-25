@@ -10,6 +10,7 @@ import {
   buildRetryFeedback,
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -544,57 +545,100 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Fetch profile (need profile.id for cluster fetch)
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("id, first_name, age, sex")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // P1a: load patient terrain via the witness-native context loader.
+    // All biological values, profile fields, CIE gate scores, and prior
+    // patterns flow through this single call. No raw observation /
+    // cie_* / derived_patterns / profiles reads remain in this function.
+    const witnessContext = await loadPatientContext(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      userId,
+    );
 
-    if (profileData) {
-      manifest.patient = {
-        ...(manifest.patient || {}),
-        firstName: profileData.first_name || manifest.patient?.firstName || "unknown",
-        age: profileData.age || manifest.patient?.age || 0,
-        sex: profileData.sex || manifest.patient?.sex || "unknown",
-      };
-    }
+    // Patient identity is witness-derived. Caller-supplied manifest.patient
+    // fields are kept only as a last-resort fallback for non-biological
+    // labels (e.g. firstName when display_name is null).
+    manifest.patient = {
+      ...(manifest.patient || {}),
+      firstName: witnessContext.profile.display_name || manifest.patient?.firstName || "unknown",
+      age: witnessContext.profile.age ?? manifest.patient?.age ?? 0,
+      sex: witnessContext.profile.sex || manifest.patient?.sex || "unknown",
+    };
 
-    // Fetch patterns, gate scores, AND clusters in parallel
-    const [patternRes, cieAssessmentRes, clusterRes] = await Promise.all([
-      supabase.from("derived_patterns").select("*").eq("user_id", userId).eq("status", "active").order("severity", { ascending: true }),
-      supabase.from("cie_assessments").select("id").eq("user_id", userId).eq("status", "complete").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      profileData
-        ? supabase.from("clusters").select("*").eq("patient_id", profileData.id).eq("status", "active").order("confidence_score", { ascending: false })
-        : Promise.resolve({ data: [] }),
-    ]);
+    // Severity ordering matches the legacy `.order("severity", { ascending: true })`
+    // semantics: most-severe first.
+    const SEVERITY_RANK: Record<string, number> = {
+      critical: 0,
+      high: 1,
+      moderate: 2,
+      informational: 3,
+      info: 3,
+    };
+    const patternList = [...witnessContext.prior_patterns.patterns].sort(
+      (a, b) => (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99),
+    );
 
-    if (patternRes.error) {
-      console.error("Failed to fetch patterns:", patternRes.error);
-      return new Response(JSON.stringify({ error: "Could not fetch derived patterns" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Gate scores are witness-backed.
+    const gateScoresList = witnessContext.cie.gate_scores.map((g) => ({
+      gate_id: g.gate_id,
+      gate_name: g.gate_name,
+      score: g.score,
+      traffic_light: g.traffic_light,
+      contributing_domains: g.contributing_domains,
+    }));
 
-    const patternList = patternRes.data || [];
-    const biomarkerCount = manifest.rawData?.biomarkerTimeline?.length || 0;
-    const clusters = clusterRes.data || [];
+    // Replace any caller-supplied biomarker timeline with a witness-derived
+    // one. Caller-supplied biological values are NOT trusted. Non-biological
+    // layout fields (vitalSigns, sensorStreams, symptomsJournal, foodLogSummary)
+    // remain caller-controlled.
+    const witnessBiomarkerTimeline = [
+      ...witnessContext.labs.observations.map((o) => ({
+        name: o.canonical_name,
+        displayName: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        timestamp: o.collection_date,
+        refLow: o.ref_low ?? undefined,
+        refHigh: o.ref_high ?? undefined,
+        flag: o.flag ?? undefined,
+        source: o.source ?? undefined,
+      })),
+      ...witnessContext.inbody.observations.map((o) => ({
+        name: o.canonical_name,
+        displayName: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        timestamp: o.collection_date,
+        source: o.source,
+      })),
+      ...witnessContext.fibroscan.observations.map((o) => ({
+        name: o.canonical_name,
+        displayName: o.canonical_name,
+        value: o.value,
+        unit: o.unit,
+        timestamp: o.collection_date,
+        source: "FibroScan",
+      })),
+    ];
+    manifest.rawData = {
+      ...(manifest.rawData || {}),
+      biomarkerTimeline: witnessBiomarkerTimeline,
+    };
+    const biomarkerCount = witnessBiomarkerTimeline.length;
+
+    // Clusters scoped by witness-derived patient_id (was profileData.id).
+    const { data: clusterData } = await supabase
+      .from("clusters")
+      .select("*")
+      .eq("patient_id", witnessContext.patient_id)
+      .eq("status", "active")
+      .order("confidence_score", { ascending: false });
+    const clusters = clusterData || [];
 
     // Build cluster tier map
     const clusterTierMap = new Map<string, ClusterTier>();
     for (const c of clusters) {
       clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
-    }
-
-    // Fetch gate scores
-    let gateScoresList: any[] = [];
-    if (cieAssessmentRes.data) {
-      const { data: gs } = await supabase
-        .from("cie_gate_scores")
-        .select("gate_id, gate_name, score, traffic_light, contributing_domains")
-        .eq("assessment_id", cieAssessmentRes.data.id);
-      if (gs) gateScoresList = gs;
     }
 
     // Build system prompt with cluster context
