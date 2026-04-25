@@ -34,19 +34,41 @@ test.describe("/manifest-preview", () => {
       page.getByRole("button", { name: /^Jump to Patient \(/ }),
     ).toBeVisible();
 
+    // Sample banner is shown immediately after loading the sample
+    await expect(page.getByText(/sample manifest loaded/i)).toBeVisible();
+
     // Diff panel toggles open
     await page.getByRole("button", { name: /diff vs sample/i }).click();
     await expect(
       page.getByRole("heading", { name: /diff vs sample/i }),
     ).toBeVisible();
-    // Diff summary appears next to the heading. We don't assert "identical"
-    // here because the live diff against the bundled sample may legitimately
-    // contain entries (e.g. when reformatting widens types). We just confirm
-    // the panel rendered a summary line in one of its two valid shapes:
-    //   - "Identical"                                   (zero diff)
-    //   - "+<added> · ~<changed> · −<removed>"          (non-zero diff)
+    // Loading the bundled sample should yield an exact match against itself.
     await expect(
-      page.getByText(/identical|^\s*\+\d+\s*·\s*~\d+\s*·\s*−\d+\s*$/i).first(),
+      page.getByText(/current manifest is identical to the bundled sample/i),
     ).toBeVisible();
+  });
+
+  test("clears sample banner when the manifest is edited away from the sample", async ({
+    page,
+  }) => {
+    await page.goto("/manifest-preview");
+    await page.getByRole("button", { name: /load sample manifest/i }).click();
+    await expect(page.getByText(/sample manifest loaded/i)).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Edit the JSON away from the bundled sample.
+    const textarea = page.locator("textarea").first();
+    const raw = (await textarea.inputValue()).replace(
+      /"firstName"\s*:\s*"[^"]*"/,
+      '"firstName": "Edited Patient"',
+    );
+    await textarea.fill(raw);
+    await page.getByRole("button", { name: /^validate & preview$/i }).click();
+
+    // Banner should disappear once validated data differs from the sample.
+    await expect(page.getByText(/sample manifest loaded/i)).toBeHidden({
+      timeout: 5000,
+    });
   });
 });

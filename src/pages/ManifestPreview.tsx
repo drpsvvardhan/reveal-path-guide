@@ -45,6 +45,7 @@ export default function ManifestPreviewPage() {
   const [state, setState] = useState<PreviewState>({ kind: "empty" });
   const fileRef = useRef<HTMLInputElement | null>(null);
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
+  const diffCardRef = useRef<HTMLDivElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [sampleLoaded, setSampleLoaded] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
@@ -290,6 +291,28 @@ export default function ManifestPreviewPage() {
     return { added, removed, changed, total: diffEntries.length };
   }, [diffEntries]);
 
+  // Clear the "Sample manifest loaded" banner whenever the validated
+  // manifest no longer matches the bundled sample (e.g. user edited
+  // the JSON after loading the sample).
+  useEffect(() => {
+    if (!sampleLoaded) return;
+    if (state.kind !== "success") return;
+    if ((diffSummary?.total ?? 0) > 0) {
+      setSampleLoaded(false);
+    }
+  }, [state, diffSummary, sampleLoaded]);
+
+  // When the diff panel is opened, smooth-scroll it into view so users
+  // don't miss it sitting below the sticky Sections card.
+  useEffect(() => {
+    if (!diffOpen) return;
+    // Defer to allow the card to mount before scrolling.
+    const id = window.setTimeout(() => {
+      diffCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [diffOpen]);
+
   // Non-blocking guidance warnings produced by the lint pass.
   const warnings: ManifestWarning[] | null = useMemo(() => {
     if (state.kind !== "success") return null;
@@ -462,6 +485,46 @@ export default function ManifestPreviewPage() {
               <CardTitle className="text-sm">Input</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Compact validation status — visible above the textarea so
+                  users see success/error immediately after Validate without
+                  needing to scroll past a long input. */}
+              {state.kind === "success" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/5 px-2.5 py-1.5 text-xs text-emerald-700"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Manifest is valid</span>
+                  {sectionStats && (
+                    <span className="ml-auto text-[11px] text-muted-foreground">
+                      {sectionStats.present}/{sectionStats.total} sections
+                    </span>
+                  )}
+                </div>
+              )}
+              {state.kind === "error" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive"
+                >
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>
+                    Validation failed
+                    {state.issues?.length
+                      ? ` · ${state.issues.length} issue${state.issues.length === 1 ? "" : "s"}`
+                      : ""}
+                  </span>
+                </div>
+              )}
+              {state.kind === "loading" && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground"
+                >
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Validating…</span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={onLoadSample}>
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
@@ -865,7 +928,7 @@ export default function ManifestPreviewPage() {
               </Card>
 
               {diffOpen && diffEntries && diffSummary && filteredGroupedDiff && (
-                <Card>
+                <Card ref={diffCardRef}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
