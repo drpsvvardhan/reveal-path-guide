@@ -69,7 +69,7 @@ export interface RaeDepth0Passthrough {
 
 function isRaeDepth0Passthrough(
   v: Record<string, unknown>,
-): v is unknown as RaeDepth0Passthrough {
+): boolean {
   return (
     typeof v.engine_version_id === "string" &&
     typeof v.confidence_basis === "string" &&
