@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { lintManifest, buildLintReport } from "./manifestLint";
 import type { ManifestPreview } from "./manifestSchema";
 
