@@ -630,7 +630,7 @@ async function processUpload(
       .eq("id", uploadId);
 
     // Slice exactly to the view in case Uint8Array is a view over a larger buffer
-    const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength);
+    const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
     const base64Data = arrayBufferToBase64(exactBuffer);
     console.log(`[encode] pdfBytes.length=${pdfBytes.length}, base64.length=${base64Data.length}`);
     const mimeType = detectMimeFromPath(upload.storage_path);

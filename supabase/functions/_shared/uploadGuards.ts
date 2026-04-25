@@ -24,7 +24,7 @@ export type DedupCheckResult = {
 // SHA-256 of raw bytes
 // ----------------------------------------------------------------------------
 export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
