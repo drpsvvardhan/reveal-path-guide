@@ -154,4 +154,52 @@ export const sampleManifestPreview = {
       { who: "Primary care", tasks: ["Order labs at day 30", "Review trend and prescribe follow-ups"] },
     ],
   },
+  patientJourney: {
+    currentPhase: "Day 12 of the 30-day reset phase",
+    nextStep: "Lab redraw on Day 30 — hs-CRP, vitamin D, fasting insulin",
+    timeline: [
+      {
+        dateLabel: "Day -14",
+        title: "Initial intake",
+        description: "Symptom history, lifestyle baseline, and goals captured.",
+        status: "complete" as const,
+        icon: "📝",
+      },
+      {
+        dateLabel: "Day -7",
+        title: "Baseline labs drawn",
+        description: "CBC, CMP, lipid, hs-CRP, vitamin D, B12, HbA1c, fasting insulin.",
+        status: "complete" as const,
+        icon: "🩸",
+      },
+      {
+        dateLabel: "Day 0",
+        title: "Plan kickoff",
+        description: "Patient thesis reviewed; supplements and behavioral targets started.",
+        status: "complete" as const,
+        icon: "🚀",
+      },
+      {
+        dateLabel: "Day 12",
+        title: "Mid-phase check-in",
+        description: "Adherence review with health coach; sleep diary inspection.",
+        status: "current" as const,
+        icon: "📍",
+      },
+      {
+        dateLabel: "Day 30",
+        title: "Lab redraw",
+        description: "Repeat hs-CRP, vitamin D, fasting insulin to measure inflection.",
+        status: "upcoming" as const,
+        icon: "🧪",
+      },
+      {
+        dateLabel: "Day 35",
+        title: "Plan update",
+        description: "Adjust the plan based on labs and self-report.",
+        status: "upcoming" as const,
+        icon: "🗺️",
+      },
+    ],
+  },
 };

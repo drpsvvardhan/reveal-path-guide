@@ -141,6 +141,24 @@ const WeeklySnapshotSchema = z
   })
   .passthrough();
 
+const JourneyEventSchema = z
+  .object({
+    dateLabel: z.string(),
+    title: z.string(),
+    description: z.string().optional().default(""),
+    status: z.enum(["complete", "current", "upcoming"]).optional(),
+    icon: z.string().optional(),
+  })
+  .passthrough();
+
+const PatientJourneySchema = z
+  .object({
+    timeline: z.array(JourneyEventSchema).optional().default([]),
+    currentPhase: z.string().optional(),
+    nextStep: z.string().optional(),
+  })
+  .passthrough();
+
 export const ManifestPreviewSchema = z
   .object({
     schema_version: z
@@ -161,6 +179,7 @@ export const ManifestPreviewSchema = z
     reversibility: ReversibilitySchema.optional(),
     confidenceBreakdown: ConfidenceSchema.optional(),
     careMap: CareMapSchema.optional(),
+    patientJourney: PatientJourneySchema.optional(),
   })
   .passthrough();
 
