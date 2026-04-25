@@ -9,8 +9,8 @@
 //   (concept-override application) + §11 (closed read surface).
 //
 // Discipline:
-//   - No I/O. No DB access. No imports from reasoning surfaces, storage,
-//     witnessify_impl, or ontology tables.
+//   - No I/O. No DB access. No imports from reasoning surfaces, storage
+//     layer, witness-construction layer, or ontology tables.
 //   - Does NOT mutate inputs. Returns new objects.
 //   - Does NOT introduce a fifth admission state. Override application is
 //     expressed by:
