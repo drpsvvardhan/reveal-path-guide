@@ -333,6 +333,16 @@ function happyDeps(): HandleDeps {
     getUserIdFromJwt: () => Promise.resolve(USER_ID),
     hasAdminRole: () => Promise.resolve(true),
     loadEngineBinding: (() => Promise.resolve(mkBinding())) as unknown as HandleDeps["loadEngineBinding"],
+    loadRegistryWitnessFields: (() =>
+      Promise.resolve({
+        source_window: "lab_panel",
+        signal: "ldl_cholesterol",
+        domain_of_access: "biochemical",
+        epistemic_role: "primary_observation",
+        reliability_class: "instrument_measured",
+        compression_depth: 0,
+        registry_seed_version: "p1a-seed-v1",
+      })) as unknown as HandleDeps["loadRegistryWitnessFields"],
     bindCandidateConceptForAdmission: ((input: { candidate_concept: unknown; binding: unknown }) => ({
       candidate_concept: input.candidate_concept!,
       binding: input.binding,
