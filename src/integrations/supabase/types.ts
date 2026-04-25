@@ -1216,6 +1216,95 @@ export type Database = {
         }
         Relationships: []
       }
+      rae_engine_concept_overrides: {
+        Row: {
+          candidate_concept_id: string
+          created_at: string
+          engine_version_id: string
+          id: string
+          lifted: boolean
+          lifted_at: string | null
+          lifted_by: string | null
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_concept_id: string
+          created_at?: string
+          engine_version_id: string
+          id?: string
+          lifted?: boolean
+          lifted_at?: string | null
+          lifted_by?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_concept_id?: string
+          created_at?: string
+          engine_version_id?: string
+          id?: string
+          lifted?: boolean
+          lifted_at?: string | null
+          lifted_by?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_engine_concept_overrides_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rae_engine_versions: {
+        Row: {
+          activated_at: string | null
+          calibration_mode: boolean
+          created_at: string
+          id: string
+          notes: string | null
+          ontology_version: string
+          parameters: Json
+          registry_seed_version: string
+          semver: string
+          threshold_admission: number
+          threshold_rejection_floor: number
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          calibration_mode?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ontology_version: string
+          parameters?: Json
+          registry_seed_version: string
+          semver: string
+          threshold_admission: number
+          threshold_rejection_floor: number
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          calibration_mode?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ontology_version?: string
+          parameters?: Json
+          registry_seed_version?: string
+          semver?: string
+          threshold_admission?: number
+          threshold_rejection_floor?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reconsideration_events: {
         Row: {
           assessment_id: string
