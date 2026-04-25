@@ -64,7 +64,7 @@ function PatientSummary({ m }: { m: ManifestPreview }) {
               </CardContent>
             </Card>
           ) : (
-            <EmptyHint label="Today" />
+            <EmptyHint label="Today" field="todayBar" />
           )}
           {m.weeklySnapshot ? (
             <Card className="bg-muted/30 border-none">
@@ -89,7 +89,7 @@ function PatientSummary({ m }: { m: ManifestPreview }) {
               </CardContent>
             </Card>
           ) : (
-            <EmptyHint label="This week" />
+            <EmptyHint label="This week" field="weeklySnapshot" />
           )}
         </CardContent>
       )}
@@ -102,7 +102,7 @@ function PatientSummary({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function ThesisSection({ m }: { m: ManifestPreview }) {
   const t = m.patientThesis;
-  if (!t || (!t.title && !t.body)) return <EmptyHint label="Patient thesis" />;
+  if (!t || (!t.title && !t.body)) return <EmptyHint label="Patient thesis" field="patientThesis" />;
   return (
     <Card>
       <CardHeader>
@@ -126,7 +126,7 @@ function ThesisSection({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function StudyOverviewSection({ m }: { m: ManifestPreview }) {
   const s = m.studyOverview;
-  if (!s) return <EmptyHint label="Study overview" />;
+  if (!s) return <EmptyHint label="Study overview" field="studyOverview" />;
   const layers = s.layers ?? [];
   return (
     <Card>
@@ -166,7 +166,7 @@ function StudyOverviewSection({ m }: { m: ManifestPreview }) {
         </CardContent>
       ) : (
         <CardContent>
-          <EmptyHint label="Study layers" />
+          <EmptyHint label="Study layers" field="studyOverview.layers" />
         </CardContent>
       )}
     </Card>
@@ -179,7 +179,7 @@ function StudyOverviewSection({ m }: { m: ManifestPreview }) {
 function LayerFindingsSection({ m }: { m: ManifestPreview }) {
   const lf = m.layerFindings ?? {};
   const entries = Object.entries(lf);
-  if (entries.length === 0) return <EmptyHint label="Layer findings" />;
+  if (entries.length === 0) return <EmptyHint label="Layer findings" field="layerFindings" />;
   return (
     <Card>
       <CardHeader>
@@ -208,7 +208,7 @@ function LayerFindingsSection({ m }: { m: ManifestPreview }) {
 function HelpingFeedingSection({ m }: { m: ManifestPreview }) {
   const hf = m.helpingVsFeeding;
   if (!hf || ((hf.helping ?? []).length === 0 && (hf.feeding ?? []).length === 0)) {
-    return <EmptyHint label="Helping vs feeding" />;
+    return <EmptyHint label="Helping vs feeding" field="helpingVsFeeding" />;
   }
   const Col = ({
     title,
@@ -260,7 +260,7 @@ function HelpingFeedingSection({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function ConfidenceSection({ m }: { m: ManifestPreview }) {
   const c = m.confidenceBreakdown;
-  if (!c) return <EmptyHint label="Confidence breakdown" />;
+  if (!c) return <EmptyHint label="Confidence breakdown" field="confidenceBreakdown" />;
   const confident = c.confident ?? [];
   const investigating = c.investigating ?? [];
   const retest = c.retest ?? [];
@@ -325,7 +325,7 @@ function ConfidenceSection({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function ReversibilitySection({ m }: { m: ManifestPreview }) {
   const r = m.reversibility;
-  if (!r) return <EmptyHint label="Reversibility" />;
+  if (!r) return <EmptyHint label="Reversibility" field="reversibility" />;
   const buckets: { label: string; items: string[]; weight: number }[] = [
     { label: "Weeks", items: r.weeks ?? [], weight: 100 },
     { label: "Months", items: r.months ?? [], weight: 75 },
@@ -377,12 +377,12 @@ function ReversibilitySection({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function CareMapSection({ m }: { m: ManifestPreview }) {
   const cm = m.careMap;
-  if (!cm) return <EmptyHint label="Care map" />;
+  if (!cm) return <EmptyHint label="Care map" field="careMap" />;
   const meds = cm.medications ?? [];
   const checkpoints = cm.checkpoints ?? [];
   const resp = cm.responsibilities ?? [];
   if (meds.length === 0 && checkpoints.length === 0 && resp.length === 0) {
-    return <EmptyHint label="Care map" />;
+    return <EmptyHint label="Care map" field="careMap" />;
   }
   return (
     <Card>
@@ -475,7 +475,7 @@ function CareMapSection({ m }: { m: ManifestPreview }) {
 // ---------------------------------------------------------------------------
 function SymptomBridgesSection({ m }: { m: ManifestPreview }) {
   const sb = m.symptomBridges ?? [];
-  if (sb.length === 0) return <EmptyHint label="Symptom bridges" />;
+  if (sb.length === 0) return <EmptyHint label="Symptom bridges" field="symptomBridges" />;
   return (
     <Card>
       <CardHeader>
@@ -510,23 +510,35 @@ export const sectionRenderers: Record<string, (m: ManifestPreview) => JSX.Elemen
   careMap: (m) => <CareMapSection m={m} />,
 };
 
-export const sectionOrder: (keyof typeof sectionRenderers)[] = [
-  "patient",
-  "patientThesis",
-  "studyOverview",
-  "layerFindings",
-  "helpingVsFeeding",
-  "symptomBridges",
-  "reversibility",
-  "confidenceBreakdown",
-  "careMap",
+export interface SectionMeta {
+  key: keyof typeof sectionRenderers;
+  label: string;
+}
+
+export const sectionMeta: SectionMeta[] = [
+  { key: "patient", label: "Patient" },
+  { key: "patientThesis", label: "Thesis" },
+  { key: "studyOverview", label: "Study overview" },
+  { key: "layerFindings", label: "Layer findings" },
+  { key: "helpingVsFeeding", label: "Helping vs feeding" },
+  { key: "symptomBridges", label: "Symptom bridges" },
+  { key: "reversibility", label: "Reversibility" },
+  { key: "confidenceBreakdown", label: "Confidence" },
+  { key: "careMap", label: "Care map" },
 ];
+
+export const sectionOrder = sectionMeta.map((s) => s.key);
+
+/** Stable DOM id used by the sticky section nav. */
+export const sectionAnchorId = (key: string) => `manifest-section-${key}`;
 
 export function RenderManifest({ m }: { m: ManifestPreview }) {
   return (
     <div className="space-y-5">
-      {sectionOrder.map((key) => (
-        <div key={key}>{sectionRenderers[key](m)}</div>
+      {sectionMeta.map(({ key }) => (
+        <div key={key} id={sectionAnchorId(key)} className="scroll-mt-24">
+          {sectionRenderers[key](m)}
+        </div>
       ))}
     </div>
   );

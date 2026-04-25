@@ -4,13 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, FileJson, AlertCircle, CheckCircle2, RotateCcw } from "lucide-react";
+import {
+  Loader2, Upload, FileJson, AlertCircle, CheckCircle2,
+  RotateCcw, Sparkles, Download,
+} from "lucide-react";
 import {
   parseManifestJson,
   type FriendlyIssue,
   type ManifestPreview as ManifestData,
 } from "@/lib/manifestSchema";
-import { RenderManifest } from "@/components/manifest-preview/SectionRenderer";
+import {
+  RenderManifest,
+  sectionMeta,
+  sectionAnchorId,
+} from "@/components/manifest-preview/SectionRenderer";
+import { sampleManifestPreview } from "@/lib/sampleManifestPreview";
 
 type PreviewState =
   | { kind: "empty" }
@@ -77,6 +85,33 @@ export default function ManifestPreviewPage() {
     return state.issues;
   }, [state]);
 
+  const onLoadSample = useCallback(() => {
+    const raw = JSON.stringify(sampleManifestPreview, null, 2);
+    setText(raw);
+    validate(raw);
+  }, [validate]);
+
+  const onExport = useCallback(() => {
+    if (state.kind !== "success") return;
+    const blob = new Blob([JSON.stringify(state.data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = `manifest-${state.data.patient.firstName.replace(/\s+/g, "_")}-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [state]);
+
+  const scrollToSection = (key: string) => {
+    const el = document.getElementById(sectionAnchorId(key));
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -90,9 +125,14 @@ export default function ManifestPreviewPage() {
               Paste or upload a patient manifest JSON to validate and preview its sections.
             </p>
           </div>
-          <Badge variant="outline" className="hidden md:inline-flex">
-            Local preview · no data is sent
-          </Badge>
+          <div className="hidden md:flex items-center gap-2">
+            {state.kind === "success" && state.data.schema_version && (
+              <Badge variant="secondary">
+                schema v{state.data.schema_version}
+              </Badge>
+            )}
+            <Badge variant="outline">Local preview · no data is sent</Badge>
+          </div>
         </div>
       </header>
 
@@ -104,7 +144,11 @@ export default function ManifestPreviewPage() {
               <CardTitle className="text-sm">Input</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={onLoadSample}>
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Load sample manifest
+                </Button>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -130,6 +174,15 @@ export default function ManifestPreviewPage() {
                 >
                   Validate & preview
                 </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onExport}
+                  disabled={state.kind !== "success"}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Export JSON
+                </Button>
                 <Button size="sm" variant="ghost" onClick={onReset}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
                   Clear
@@ -138,13 +191,14 @@ export default function ManifestPreviewPage() {
               <Textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder='{ "patient": { "firstName": "...", "age": 0, "sex": "..." } }'
+                placeholder='{ "schema_version": "1.0.0", "patient": { "firstName": "...", "age": 0, "sex": "..." } }'
                 className="font-mono text-xs min-h-[360px]"
                 spellCheck={false}
               />
               <p className="text-[11px] text-muted-foreground">
                 Required: <code>patient.firstName</code>, <code>patient.age</code>,{" "}
-                <code>patient.sex</code>. Other sections are optional and render fallbacks when missing.
+                <code>patient.sex</code>. Optional <code>schema_version</code> like <code>1.0.0</code>.
+                All other sections are optional and render fallbacks when missing.
               </p>
             </CardContent>
           </Card>
@@ -171,14 +225,54 @@ export default function ManifestPreviewPage() {
           )}
 
           {state.kind === "success" && (
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>Manifest is valid</AlertTitle>
-              <AlertDescription className="text-xs mt-1">
-                Rendered {Object.keys(state.data).length} top-level field
-                {Object.keys(state.data).length === 1 ? "" : "s"}.
-              </AlertDescription>
-            </Alert>
+            <>
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle>Manifest is valid</AlertTitle>
+                <AlertDescription className="text-xs mt-1">
+                  Rendered {Object.keys(state.data).length} top-level field
+                  {Object.keys(state.data).length === 1 ? "" : "s"}
+                  {state.data.schema_version
+                    ? ` · schema v${state.data.schema_version}`
+                    : " · no schema_version"}
+                  .
+                </AlertDescription>
+              </Alert>
+
+              {/* Sticky section nav (shown alongside the input column on lg+). */}
+              <Card className="lg:sticky lg:top-4">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Sections
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <nav>
+                    <ul className="space-y-1">
+                      {sectionMeta.map(({ key, label }) => {
+                        const present = (state.data as Record<string, unknown>)[key] != null
+                          || key === "patient";
+                        return (
+                          <li key={key}>
+                            <button
+                              type="button"
+                              onClick={() => scrollToSection(key)}
+                              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 transition-colors"
+                            >
+                              <span className="truncate">{label}</span>
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${present ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
+                                title={present ? "Present" : "Missing"}
+                              />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </nav>
+                </CardContent>
+              </Card>
+            </>
           )}
         </section>
 
