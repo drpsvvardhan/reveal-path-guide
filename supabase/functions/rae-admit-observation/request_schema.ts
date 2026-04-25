@@ -28,7 +28,12 @@ export const RangePairSchema = z.object({
 }).strict();
 
 export const CandidateConceptSchema = z.object({
-  concept_id: z.string().uuid(),
+  // D-10: ontology / RAE concept identity strings are not row UUIDs.
+  // They are stable identity tokens (e.g. "HbA1c", "concept_hba1c") and
+  // must accept any non-empty string. True row IDs (source_row_id,
+  // user_id, engine_version_id, back_annotation_witness_id, request_id)
+  // remain uuid-validated below.
+  concept_id: z.string().min(1),
   canonical_name: z.string().min(1),
   synonyms: z.array(z.string()).optional(),
   ambiguous_alternatives: z.array(z.string()).optional(),
@@ -38,7 +43,8 @@ export const CandidateConceptSchema = z.object({
   known_assays: z.array(z.string()).optional(),
   method_optional: z.boolean().optional(),
   canonical_reference_range: RangePairSchema.nullable(),
-  expected_panel_concept_ids: z.array(z.string()).optional(),
+  // D-10: panel members are concept identity strings, not row UUIDs.
+  expected_panel_concept_ids: z.array(z.string().min(1)).optional(),
   panel_id: z.string().nullable().optional(),
   dynamics_rule_id: z.string().nullable(),
   delta_ceiling: z.number().finite().nullable(),
@@ -61,7 +67,8 @@ export const RawObservationClaimSchema = z.object({
   // Sibling rows that omit this field are dropped at the wiring boundary
   // and counted in `diagnostics.dropped_siblings` of the success response.
   // Not split into a separate schema for now (single-shape policy).
-  concept_id: z.string().uuid().optional(),
+  // D-10: concept identity string, not a row UUID.
+  concept_id: z.string().min(1).optional(),
 }).strict();
 
 export const PolicyOverrideSchema = z.enum([
