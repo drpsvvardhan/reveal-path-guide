@@ -80,4 +80,61 @@ describe("lintManifest", () => {
     const w = lintManifest(m);
     expect(w.every((x) => x.severity === "info")).toBe(true);
   });
+
+  describe("ordering", () => {
+    it("emits schema_version info before any patientJourney warnings", () => {
+      const m: ManifestPreview = {
+        patient: baseValid.patient,
+        patientJourney: {
+          timeline: [{ title: "Kickoff" }],
+        },
+      };
+      const w = lintManifest(m);
+      expect(w[0].path).toBe("schema_version");
+      // Every later item should belong to patientJourney.
+      for (let i = 1; i < w.length; i++) {
+        expect(w[i].path.startsWith("patientJourney")).toBe(true);
+      }
+    });
+
+    it("emits the patientJourney phase warning before any per-event warnings", () => {
+      const m: ManifestPreview = {
+        ...baseValid,
+        patientJourney: {
+          timeline: [{ title: "Kickoff" }, { title: "Next" }],
+        },
+      };
+      const w = lintManifest(m);
+      expect(w[0].path).toBe("patientJourney");
+      for (let i = 1; i < w.length; i++) {
+        expect(w[i].path.startsWith("patientJourney.timeline[")).toBe(true);
+      }
+    });
+
+    it("emits per-event warnings in event index order", () => {
+      const m: ManifestPreview = {
+        ...baseValid,
+        patientJourney: {
+          currentPhase: "Phase 1",
+          timeline: [
+            { title: "Event 0" }, // missing dateLabel + status
+            { title: "Event 1", dateLabel: "Day 1", status: "complete" }, // clean
+            { title: "Event 2", dateLabel: "Day 2" }, // missing status
+            { title: "Event 3", status: "current" }, // missing dateLabel
+          ],
+        },
+      };
+      const w = lintManifest(m);
+      const indices = w.map((x) => {
+        const m2 = x.path.match(/timeline\[(\d+)\]/);
+        return m2 ? Number(m2[1]) : -1;
+      });
+      // Indices must be non-decreasing (per-event order preserved).
+      for (let i = 1; i < indices.length; i++) {
+        expect(indices[i]).toBeGreaterThanOrEqual(indices[i - 1]);
+      }
+      // First per-event entry should reference index 0.
+      expect(indices[0]).toBe(0);
+    });
+  });
 });

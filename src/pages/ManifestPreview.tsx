@@ -30,6 +30,7 @@ type PreviewState =
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB safety cap for paste/upload
 const LS_KEY = "manifest-preview:last-valid-v1";
+const LS_LINT_FILTER_KEY = "manifest-preview:lint-filter-v1";
 const DIFF_CAP = 100;
 
 // Format a byte count compactly for the size hint (e.g. "1.2 KB").
@@ -49,7 +50,20 @@ export default function ManifestPreviewPage() {
   const [diffOpen, setDiffOpen] = useState(false);
   const [restored, setRestored] = useState(false);
   const [diffQuery, setDiffQuery] = useState("");
-  const [warningFilter, setWarningFilter] = useState<"all" | "warning" | "info">("all");
+  const [warningFilter, setWarningFilter] = useState<"all" | "warning" | "info">(() => {
+    try {
+      const v = localStorage.getItem(LS_LINT_FILTER_KEY);
+      if (v === "all" || v === "warning" || v === "info") return v;
+    } catch { /* noop */ }
+    return "all";
+  });
+
+  // Persist the selected lint filter so it survives reloads.
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_LINT_FILTER_KEY, warningFilter);
+    } catch { /* noop */ }
+  }, [warningFilter]);
 
   const validate = useCallback((raw: string) => {
     setState({ kind: "loading" });
@@ -668,6 +682,11 @@ export default function ManifestPreviewPage() {
                   <AlertDescription className="text-xs mt-1">
                     <p className="mb-2 text-muted-foreground">
                       Guidance only — the manifest is valid and will render.
+                    </p>
+                    <p className="mb-2 text-muted-foreground">
+                      Warnings: <strong className="text-foreground">{warningCounts.warning}</strong>
+                      {" · "}
+                      Info: <strong className="text-foreground">{warningCounts.info}</strong>
                     </p>
                     <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                       {(
