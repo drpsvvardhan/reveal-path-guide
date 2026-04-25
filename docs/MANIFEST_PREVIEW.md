@@ -98,6 +98,23 @@ required-field checklist is shown in **both** success and error states,
 and remains accurate while you edit the JSON in the error state via a
 loose JSON parse.
 
+### Warnings vs errors
+
+The previewer also runs a **non-blocking lint pass** on every
+successfully validated manifest. Warnings appear in an amber alert
+directly below the "Manifest is valid" banner and are **guidance, not
+blockers** — the manifest still validates, still persists to
+`localStorage`, and still renders every section. Warnings flag things
+the schema can't catch but that visibly degrade the preview, e.g.:
+
+- `patientJourney.timeline` is provided but neither `currentPhase`
+  nor `nextStep` is set
+- A `patientJourney.timeline[]` event is missing `dateLabel`
+- A `patientJourney.timeline[]` event is missing `status`
+
+Treat warnings as todo items for the upstream pipeline; the
+previewer never blocks on them.
+
 ---
 
 ## What stays local
