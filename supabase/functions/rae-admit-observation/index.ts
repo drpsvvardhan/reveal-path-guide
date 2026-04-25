@@ -401,6 +401,10 @@ async function handle(req: Request): Promise<Response> {
   }
 }
 
-Deno.serve(handle);
+// Only start the HTTP server when this module is the entry point.
+// Importing index.ts from tests must not bind a port.
+if (import.meta.main) {
+  Deno.serve(handle);
+}
 
 export { handle };
