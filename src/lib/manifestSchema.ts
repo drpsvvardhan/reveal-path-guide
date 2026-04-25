@@ -143,6 +143,13 @@ const WeeklySnapshotSchema = z
 
 export const ManifestPreviewSchema = z
   .object({
+    schema_version: z
+      .string()
+      .trim()
+      .regex(/^\d+\.\d+\.\d+$/, {
+        message: "schema_version must look like '1.0.0'",
+      })
+      .optional(),
     patient: PatientSchema,
     todayBar: TodayBarSchema.optional(),
     weeklySnapshot: WeeklySnapshotSchema.optional(),
