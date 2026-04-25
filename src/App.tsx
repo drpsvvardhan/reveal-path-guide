@@ -13,6 +13,7 @@ import ClinicalShare from "./pages/ClinicalShare.tsx";
 import AdminReviewQueue from "./pages/AdminReviewQueue.tsx";
 import AdminProfiles from "./pages/AdminProfiles.tsx";
 import Account from "./pages/Account.tsx";
+import ManifestPreview from "./pages/ManifestPreview.tsx";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -79,6 +80,7 @@ const App = () => (
               <Route path="/clinical/:token" element={<ClinicalShare />} />
               <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
               <Route path="/admin/profiles" element={<AdminRoute><AdminProfiles /></AdminRoute>} />
+              <Route path="/manifest-preview" element={<ManifestPreview />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ViewAsProvider>
