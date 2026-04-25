@@ -143,7 +143,7 @@ const WeeklySnapshotSchema = z
 
 const JourneyEventSchema = z
   .object({
-    dateLabel: z.string(),
+    dateLabel: z.string().optional(),
     title: z.string(),
     description: z.string().optional().default(""),
     status: z.enum(["complete", "current", "upcoming"]).optional(),

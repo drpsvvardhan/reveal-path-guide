@@ -81,6 +81,17 @@ the exact order they appear in the `timeline` array — it does not sort
 by `dateLabel`, `status`, or any other field. If you want chronological
 order, sort the array before handing the manifest to the previewer.
 
+**Per-event field rules.** Within `timeline[]`:
+
+- `title` is required.
+- `dateLabel` is optional. When missing or blank, the previewer renders
+  the italic fallback "Date not provided" in its place.
+- `status` is optional; allowed values are `complete`, `current`, or
+  `upcoming`. When omitted, no status badge is rendered and the
+  timeline dot stays neutral.
+- `icon` is optional and capped at 8 characters.
+- `description` is optional.
+
 On validation failure, errors are grouped by their top-level field
 (`patient`, `careMap`, etc.) so you can scan section-by-section. A
 required-field checklist is shown in **both** success and error states,
@@ -168,6 +179,11 @@ changes to `/manifest-preview`, walk through this checklist manually:
     `patientJourney.timeline` and click **Validate & preview**.
     Verify the rendered timeline reflects the new order exactly —
     the previewer must not reorder events.
+13. In one event, delete `dateLabel` (or set it to `""`) and delete
+    `status`. Click **Validate & preview**. Verify the event still
+    renders, the date area shows the italic "Date not provided"
+    fallback, no status badge appears, and the timeline dot stays
+    neutral.
 
 ---
 
