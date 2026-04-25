@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Upload, FileJson, AlertCircle, CheckCircle2,
-  RotateCcw, Sparkles, Download, FileDown,
+  RotateCcw, Sparkles, Download, FileDown, Copy, Printer, GitCompare, Check,
 } from "lucide-react";
 import {
   parseManifestJson,
@@ -19,6 +19,7 @@ import {
   sectionAnchorId,
 } from "@/components/manifest-preview/SectionRenderer";
 import { sampleManifestPreview } from "@/lib/sampleManifestPreview";
+import { diffManifests, formatDiffValue, type DiffEntry } from "@/lib/manifestDiff";
 
 type PreviewState =
   | { kind: "empty" }
@@ -32,6 +33,10 @@ export default function ManifestPreviewPage() {
   const [text, setText] = useState("");
   const [state, setState] = useState<PreviewState>({ kind: "empty" });
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const errorAlertRef = useRef<HTMLDivElement | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [sampleLoaded, setSampleLoaded] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
 
   const validate = useCallback((raw: string) => {
     setState({ kind: "loading" });
@@ -77,12 +82,15 @@ export default function ManifestPreviewPage() {
   const onReset = () => {
     setText("");
     setState({ kind: "empty" });
+    setSampleLoaded(false);
+    setDiffOpen(false);
     if (fileRef.current) fileRef.current.value = "";
   };
 
   const onLoadSample = useCallback(() => {
     const raw = JSON.stringify(sampleManifestPreview, null, 2);
     setText(raw);
+    setSampleLoaded(true);
     validate(raw);
   }, [validate]);
 
@@ -116,6 +124,26 @@ export default function ManifestPreviewPage() {
     a.remove();
     URL.revokeObjectURL(url);
   }, [state]);
+
+  const onCopyJson = useCallback(async () => {
+    if (state.kind !== "success") return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(state.data, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard blocked — silently noop; the Export button is the fallback.
+    }
+  }, [state]);
+
+  const onPrint = useCallback(() => {
+    document.body.classList.add("manifest-print-mode");
+    // Defer so the class can apply before the print dialog snapshots layout.
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove("manifest-print-mode");
+    }, 50);
+  }, []);
 
   const scrollToSection = (key: string) => {
     const el = document.getElementById(sectionAnchorId(key));
@@ -164,6 +192,35 @@ export default function ManifestPreviewPage() {
     });
   }, [state]);
 
+  // ---------------------------------------------------------------------------
+  // Auto-scroll to the validation error alert when it appears.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (state.kind === "error" && errorAlertRef.current) {
+      errorAlertRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (state.kind !== "success") {
+      // Drop diff panel + sample-loaded confirmation when we leave success.
+      if (state.kind === "empty") setSampleLoaded(false);
+    }
+  }, [state]);
+
+  // ---------------------------------------------------------------------------
+  // Diff: current valid manifest vs the bundled sample.
+  // ---------------------------------------------------------------------------
+  const diffEntries: DiffEntry[] | null = useMemo(() => {
+    if (state.kind !== "success") return null;
+    return diffManifests(sampleManifestPreview, state.data);
+  }, [state]);
+
+  const diffSummary = useMemo(() => {
+    if (!diffEntries) return null;
+    const added = diffEntries.filter((d) => d.kind === "added").length;
+    const removed = diffEntries.filter((d) => d.kind === "removed").length;
+    const changed = diffEntries.filter((d) => d.kind === "changed").length;
+    return { added, removed, changed, total: diffEntries.length };
+  }, [diffEntries]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -190,7 +247,7 @@ export default function ManifestPreviewPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-6 grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* INPUT */}
-        <section className="space-y-3">
+        <section className="space-y-3 print:hidden">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Input</CardTitle>
@@ -241,6 +298,40 @@ export default function ManifestPreviewPage() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="secondary"
+                  onClick={onCopyJson}
+                  disabled={state.kind !== "success"}
+                  title="Copy validated JSON to clipboard"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 mr-1.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {copied ? "Copied" : "Copy JSON"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onPrint}
+                  disabled={state.kind !== "success"}
+                  title="Open print/PDF dialog with preview-only view"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1.5" />
+                  Print preview
+                </Button>
+                <Button
+                  size="sm"
+                  variant={diffOpen ? "default" : "secondary"}
+                  onClick={() => setDiffOpen((v) => !v)}
+                  disabled={state.kind !== "success"}
+                  title="Compare current manifest vs the bundled sample"
+                >
+                  <GitCompare className="h-3.5 w-3.5 mr-1.5" />
+                  {diffOpen ? "Hide diff" : "Diff vs sample"}
+                </Button>
+                <Button
+                  size="sm"
                   variant="ghost"
                   onClick={onReset}
                   title="Reset input and preview to empty"
@@ -264,8 +355,19 @@ export default function ManifestPreviewPage() {
             </CardContent>
           </Card>
 
+          {sampleLoaded && state.kind === "success" && (
+            <Alert className="border-emerald-500/40 bg-emerald-500/5">
+              <Sparkles className="h-4 w-4 text-emerald-600" />
+              <AlertTitle>Sample manifest loaded</AlertTitle>
+              <AlertDescription className="text-xs mt-1">
+                You're viewing the bundled demo manifest. Edit the JSON, upload your own,
+                or click <strong>Reset to empty</strong> to clear it.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {state.kind === "error" && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" ref={errorAlertRef}>
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>Validation failed</AlertTitle>
               <AlertDescription className="space-y-2 mt-1">
@@ -372,12 +474,74 @@ export default function ManifestPreviewPage() {
                   </nav>
                 </CardContent>
               </Card>
+
+              {diffOpen && diffEntries && diffSummary && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Diff vs sample
+                      </CardTitle>
+                      <span className="text-[11px] text-muted-foreground">
+                        {diffSummary.total === 0
+                          ? "Identical"
+                          : `+${diffSummary.added} ·  ~${diffSummary.changed} ·  −${diffSummary.removed}`}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {diffSummary.total === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Current manifest is identical to the bundled sample.
+                      </p>
+                    ) : (
+                      <ul className="text-xs max-h-72 overflow-auto space-y-1 font-mono">
+                        {diffEntries.map((d, i) => {
+                          const tone =
+                            d.kind === "added"
+                              ? "text-emerald-600"
+                              : d.kind === "removed"
+                              ? "text-rose-600"
+                              : "text-amber-600";
+                          const sigil =
+                            d.kind === "added" ? "+" : d.kind === "removed" ? "−" : "~";
+                          return (
+                            <li key={i} className="leading-snug">
+                              <span className={`${tone} font-semibold`}>{sigil}</span>{" "}
+                              <span>{d.path}</span>
+                              {d.kind === "changed" && (
+                                <div className="pl-4 text-muted-foreground">
+                                  <span className="text-rose-600/80">−</span>{" "}
+                                  {formatDiffValue(d.before)}
+                                  <br />
+                                  <span className="text-emerald-600/80">+</span>{" "}
+                                  {formatDiffValue(d.after)}
+                                </div>
+                              )}
+                              {d.kind === "added" && (
+                                <div className="pl-4 text-emerald-700/80">
+                                  + {formatDiffValue(d.after)}
+                                </div>
+                              )}
+                              {d.kind === "removed" && (
+                                <div className="pl-4 text-rose-700/80">
+                                  − {formatDiffValue(d.before)}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </section>
 
         {/* PREVIEW */}
-        <section>
+        <section className="manifest-print-target">
           {state.kind === "empty" && (
             <Card className="h-full border-dashed">
               <CardContent className="h-full min-h-[420px] flex flex-col items-center justify-center text-center p-10 gap-2">
