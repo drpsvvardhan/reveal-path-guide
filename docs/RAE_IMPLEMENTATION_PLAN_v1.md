@@ -116,6 +116,16 @@ See §8 below. All tests live alongside the modules they cover.
 
 ### 1.1 Proposed table — `public.concept_assignment_witnesses`
 
+**Naming convention (binding).** The conceptual object is
+`concept_assignment_witness` (singular). The Postgres table is
+`public.concept_assignment_witnesses` (plural). All docs, migrations,
+TypeScript types (`ConceptAssignmentWitness`,
+`ConceptAssignmentWitnessDraft`), edge functions, and tests use
+exactly these two forms. The short identifier `caw_id` is permitted
+only as a column or local variable name — never as a table, type, or
+module name. No abbreviations (`caw_table`, `assignment_witness`,
+`concept_witness`) are introduced.
+
 Single table. Append-mostly. State changes are recorded by updating the
 row's `current_state` column **and** appending a row to
 `rae_state_transitions` (§3). The CAW row is the current view; the
