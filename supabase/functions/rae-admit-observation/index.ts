@@ -19,7 +19,15 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.45.0/cors";
+
+// CORS headers — manual definition (the @supabase/supabase-js@2.45.0 build
+// does not export a /cors entry).
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 import {
   RequestSchema,
@@ -39,7 +47,10 @@ import {
 
 import { loadEngineBinding } from "../_shared/rae/edge_loaders.ts";
 import { bindCandidateConceptForAdmission } from "../_shared/rae/concept_binding_adapter.ts";
-import { adjudicate } from "../_shared/rae/orchestrator.ts";
+import {
+  adjudicate,
+  type CandidateConcept as OrchestratorCandidateConcept,
+} from "../_shared/rae/orchestrator.ts";
 import { persistInitialAdmission } from "../_shared/rae/storage/admit.ts";
 import { makeRpcAdmitGateway } from "../_shared/rae/storage/gateway_rpc.ts";
 
@@ -182,7 +193,9 @@ async function handle(req: Request): Promise<Response> {
 
   try {
     // §4.7 — load engine binding.
-    const binding = await loadEngineBinding(serviceClient, {
+    // The shared loader's ReadOnlyDbClient is a structural subset of the
+    // supabase-js client; the cast is safe at this seam.
+    const binding = await loadEngineBinding(serviceClient as unknown as Parameters<typeof loadEngineBinding>[0], {
       engine_version_id: reqBody.engine_version_id,
       candidate_concept_id: reqBody.candidate_concept.concept_id,
     });
@@ -202,8 +215,32 @@ async function handle(req: Request): Promise<Response> {
 
     // §4.8 — bind candidate concept (validates + applies any concept
     // override + computes the response-safe metadata).
+    //
+    // The request schema's UnitConversion projection ({to_canonical_factor,
+    // offset}) is the response/transport contract; orchestrator's internal
+    // UnitConversion ({factor, conversion_id}) is normalized here at the
+    // wiring boundary. The factor maps 1:1; conversion_id is synthesized
+    // deterministically from the unit key so the orchestrator's audit
+    // trail remains stable.
+    const candidateConceptForOrchestrator: OrchestratorCandidateConcept = {
+      ...reqBody.candidate_concept,
+      unit_conversions: reqBody.candidate_concept.unit_conversions
+        ? Object.fromEntries(
+          Object.entries(reqBody.candidate_concept.unit_conversions).map(
+            ([unitKey, c]) => [
+              unitKey,
+              {
+                factor: c.to_canonical_factor,
+                conversion_id: `req:${unitKey}`,
+              },
+            ],
+          ),
+        )
+        : undefined,
+    };
+
     const bound = bindCandidateConceptForAdmission({
-      candidate_concept: reqBody.candidate_concept,
+      candidate_concept: candidateConceptForOrchestrator,
       binding_lookup_concept_id: reqBody.candidate_concept.concept_id,
       binding: {
         ...binding,
@@ -212,16 +249,31 @@ async function handle(req: Request): Promise<Response> {
     });
 
     // §4.9 — adjudicate.
+    //
+    // Project the request's RawObservationClaim-shaped sibling and prior
+    // arrays into the slim PanelSibling / PriorObservation shapes the
+    // orchestrator's panel and longitudinal signals consume. Caller-
+    // provided `source_row_id` doubles as the sibling observation_id;
+    // the prior's value+timestamp come straight off the claim.
+    const siblings = reqBody.siblings.map((s) => ({
+      observation_id: s.source_row_id,
+      concept_id: reqBody.candidate_concept.concept_id,
+    }));
+    const priorObservations = reqBody.prior_observations
+      .filter((p) => typeof p.raw_value === "number" && Number.isFinite(p.raw_value))
+      .map((p) => ({
+        witness_id: p.source_row_id,
+        value: p.raw_value as number,
+        observed_at: p.observed_at,
+      }));
+
     const decision = adjudicate({
       claim: reqBody.claim,
       candidate_concept: bound.candidate_concept,
       signal_config: bound.binding.signal_config,
       engine_version: bound.binding.engine_version,
-      // The edge function's RawObservationClaim shape is field-for-field
-      // aligned with the orchestrator's PanelSibling / PriorObservation
-      // (each is a structural superset of RawObservationClaim).
-      siblings: reqBody.siblings,
-      prior_observations: reqBody.prior_observations,
+      siblings,
+      prior_observations: priorObservations,
     });
 
     // §4.10 — build the two adapters (witnessify + payload).
@@ -231,7 +283,9 @@ async function handle(req: Request): Promise<Response> {
     const witnessPayloadAdapter = makeRaeDepth0WitnessPayloadAdapter();
 
     // §4.11 — construct the gateway and persist via the RPC.
-    const runInTxn = makeRpcAdmitGateway(serviceClient, {
+    // RpcCapableClient is a narrow structural subset of the supabase-js
+    // client; the cast is safe at this seam.
+    const runInTxn = makeRpcAdmitGateway(serviceClient as unknown as Parameters<typeof makeRpcAdmitGateway>[0], {
       witnessPayloadAdapter,
     });
 
