@@ -45,6 +45,7 @@ export default function ManifestPreviewPage() {
   const [state, setState] = useState<PreviewState>({ kind: "empty" });
   const fileRef = useRef<HTMLInputElement | null>(null);
   const errorAlertRef = useRef<HTMLDivElement | null>(null);
+  const diffCardRef = useRef<HTMLDivElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [sampleLoaded, setSampleLoaded] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
@@ -289,6 +290,28 @@ export default function ManifestPreviewPage() {
     const changed = diffEntries.filter((d) => d.kind === "changed").length;
     return { added, removed, changed, total: diffEntries.length };
   }, [diffEntries]);
+
+  // Clear the "Sample manifest loaded" banner whenever the validated
+  // manifest no longer matches the bundled sample (e.g. user edited
+  // the JSON after loading the sample).
+  useEffect(() => {
+    if (!sampleLoaded) return;
+    if (state.kind !== "success") return;
+    if ((diffSummary?.total ?? 0) > 0) {
+      setSampleLoaded(false);
+    }
+  }, [state, diffSummary, sampleLoaded]);
+
+  // When the diff panel is opened, smooth-scroll it into view so users
+  // don't miss it sitting below the sticky Sections card.
+  useEffect(() => {
+    if (!diffOpen) return;
+    // Defer to allow the card to mount before scrolling.
+    const id = window.setTimeout(() => {
+      diffCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [diffOpen]);
 
   // Non-blocking guidance warnings produced by the lint pass.
   const warnings: ManifestWarning[] | null = useMemo(() => {
