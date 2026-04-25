@@ -395,7 +395,8 @@ All errors are normalized in `error_mapping.ts`.
 | `has_role` returns false | `403` | `forbidden` | |
 | `MalformedClaimError` | `400` | `malformed_claim` | |
 | `NoCandidateConceptError` | `400` | `no_candidate_concept` | |
-| Concept-id mismatch (adapter) | `400` | `candidate_concept_mismatch` | |
+| `CandidateConceptShapeError` (adapter) | `400` | `candidate_concept_shape` | C2: malformed/missing fields |
+| `CandidateConceptMismatchError` (adapter) | `400` | `candidate_concept_mismatch` | `concept_id` ≠ `binding_lookup_concept_id` |
 | `InvalidSignalShapeError` | `422` | `invalid_signal_shape` | |
 | `UnitNormalizationError` | `422` | `unit_normalization_failed` | |
 | `RegistryGapError` (loader or orchestrator) | `422` | `registry_gap` | |
