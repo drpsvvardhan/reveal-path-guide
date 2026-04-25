@@ -13,13 +13,26 @@
 
 import type { ManifestPreview } from "./manifestSchema";
 
+export type WarningSeverity = "info" | "warning";
+
 export interface ManifestWarning {
   path: string;
   message: string;
+  severity: WarningSeverity;
 }
 
 export function lintManifest(m: ManifestPreview): ManifestWarning[] {
   const out: ManifestWarning[] = [];
+
+  // ---- schema_version ------------------------------------------------------
+  if (!m.schema_version) {
+    out.push({
+      path: "schema_version",
+      severity: "info",
+      message:
+        "schema_version is not set — declaring one (e.g. '1.0.0') makes downstream consumers safer.",
+    });
+  }
 
   // ---- patientJourney ------------------------------------------------------
   const j = m.patientJourney;
@@ -28,6 +41,7 @@ export function lintManifest(m: ManifestPreview): ManifestWarning[] {
     if (events.length > 0 && !j.currentPhase && !j.nextStep) {
       out.push({
         path: "patientJourney",
+        severity: "warning",
         message:
           "timeline is provided but neither currentPhase nor nextStep is set — patients lose the 'where am I now' anchor.",
       });
@@ -36,12 +50,14 @@ export function lintManifest(m: ManifestPreview): ManifestWarning[] {
       if (!e.dateLabel || !e.dateLabel.trim()) {
         out.push({
           path: `patientJourney.timeline[${i}]`,
+          severity: "warning",
           message: "missing dateLabel — the event will render with a 'Date not provided' fallback.",
         });
       }
       if (!e.status) {
         out.push({
           path: `patientJourney.timeline[${i}]`,
+          severity: "warning",
           message: "missing status — no badge will render and the timeline dot stays neutral.",
         });
       }
