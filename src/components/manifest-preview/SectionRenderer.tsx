@@ -510,23 +510,35 @@ export const sectionRenderers: Record<string, (m: ManifestPreview) => JSX.Elemen
   careMap: (m) => <CareMapSection m={m} />,
 };
 
-export const sectionOrder: (keyof typeof sectionRenderers)[] = [
-  "patient",
-  "patientThesis",
-  "studyOverview",
-  "layerFindings",
-  "helpingVsFeeding",
-  "symptomBridges",
-  "reversibility",
-  "confidenceBreakdown",
-  "careMap",
+export interface SectionMeta {
+  key: keyof typeof sectionRenderers;
+  label: string;
+}
+
+export const sectionMeta: SectionMeta[] = [
+  { key: "patient", label: "Patient" },
+  { key: "patientThesis", label: "Thesis" },
+  { key: "studyOverview", label: "Study overview" },
+  { key: "layerFindings", label: "Layer findings" },
+  { key: "helpingVsFeeding", label: "Helping vs feeding" },
+  { key: "symptomBridges", label: "Symptom bridges" },
+  { key: "reversibility", label: "Reversibility" },
+  { key: "confidenceBreakdown", label: "Confidence" },
+  { key: "careMap", label: "Care map" },
 ];
+
+export const sectionOrder = sectionMeta.map((s) => s.key);
+
+/** Stable DOM id used by the sticky section nav. */
+export const sectionAnchorId = (key: string) => `manifest-section-${key}`;
 
 export function RenderManifest({ m }: { m: ManifestPreview }) {
   return (
     <div className="space-y-5">
-      {sectionOrder.map((key) => (
-        <div key={key}>{sectionRenderers[key](m)}</div>
+      {sectionMeta.map(({ key }) => (
+        <div key={key} id={sectionAnchorId(key)} className="scroll-mt-24">
+          {sectionRenderers[key](m)}
+        </div>
       ))}
     </div>
   );
