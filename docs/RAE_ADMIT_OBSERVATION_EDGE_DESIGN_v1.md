@@ -598,6 +598,13 @@ and HTTP dependencies are mocked; no real network or RPC calls are made.
    `schema_version: '1'` field) before first use?
 6. **Error code namespace.** Confirm the §9 `error.code` strings — these
    become a public contract once any external caller branches on them.
+7. **Candidate-concept hydration.** This design requires callers to
+   transport the **full** orchestrator `CandidateConcept` (§5.1, C7).
+   Should a future revision add an ontology-side hydration step inside
+   the edge function (taking only `concept_id` from callers), and if
+   so, which ontology surface is the source of truth? Out of scope for
+   v1; recorded so callers and CodexOS agree on the contract before the
+   first production caller integrates.
 
 ---
 
