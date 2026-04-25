@@ -333,7 +333,7 @@ function happyDeps(): HandleDeps {
     getUserIdFromJwt: () => Promise.resolve(USER_ID),
     hasAdminRole: () => Promise.resolve(true),
     loadEngineBinding: (() => Promise.resolve(mkBinding())) as unknown as HandleDeps["loadEngineBinding"],
-    bindCandidateConceptForAdmission: ((input) => ({
+    bindCandidateConceptForAdmission: ((input: { candidate_concept: unknown; binding: unknown }) => ({
       candidate_concept: input.candidate_concept!,
       binding: input.binding,
       applied_override: null,
@@ -346,8 +346,9 @@ function happyDeps(): HandleDeps {
         mode: "created" as const,
         caw: mkPersistedCaw(),
       })) as unknown as HandleDeps["persistInitialAdmission"],
-    makeRpcAdmitGateway: (() => (async (body: (gw: unknown) => Promise<unknown>) =>
-      await body({} as unknown))) as unknown as HandleDeps["makeRpcAdmitGateway"],
+    makeRpcAdmitGateway: (() =>
+      ((body: (gw: unknown) => Promise<unknown>) =>
+        body({} as unknown))) as unknown as HandleDeps["makeRpcAdmitGateway"],
     makeServiceClient: () => ({}),
   };
 }
