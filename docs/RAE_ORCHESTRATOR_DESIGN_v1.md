@@ -377,17 +377,20 @@ after):
 1. **HbA1c happy path.** Canonical unit `%`, value 5.6, exact lexical
    match, HPLC method in known assays, ref range matches, diabetes panel
    complete, prior 5.5 within delta ceiling → `current_state =
-   auto_admitted`, `policy_at_decision = "default"`, witness produced,
+   auto_admitted`, `policy_at_decision = "default"`, `witness_intent =
+   "produce_depth0_witness"`, `produced_witness_id = null`,
    `founder_review_flag = false`.
 2. **HbA1c calibration mode routes to needs_review.** Same inputs as
    test 1 but `engine_version.calibration_mode = true` →
    `current_state = needs_review`, `policy_at_decision =
-   "calibration_all_routes_to_review"`, **no witness produced**, all
-   identity signals still recorded with their original bands.
+   "calibration_all_routes_to_review"`, `witness_intent = "none"`,
+   `founder_review_flag = true`, all identity signals still recorded
+   with their original bands.
 3. **Longitudinal fail forces needs_review.** HbA1c jumps 5.6 → 12.0
    exceeding `delta_ceiling = 1.5` → coherence gate trips,
    `coherence_result = "fail"`, `current_state = needs_review` regardless
-   of identity score, `founder_review_flag = true`, no witness.
+   of identity score, `founder_review_flag = true`, `witness_intent =
+   "none"`.
 4. **Missing config produces RegistryGapError, not rejected.**
    `signal_config` lookup returns null → orchestrator throws
    `RegistryGapError`; **no CAW row is constructed**, no `rejected`
