@@ -28,6 +28,8 @@ type PreviewState =
   | { kind: "success"; data: ManifestData };
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2MB safety cap for paste/upload
+const LS_KEY = "manifest-preview:last-valid-v1";
+const DIFF_CAP = 100;
 
 export default function ManifestPreviewPage() {
   const [text, setText] = useState("");
@@ -37,6 +39,7 @@ export default function ManifestPreviewPage() {
   const [copied, setCopied] = useState(false);
   const [sampleLoaded, setSampleLoaded] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [restored, setRestored] = useState(false);
 
   const validate = useCallback((raw: string) => {
     setState({ kind: "loading" });
@@ -55,6 +58,35 @@ export default function ManifestPreviewPage() {
       setState({ kind: "success", data: result.data! });
     }, 50);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Restore last valid manifest from localStorage on first mount.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const result = parseManifestJson(raw);
+      if (result.ok && result.data) {
+        setText(JSON.stringify(result.data, null, 2));
+        setState({ kind: "success", data: result.data });
+        setRestored(true);
+      }
+    } catch {
+      // ignore — corrupt storage is non-fatal
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist last valid manifest whenever validation succeeds.
+  useEffect(() => {
+    if (state.kind !== "success") return;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+    } catch {
+      // storage may be full / disabled — non-fatal
+    }
+  }, [state]);
 
   const onFile = useCallback(
     async (file: File) => {
@@ -84,6 +116,8 @@ export default function ManifestPreviewPage() {
     setState({ kind: "empty" });
     setSampleLoaded(false);
     setDiffOpen(false);
+    setRestored(false);
+    try { localStorage.removeItem(LS_KEY); } catch { /* noop */ }
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -91,6 +125,7 @@ export default function ManifestPreviewPage() {
     const raw = JSON.stringify(sampleManifestPreview, null, 2);
     setText(raw);
     setSampleLoaded(true);
+    setRestored(false);
     validate(raw);
   }, [validate]);
 
@@ -221,6 +256,46 @@ export default function ManifestPreviewPage() {
     return { added, removed, changed, total: diffEntries.length };
   }, [diffEntries]);
 
+  // Group diff entries by top-level field, capped at DIFF_CAP rows total
+  // so very large manifests don't tank the panel.
+  const groupedDiff = useMemo(() => {
+    if (!diffEntries) return null;
+    const capped = diffEntries.slice(0, DIFF_CAP);
+    const truncated = diffEntries.length - capped.length;
+    const groups = new Map<string, DiffEntry[]>();
+    for (const d of capped) {
+      const top = d.path === "(root)" ? "(root)" : d.path.split(".")[0];
+      const arr = groups.get(top) ?? [];
+      arr.push(d);
+      groups.set(top, arr);
+    }
+    const ordered = Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "(root)") return -1;
+      if (b === "(root)") return 1;
+      return a.localeCompare(b);
+    });
+    return { ordered, truncated };
+  }, [diffEntries]);
+
+  // Required-field checklist for the patient block.
+  const requiredChecklist = useMemo(() => {
+    if (state.kind !== "success") return null;
+    const p = state.data.patient as Record<string, unknown> | undefined;
+    return [
+      { label: "patient.firstName", ok: typeof p?.firstName === "string" && (p.firstName as string).trim().length > 0 },
+      { label: "patient.age", ok: typeof p?.age === "number" && Number.isFinite(p.age) },
+      { label: "patient.sex", ok: typeof p?.sex === "string" && (p.sex as string).trim().length > 0 },
+    ];
+  }, [state]);
+
+  // Show "Reset to sample" only when current manifest is valid AND differs.
+  const canResetToSample =
+    state.kind === "success" && (diffSummary?.total ?? 0) > 0;
+
+  const onResetToSample = useCallback(() => {
+    onLoadSample();
+  }, [onLoadSample]);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -318,7 +393,7 @@ export default function ManifestPreviewPage() {
                   title="Open print/PDF dialog with preview-only view"
                 >
                   <Printer className="h-3.5 w-3.5 mr-1.5" />
-                  Print preview
+                  Print / Save PDF
                 </Button>
                 <Button
                   size="sm"
@@ -330,6 +405,17 @@ export default function ManifestPreviewPage() {
                   <GitCompare className="h-3.5 w-3.5 mr-1.5" />
                   {diffOpen ? "Hide diff" : "Diff vs sample"}
                 </Button>
+                {canResetToSample && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onResetToSample}
+                    title="Replace current manifest with the bundled sample"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    Reset to sample
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -362,6 +448,16 @@ export default function ManifestPreviewPage() {
               <AlertDescription className="text-xs mt-1">
                 You're viewing the bundled demo manifest. Edit the JSON, upload your own,
                 or click <strong>Reset to empty</strong> to clear it.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {restored && state.kind === "success" && !sampleLoaded && (
+            <Alert>
+              <RotateCcw className="h-4 w-4" />
+              <AlertTitle>Restored last valid manifest</AlertTitle>
+              <AlertDescription className="text-xs mt-1">
+                Loaded from your browser's local storage. Click <strong>Reset to empty</strong> to clear it.
               </AlertDescription>
             </Alert>
           )}
@@ -413,6 +509,37 @@ export default function ManifestPreviewPage() {
                   .
                 </AlertDescription>
               </Alert>
+
+              {requiredChecklist && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Required fields
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1 text-xs">
+                      {requiredChecklist.map((r) => (
+                        <li key={r.label} className="flex items-center gap-2">
+                          {r.ok ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                          )}
+                          <code className="font-mono">{r.label}</code>
+                          <span
+                            className={
+                              r.ok ? "text-emerald-600" : "text-destructive"
+                            }
+                          >
+                            {r.ok ? "present" : "missing"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Sticky section nav (shown alongside the input column on lg+). */}
               <Card className="lg:sticky lg:top-4">
@@ -475,7 +602,7 @@ export default function ManifestPreviewPage() {
                 </CardContent>
               </Card>
 
-              {diffOpen && diffEntries && diffSummary && (
+              {diffOpen && diffEntries && diffSummary && groupedDiff && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
@@ -495,43 +622,59 @@ export default function ManifestPreviewPage() {
                         Current manifest is identical to the bundled sample.
                       </p>
                     ) : (
-                      <ul className="text-xs max-h-72 overflow-auto space-y-1 font-mono">
-                        {diffEntries.map((d, i) => {
-                          const tone =
-                            d.kind === "added"
-                              ? "text-emerald-600"
-                              : d.kind === "removed"
-                              ? "text-rose-600"
-                              : "text-amber-600";
-                          const sigil =
-                            d.kind === "added" ? "+" : d.kind === "removed" ? "−" : "~";
-                          return (
-                            <li key={i} className="leading-snug">
-                              <span className={`${tone} font-semibold`}>{sigil}</span>{" "}
-                              <span>{d.path}</span>
-                              {d.kind === "changed" && (
-                                <div className="pl-4 text-muted-foreground">
-                                  <span className="text-rose-600/80">−</span>{" "}
-                                  {formatDiffValue(d.before)}
-                                  <br />
-                                  <span className="text-emerald-600/80">+</span>{" "}
-                                  {formatDiffValue(d.after)}
-                                </div>
-                              )}
-                              {d.kind === "added" && (
-                                <div className="pl-4 text-emerald-700/80">
-                                  + {formatDiffValue(d.after)}
-                                </div>
-                              )}
-                              {d.kind === "removed" && (
-                                <div className="pl-4 text-rose-700/80">
-                                  − {formatDiffValue(d.before)}
-                                </div>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
+                      <div className="text-xs max-h-72 overflow-auto space-y-3 font-mono">
+                        {groupedDiff.ordered.map(([top, items]) => (
+                          <div key={top}>
+                            <p className="font-sans font-medium uppercase tracking-wide text-[10px] opacity-80">
+                              {top}{" "}
+                              <span className="opacity-70">({items.length})</span>
+                            </p>
+                            <ul className="mt-1 space-y-1">
+                              {items.map((d, i) => {
+                                const tone =
+                                  d.kind === "added"
+                                    ? "text-emerald-600"
+                                    : d.kind === "removed"
+                                    ? "text-rose-600"
+                                    : "text-amber-600";
+                                const sigil =
+                                  d.kind === "added" ? "+" : d.kind === "removed" ? "−" : "~";
+                                return (
+                                  <li key={i} className="leading-snug">
+                                    <span className={`${tone} font-semibold`}>{sigil}</span>{" "}
+                                    <span>{d.path}</span>
+                                    {d.kind === "changed" && (
+                                      <div className="pl-4 text-muted-foreground">
+                                        <span className="text-rose-600/80">−</span>{" "}
+                                        {formatDiffValue(d.before)}
+                                        <br />
+                                        <span className="text-emerald-600/80">+</span>{" "}
+                                        {formatDiffValue(d.after)}
+                                      </div>
+                                    )}
+                                    {d.kind === "added" && (
+                                      <div className="pl-4 text-emerald-700/80">
+                                        + {formatDiffValue(d.after)}
+                                      </div>
+                                    )}
+                                    {d.kind === "removed" && (
+                                      <div className="pl-4 text-rose-700/80">
+                                        − {formatDiffValue(d.before)}
+                                      </div>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                        {groupedDiff.truncated > 0 && (
+                          <p className="font-sans text-[11px] text-muted-foreground">
+                            +{groupedDiff.truncated} more entr
+                            {groupedDiff.truncated === 1 ? "y" : "ies"} hidden (capped at {DIFF_CAP}).
+                          </p>
+                        )}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
