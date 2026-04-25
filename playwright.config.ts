@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
  * webServer and runs the existing e2e specs against it. No backend, auth,
  * or DB interaction is required by the manifest-preview smoke test.
  */
-const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 5173);
 const HOST = process.env.PLAYWRIGHT_HOST ?? "127.0.0.1";
 const BASE_URL = `http://${HOST}:${PORT}`;
 
@@ -30,7 +30,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npx vite preview --port ${PORT} --host ${HOST} --strictPort`,
+    command: `npx vite --port ${PORT} --host ${HOST} --strictPort`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
