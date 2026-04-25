@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, Upload, FileJson, AlertCircle, CheckCircle2,
-  RotateCcw, Sparkles, Download, FileDown, Copy, Printer, GitCompare, Check,
+  RotateCcw, Sparkles, Download, FileDown, Copy, Printer, GitCompare, Check, Search,
 } from "lucide-react";
 import {
   parseManifestJson,
@@ -31,6 +31,13 @@ const MAX_BYTES = 2 * 1024 * 1024; // 2MB safety cap for paste/upload
 const LS_KEY = "manifest-preview:last-valid-v1";
 const DIFF_CAP = 100;
 
+// Format a byte count compactly for the size hint (e.g. "1.2 KB").
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 2 : 1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function ManifestPreviewPage() {
   const [text, setText] = useState("");
   const [state, setState] = useState<PreviewState>({ kind: "empty" });
@@ -40,6 +47,7 @@ export default function ManifestPreviewPage() {
   const [sampleLoaded, setSampleLoaded] = useState(false);
   const [diffOpen, setDiffOpen] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [diffQuery, setDiffQuery] = useState("");
 
   const validate = useCallback((raw: string) => {
     setState({ kind: "loading" });
@@ -112,11 +120,21 @@ export default function ManifestPreviewPage() {
   );
 
   const onReset = () => {
+    const hasStored = (() => {
+      try { return localStorage.getItem(LS_KEY) != null; } catch { return false; }
+    })();
+    if (hasStored) {
+      const ok = window.confirm(
+        "Reset to empty?\n\nThis will clear the input and remove the last valid manifest saved in this browser's local storage.",
+      );
+      if (!ok) return;
+    }
     setText("");
     setState({ kind: "empty" });
     setSampleLoaded(false);
     setDiffOpen(false);
     setRestored(false);
+    setDiffQuery("");
     try { localStorage.removeItem(LS_KEY); } catch { /* noop */ }
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -277,16 +295,63 @@ export default function ManifestPreviewPage() {
     return { ordered, truncated };
   }, [diffEntries]);
 
-  // Required-field checklist for the patient block.
+  // Required-field checklist. In success state, evaluates against the
+  // validated manifest. In error state, attempts a loose JSON parse so
+ // reviewers can see which required fields are still missing.
   const requiredChecklist = useMemo(() => {
-    if (state.kind !== "success") return null;
-    const p = state.data.patient as Record<string, unknown> | undefined;
+    let p: Record<string, unknown> | undefined;
+    if (state.kind === "success") {
+      p = state.data.patient as Record<string, unknown> | undefined;
+    } else if (state.kind === "error" && text.trim()) {
+      try {
+        const obj = JSON.parse(text);
+        if (obj && typeof obj === "object" && "patient" in obj) {
+          p = (obj as Record<string, unknown>).patient as Record<string, unknown>;
+        }
+      } catch {
+        p = undefined;
+      }
+    } else {
+      return null;
+    }
     return [
       { label: "patient.firstName", ok: typeof p?.firstName === "string" && (p.firstName as string).trim().length > 0 },
       { label: "patient.age", ok: typeof p?.age === "number" && Number.isFinite(p.age) },
       { label: "patient.sex", ok: typeof p?.sex === "string" && (p.sex as string).trim().length > 0 },
     ];
-  }, [state]);
+  }, [state, text]);
+
+  // Manifest size hint (paste/upload byte count + JSON line count).
+  const sizeHint = useMemo(() => {
+    if (!text) return null;
+    const bytes = new Blob([text]).size;
+    const lines = text.split("\n").length;
+    const pctOfCap = Math.min(100, Math.round((bytes / MAX_BYTES) * 100));
+    return { bytes, lines, pctOfCap };
+  }, [text]);
+
+  // Filtered diff entries by free-text search (path or value substring).
+  const filteredGroupedDiff = useMemo(() => {
+    if (!groupedDiff) return null;
+    const q = diffQuery.trim().toLowerCase();
+    if (!q) return groupedDiff;
+    const matches = (d: DiffEntry) => {
+      if (d.path.toLowerCase().includes(q)) return true;
+      const a = d.before !== undefined ? formatDiffValue(d.before).toLowerCase() : "";
+      const b = d.after !== undefined ? formatDiffValue(d.after).toLowerCase() : "";
+      return a.includes(q) || b.includes(q);
+    };
+    const ordered: [string, DiffEntry[]][] = [];
+    let kept = 0;
+    for (const [top, items] of groupedDiff.ordered) {
+      const f = items.filter(matches);
+      if (f.length) {
+        ordered.push([top, f]);
+        kept += f.length;
+      }
+    }
+    return { ordered, truncated: groupedDiff.truncated, kept };
+  }, [groupedDiff, diffQuery]);
 
   // Show "Reset to sample" only when current manifest is valid AND differs.
   const canResetToSample =
@@ -310,10 +375,24 @@ export default function ManifestPreviewPage() {
             </p>
           </div>
           <div className="hidden md:flex items-center gap-2">
-            {state.kind === "success" && state.data.schema_version && (
-              <Badge variant="secondary">
-                schema v{state.data.schema_version}
-              </Badge>
+            {state.kind === "success" && (
+              state.data.schema_version ? (
+                <Badge
+                  variant="default"
+                  className="font-mono tracking-tight"
+                  title="schema_version declared in this manifest"
+                >
+                  schema_version v{state.data.schema_version}
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="border-amber-500/50 text-amber-600"
+                  title="No schema_version declared in this manifest"
+                >
+                  schema_version: unset
+                </Badge>
+              )
             )}
             <Badge variant="outline">Local preview · no data is sent</Badge>
           </div>
@@ -433,6 +512,26 @@ export default function ManifestPreviewPage() {
                 className="font-mono text-xs min-h-[360px]"
                 spellCheck={false}
               />
+              {sizeHint && (
+                <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                  <span>
+                    {formatBytes(sizeHint.bytes)} · {sizeHint.lines.toLocaleString()} line
+                    {sizeHint.lines === 1 ? "" : "s"}
+                  </span>
+                  <span
+                    className={
+                      sizeHint.pctOfCap >= 90
+                        ? "text-destructive"
+                        : sizeHint.pctOfCap >= 70
+                        ? "text-amber-600"
+                        : ""
+                    }
+                    title={`Upload cap is ${formatBytes(MAX_BYTES)}`}
+                  >
+                    {sizeHint.pctOfCap}% of {formatBytes(MAX_BYTES)} cap
+                  </span>
+                </div>
+              )}
               <p className="text-[11px] text-muted-foreground">
                 Required: <code>patient.firstName</code>, <code>patient.age</code>,{" "}
                 <code>patient.sex</code>. Optional <code>schema_version</code> like <code>1.0.0</code>.
@@ -493,6 +592,33 @@ export default function ManifestPreviewPage() {
                 )}
               </AlertDescription>
             </Alert>
+          )}
+
+          {state.kind === "error" && requiredChecklist && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Required fields
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-1 text-xs">
+                  {requiredChecklist.map((r) => (
+                    <li key={r.label} className="flex items-center gap-2">
+                      {r.ok ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                      )}
+                      <code className="font-mono">{r.label}</code>
+                      <span className={r.ok ? "text-emerald-600" : "text-destructive"}>
+                        {r.ok ? "present" : "missing"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
           )}
 
           {state.kind === "success" && (
@@ -602,7 +728,7 @@ export default function ManifestPreviewPage() {
                 </CardContent>
               </Card>
 
-              {diffOpen && diffEntries && diffSummary && groupedDiff && (
+              {diffOpen && diffEntries && diffSummary && filteredGroupedDiff && (
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
@@ -615,15 +741,31 @@ export default function ManifestPreviewPage() {
                           : `+${diffSummary.added} ·  ~${diffSummary.changed} ·  −${diffSummary.removed}`}
                       </span>
                     </div>
+                    {diffSummary.total > 0 && (
+                      <div className="mt-2 relative">
+                        <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={diffQuery}
+                          onChange={(e) => setDiffQuery(e.target.value)}
+                          placeholder="Search paths or values…"
+                          className="w-full rounded-md border bg-background pl-7 pr-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {diffSummary.total === 0 ? (
                       <p className="text-xs text-muted-foreground">
                         Current manifest is identical to the bundled sample.
                       </p>
+                    ) : filteredGroupedDiff.ordered.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No diff entries match <code className="font-mono">{diffQuery}</code>.
+                      </p>
                     ) : (
                       <div className="text-xs max-h-72 overflow-auto space-y-3 font-mono">
-                        {groupedDiff.ordered.map(([top, items]) => (
+                        {filteredGroupedDiff.ordered.map(([top, items]) => (
                           <div key={top}>
                             <p className="font-sans font-medium uppercase tracking-wide text-[10px] opacity-80">
                               {top}{" "}
@@ -668,10 +810,10 @@ export default function ManifestPreviewPage() {
                             </ul>
                           </div>
                         ))}
-                        {groupedDiff.truncated > 0 && (
+                        {filteredGroupedDiff.truncated > 0 && (
                           <p className="font-sans text-[11px] text-muted-foreground">
-                            +{groupedDiff.truncated} more entr
-                            {groupedDiff.truncated === 1 ? "y" : "ies"} hidden (capped at {DIFF_CAP}).
+                            +{filteredGroupedDiff.truncated} more entr
+                            {filteredGroupedDiff.truncated === 1 ? "y" : "ies"} hidden (capped at {DIFF_CAP}).
                           </p>
                         )}
                       </div>
