@@ -56,6 +56,12 @@ export const RawObservationClaimSchema = z.object({
   raw_reference_high: z.number().finite().nullable(),
   observed_at: z.string().datetime({ offset: true }),
   panel_grouping_key: z.string().nullable(),
+  // Optional ontology concept id for THIS row. Currently consumed only
+  // for `siblings[]` to project into PanelSibling; ignored elsewhere.
+  // Sibling rows that omit this field are dropped at the wiring boundary
+  // and counted in `diagnostics.dropped_siblings` of the success response.
+  // Not split into a separate schema for now (single-shape policy).
+  concept_id: z.string().uuid().optional(),
 }).strict();
 
 export const PolicyOverrideSchema = z.enum([
