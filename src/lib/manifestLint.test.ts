@@ -173,4 +173,31 @@ describe("buildLintReport", () => {
     const report = buildLintReport(m, all);
     expect(report.items).toHaveLength(all.length);
   });
+
+  it("download payload exposes schema_version, generated_at, counts, and items with path/severity/message", () => {
+    const items = lintManifest(m);
+    const fixed = new Date("2025-06-15T12:00:00.000Z");
+    const report = buildLintReport(m, items, fixed);
+
+    // Round-trip through JSON to mirror what the download blob contains.
+    const serialized = JSON.parse(JSON.stringify(report));
+
+    expect(Object.keys(serialized).sort()).toEqual(
+      ["counts", "generated_at", "items", "schema_version"],
+    );
+    expect(serialized.schema_version).toBe("1.0.0");
+    expect(serialized.generated_at).toBe("2025-06-15T12:00:00.000Z");
+    expect(serialized.counts).toEqual({
+      total: items.length,
+      warning: items.filter((i) => i.severity === "warning").length,
+      info: items.filter((i) => i.severity === "info").length,
+    });
+    expect(Array.isArray(serialized.items)).toBe(true);
+    expect(serialized.items.length).toBeGreaterThan(0);
+    for (const it of serialized.items) {
+      expect(typeof it.path).toBe("string");
+      expect(typeof it.message).toBe("string");
+      expect(["info", "warning"]).toContain(it.severity);
+    }
+  });
 });
