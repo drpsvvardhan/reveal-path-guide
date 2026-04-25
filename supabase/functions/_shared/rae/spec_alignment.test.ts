@@ -162,6 +162,8 @@ Deno.test("spec-alignment: RAE shared dir contains only the contracted files", a
     "spec_alignment.test.ts",
     "edge_loaders.ts",
     "edge_loaders.test.ts",
+    "concept_binding.ts",
+    "concept_binding.test.ts",
   ]);
   const allowedDirs = new Set([
     "signals",  // seven signal evaluators (see signals/*.ts)
