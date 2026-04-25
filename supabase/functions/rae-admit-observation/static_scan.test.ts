@@ -25,6 +25,14 @@ async function read(name: string): Promise<string> {
   return await Deno.readTextFile(`${DIR}${name}`);
 }
 
+/** Strip line comments and block comments before scanning so doc text
+ *  documenting forbidden symbols does not trip the guards. */
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
 const FORBIDDEN_IMPORT_PATTERNS: RegExp[] = [
   /witnessify_impl/,
   /_shared\/rae\/signals\//,
@@ -71,7 +79,7 @@ const IMPORT_RE = /^\s*import[^"']+["']([^"']+)["']/gm;
 
 Deno.test("static_scan: no forbidden imports in source files", async () => {
   for (const f of await listSourceFiles()) {
-    const src = await read(f);
+    const src = stripComments(await read(f));
     for (const pat of FORBIDDEN_IMPORT_PATTERNS) {
       assert(!pat.test(src), `${f} contains forbidden reference matching ${pat}`);
     }
@@ -80,7 +88,7 @@ Deno.test("static_scan: no forbidden imports in source files", async () => {
 
 Deno.test("static_scan: no direct DB access or raw SQL in source files", async () => {
   for (const f of await listSourceFiles()) {
-    const src = await read(f);
+    const src = stripComments(await read(f));
     for (const pat of FORBIDDEN_DB_PATTERNS) {
       assert(!pat.test(src), `${f} contains forbidden DB pattern ${pat}`);
     }
@@ -89,7 +97,7 @@ Deno.test("static_scan: no direct DB access or raw SQL in source files", async (
 
 Deno.test("static_scan: every RAE shared import is on the allow-list", async () => {
   for (const f of await listSourceFiles()) {
-    const src = await read(f);
+    const src = stripComments(await read(f));
     const imports = [...src.matchAll(IMPORT_RE)].map((m) => m[1]);
     for (const spec of imports) {
       if (!spec.includes("_shared/rae/")) continue;
@@ -103,7 +111,7 @@ Deno.test("static_scan: every RAE shared import is on the allow-list", async () 
 
 Deno.test("static_scan: source files do not import witnessify_impl directly or transitively by name", async () => {
   for (const f of await listSourceFiles()) {
-    const src = await read(f);
+    const src = stripComments(await read(f));
     assert(!/witnessify_impl/.test(src), `${f} references witnessify_impl`);
   }
 });
