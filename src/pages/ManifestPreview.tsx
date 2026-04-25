@@ -13,7 +13,7 @@ import {
   type FriendlyIssue,
   type ManifestPreview as ManifestData,
 } from "@/lib/manifestSchema";
-import { lintManifest, type ManifestWarning } from "@/lib/manifestLint";
+import { lintManifest, buildLintReport, type ManifestWarning } from "@/lib/manifestLint";
 import {
   RenderManifest,
   sectionMeta,
@@ -310,6 +310,24 @@ export default function ManifestPreviewPage() {
     if (warningFilter === "all") return warnings;
     return warnings.filter((w) => w.severity === warningFilter);
   }, [warnings, warningFilter]);
+
+  const onExportLintReport = useCallback(() => {
+    if (state.kind !== "success" || !warnings) return;
+    // Always export the FULL unfiltered list — filters are UI only.
+    const report = buildLintReport(state.data, warnings);
+    const blob = new Blob([JSON.stringify(report, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = `manifest-lint-report-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [state, warnings]);
 
   // Group diff entries by top-level field, capped at DIFF_CAP rows total
   // so very large manifests don't tank the panel.
@@ -688,6 +706,17 @@ export default function ManifestPreviewPage() {
                       {" · "}
                       Info: <strong className="text-foreground">{warningCounts.info}</strong>
                     </p>
+                    <div className="mb-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={onExportLintReport}
+                        title="Export full lint report as JSON (always includes all items)"
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Export lint report
+                      </Button>
+                    </div>
                     <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                       {(
                         [

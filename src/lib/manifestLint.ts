@@ -66,3 +66,31 @@ export function lintManifest(m: ManifestPreview): ManifestWarning[] {
 
   return out;
 }
+
+export interface LintReport {
+  schema_version: string | null;
+  generated_at: string;
+  counts: { total: number; warning: number; info: number };
+  items: ManifestWarning[];
+}
+
+/**
+ * Build a serializable lint report payload. Always includes ALL items —
+ * UI filtering is presentational only and never narrows the export.
+ */
+export function buildLintReport(
+  m: ManifestPreview,
+  items: ManifestWarning[],
+  now: Date = new Date(),
+): LintReport {
+  return {
+    schema_version: m.schema_version ?? null,
+    generated_at: now.toISOString(),
+    counts: {
+      total: items.length,
+      warning: items.filter((i) => i.severity === "warning").length,
+      info: items.filter((i) => i.severity === "info").length,
+    },
+    items,
+  };
+}
