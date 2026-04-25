@@ -286,28 +286,36 @@ concerns and are not part of the orchestrator's draft.
 
 ## 7. Witness Production Boundary
 
-Witness-production decision rules:
+The orchestrator emits a discrete `witness_intent` only — it never
+builds a witness payload, never invents a witness ID, and never writes
+to `witness_objects`. The downstream P1a witnessify layer interprets
+`witness_intent` and is solely responsible for witness construction
+and FK back-fill of `produced_witness_id`.
 
-- `current_state = auto_admitted` AND `policy = default` → **witness produced** (orchestrator emits a witness payload for the storage layer to insert into `witness_objects`).
-- `current_state = auto_admitted` AND `policy = calibration_all_routes_to_review` → **not reachable** — calibration forces `needs_review` (§3 step 7).
-- `current_state = auto_admitted` AND `policy = back_annotation` → **no witness on this pass** — back-annotation references an existing witness separately and never mints a new one in this orchestrator.
-- `current_state = needs_review` (any policy) → **no witness**.
-- `current_state = rejected` (any policy) → **no witness**.
-- `current_state = human_confirmed` → **not reachable** by initial orchestrator (engine cannot produce `human_confirmed`); witness production for human confirmation is the calibration review flow's responsibility.
+`witness_intent` decision rules:
 
-When witness is produced:
-- The witness payload is constructed by the orchestrator from the same
-  unit-normalized value, evidence, and limitations used in the CAW.
-- The witness is FK'd to the CAW via
-  `concept_assignment_witnesses.produced_witness_id` (hard FK already in
-  schema, OQ-2).
-- The witness's `signal_provenance` references the seven `SignalResult`
-  evidence blocks verbatim.
+- `current_state = auto_admitted` AND `policy = default` →
+  `witness_intent = "produce_depth0_witness"`.
+- `current_state = auto_admitted` AND `policy =
+  calibration_all_routes_to_review` → **not reachable** — calibration
+  forces `needs_review` (§3 step 7).
+- `current_state = auto_admitted` AND `policy = back_annotation` →
+  `witness_intent = "none"` (back-annotation references an existing
+  witness separately and never mints a fresh one through RAE).
+- `current_state = needs_review` (any policy) → `witness_intent =
+  "none"`.
+- `current_state = rejected` (any policy) → `witness_intent = "none"`.
+- `current_state = human_confirmed` → **not reachable** by initial
+  orchestrator (engine cannot produce `human_confirmed`); witness
+  production for human confirmation is handled by the calibration
+  review flow, which decides its own intent independently.
 
-`produced_witness_id` on the CAW is `null` until the storage layer
-inserts the witness and back-fills the FK in the same transaction. The
-orchestrator returns a draft witness object **alongside** the CAW so the
-storage layer can perform that two-row insert atomically.
+When the witness layer mints a depth-0 witness from a
+`produce_depth0_witness` intent, it FKs back to the CAW via
+`concept_assignment_witnesses.produced_witness_id` (hard FK already in
+schema, OQ-2). The witness's `signal_provenance` references the seven
+`SignalResult` evidence blocks verbatim from the CAW. None of that
+construction happens in the orchestrator.
 
 ---
 
