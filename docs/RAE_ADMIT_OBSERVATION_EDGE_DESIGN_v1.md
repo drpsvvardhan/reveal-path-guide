@@ -1,430 +1,497 @@
 # RAE `rae-admit-observation` Edge Function — Implementation Design v1
 
-Status: **Design only.** No code created. Implements the transport adapter
-described in `RAE_EDGE_FUNCTION_WIRING_DESIGN_v1.md` using the already-built
-shared modules.
-
-Controlling specs:
-- `docs/RAE_EDGE_FUNCTION_WIRING_DESIGN_v1.md`
-- `docs/RAE_STORAGE_PERSISTENCE_DESIGN_v1.md`
-- `docs/RAE_ORCHESTRATOR_DESIGN_v1.md`
+> **Status:** Design only. **No edge function is created in this step.**
+> No code, no SQL, no migrations are introduced by this document.
+> Implementation will follow in a separate, explicitly-approved prompt.
 
 ---
 
-## 1. Module reuse (no re-implementation)
+## 1. Purpose and Scope
 
-| Concern | Module | Symbol |
+### 1.1 Purpose
+`rae-admit-observation` is the transport layer that lets an authenticated
+admin caller submit a single `RawObservationClaim` for adjudication by the
+Reasoning Admission Engine (RAE) and persist the resulting initial
+admission decision through the gateway RPC. It is the **only** sanctioned
+entry point for first-time RAE admission from outside the database.
+
+### 1.2 Scope (in)
+- Accepting one observation claim + one candidate concept per request.
+- Loading the active `EngineBinding` (engine version + signal config +
+  optional concept override) for the requested `engine_version_id` /
+  `candidate_concept.concept_id`.
+- Running `adjudicate()` to produce an `AdmissionDecisionV1`.
+- Persisting that decision through `persistInitialAdmission()` via
+  `makeRpcAdmitGateway()` → `public.rae_persist_initial_admission`.
+- Returning a stable, public-safe JSON response containing the resulting
+  `caw_id`, `current_state`, `produced_witness_id`, and override metadata.
+
+### 1.3 Scope (out)
+- State transitions after initial admission (review, confirm, reject).
+- Bulk admission, backfill, or migration tooling.
+- Any P1a reasoning surface, witness narrative generation, or UI binding.
+- Direct DB writes, raw SQL, or any path that bypasses the RPC gateway.
+
+---
+
+## 2. Module Reuse
+
+The edge function is a **thin composition** of existing, tested modules.
+No engine, storage, or orchestrator semantics change.
+
+| Responsibility | Module | Symbol(s) used |
 |---|---|---|
-| Engine + signal config load | `_shared/rae/edge_loaders.ts` | `loadEngineBinding` |
-| Candidate binding + override | `_shared/rae/concept_binding_adapter.ts` | `bindCandidateConceptForAdmission` |
-| Adjudication | `_shared/rae/orchestrator.ts` | `adjudicate` |
-| Persistence | `_shared/rae/storage/admit.ts` | `persistInitialAdmission` |
-| Gateway | `_shared/rae/storage/gateway_rpc.ts` | `makeRpcAdmitGateway` |
+| Engine + signal-config load | `_shared/rae/edge_loaders.ts` | `loadEngineBinding`, `EngineBinding` |
+| Candidate-concept binding & override application | `_shared/rae/concept_binding_adapter.ts` | `bindCandidateConceptForAdmission`, `BindCandidateConceptResult` |
+| Adjudication | `_shared/rae/orchestrator.ts` | `adjudicate`, `AdmissionDecisionV1`, `RegistryGapError`, `MalformedClaimError`, `NoCandidateConceptError`, `InvalidSignalShapeError`, `UnitNormalizationError` |
+| Persistence (typed errors, back-annotation, idempotency) | `_shared/rae/storage/admit.ts` | `persistInitialAdmission`, `WitnessRowInput`, `BackAnnotationVerificationError`, `StorageInputError`, `WitnessifyFailureError`, `TransactionRollbackError` |
+| Single RPC write boundary | `_shared/rae/storage/gateway_rpc.ts` | `makeRpcAdmitGateway`, `WitnessPayloadAdapter`, `mapRpcError` |
+| Types | `_shared/rae/types.ts` | `RawObservationClaim`, `AdmissionState`, `ConceptAssignmentWitnessDraft` |
 
-The edge function MUST NOT:
-- import `witnessify_impl.ts`
-- read or write any P1a reasoning surface
-- call `.from(...)` for writes
-- issue raw SQL
-- reach into ontology tables (loaders are the only DB surface)
+No other RAE-internal module is imported. **`witnessify_impl` is not
+imported** (see §8 and §12).
 
 ---
 
-## 2. File layout
+## 3. File Structure
 
 ```
 supabase/functions/rae-admit-observation/
-  index.ts               -- transport, auth, request → modules → response
-  request_schema.ts      -- Zod schemas (request + response)
-  witness_adapters.ts    -- WitnessRowInput → WitnessPayloadAdapter
-  static_scan.test.ts    -- import/surface guardrails
-  index.test.ts          -- behavioural tests (mock supabase + gateway)
+├── index.ts                  # HTTP entry, composition only
+├── request_schema.ts         # Zod schema + parsed-type exports
+├── witness_adapters.ts       # WitnessPayloadAdapter + WitnessRowInput builder
+├── error_mapping.ts          # typed-error → HTTP status mapper
+├── index.test.ts             # request/response integration tests (mocked deps)
+├── request_schema.test.ts    # schema acceptance/rejection cases
+├── witness_adapters.test.ts  # depth-0 payload shape + null-on-non-admit
+└── static_scan.test.ts       # forbidden-imports / forbidden-DB-access guard
 ```
 
-`index.ts` is the only file that constructs a Supabase client.
+No file outside this directory is created or modified.
 
 ---
 
-## 3. `index.ts` flow (exact)
+## 4. Exact Request → Processing → Response Flow
 
-```
-1.  if req.method === "OPTIONS" → return 204 with corsHeaders
-2.  if req.method !== "POST"    → 405 { error: "method_not_allowed" }
-3.  parse JSON body. on parse error → 400 { error: "invalid_json" }
-4.  RequestSchema.safeParse(body). on fail → 400 { error, fields }
-5.  Resolve auth:
-       a. Read Authorization: Bearer <jwt>. Missing → 401.
-       b. anonClient = createClient(URL, ANON_KEY, { global: { headers: { Authorization }}})
-       c. const { data: { user } } = await anonClient.auth.getUser()
-          - null → 401 { error: "unauthenticated" }
-       d. Admin check (see §4). non-admin → 403.
-6.  Build adminClient = createClient(URL, SERVICE_ROLE_KEY,
-       { auth: { persistSession: false, autoRefreshToken: false } }).
-       This is the ONLY client used for loaders, adjudicate inputs, and
-       the RPC gateway.
-7.  binding = await loadEngineBinding(adminClient, {
-        engine_version_id: body.engine_version_id,
-        candidate_concept_id: body.candidate_concept.concept_id,
-    })
-       - RegistryGapError → 422 { error: "registry_gap", detail }
-8.  bound = bindCandidateConceptForAdmission({
-        binding_lookup_concept_id: body.candidate_concept.concept_id,
-        candidate_concept: body.candidate_concept,
-        binding,
-    })
-       - CandidateConceptShapeError    → 400 { error: "candidate_concept_shape" }
-       - CandidateConceptMismatchError → 400 { error: "candidate_concept_mismatch" }
-9.  Apply optional `policy_override` (see §5) → final binding + policy hint.
-10. decision = adjudicate({
-        raw_observation: body.raw_observation,
-        candidate_concept: bound.candidate_concept,
-        engine_version: bound.binding.engine_version,
-        signal_config: bound.binding.signal_config,
-        siblings: body.siblings ?? [],
-        prior_observations: body.prior_observations ?? [],
-        actor: { kind: "engine", id: body.engine_actor_id ?? "rae" },
-        policy_hint: appliedPolicyHint,        // see §5
-    })
-       - merge bound.override_limitations into decision.caw.limitations
-         (de-duped, blank-stripped) BEFORE persist.
-       - if applied_override present:
-           decision.caw.founder_review_flag = true
-           decision.caw.policy_at_decision  =
-             (already "calibration_all_routes_to_review" via binding)
-11. gateway = makeRpcAdmitGateway(adminClient)
-12. persisted = await persistInitialAdmission({
-        decision,
-        witness_payload: maybeWitnessPayload(decision, body),  // §6
-        back_annotation_existing_witness_id:
-            body.back_annotation?.existing_witness_id ?? null,
-        gateway,
-    })
-       - typed storage errors → §7 mapping
-13. Build ResponseSchema payload:
-       {
-         mode: persisted.mode,                       // "created" | "existing"
-         caw_id: persisted.caw.caw_id,
-         current_state: persisted.caw.current_state,
-         produced_witness_id: persisted.witness_id,
-         confidence_value: persisted.caw.confidence_value,
-         confidence_basis: persisted.caw.confidence_basis,
-         limitations: persisted.caw.limitations,
-         policy_at_decision: persisted.caw.policy_at_decision,
-         founder_review_flag: persisted.caw.founder_review_flag,
-         applied_override: bound.applied_override_metadata,
-         engine_version: { id, semver, registry_seed_version, ontology_version }
-       }
-14. return 200 JSON.
-```
+`index.ts` performs **exactly** these ordered steps. Any failure short-
+circuits to the error mapper in §9.
 
-All responses use `corsHeaders`. All thrown errors caught at top-level →
-`{ error: "internal_error", correlation_id }`, status 500, no stack
-leakage.
+1. **CORS / method gate.** Accept `POST` and `OPTIONS` only. Anything
+   else → `405`.
+2. **Body parse.** Read JSON body. Malformed JSON → `400`.
+3. **Schema validation.** `RequestSchema.safeParse(body)` (§5).
+   Failure → `400` with the Zod issue list (no internals leaked).
+4. **Auth: user JWT.** Construct a user-scoped client from the
+   `Authorization: Bearer …` header. Missing/invalid → `401`.
+5. **Authorization: admin gate.** Server-side check via
+   `public.has_role(auth.uid(), 'admin')` using the user-scoped client.
+   Not admin → `403`. **No client-supplied role claims are trusted.**
+6. **Service-role client.** Construct a separate
+   `SUPABASE_SERVICE_ROLE_KEY` client. All subsequent DB I/O uses this
+   client only (see §6).
+7. **Load engine binding.**
+   `loadEngineBinding({ client: serviceClient, engine_version_id,
+   candidate_concept_id: req.candidate_concept.concept_id })`.
+   Missing rows → `RegistryGapError` → `422`.
+8. **Bind candidate concept.**
+   `bindCandidateConceptForAdmission({ candidate_concept,
+   binding_lookup_concept_id: req.candidate_concept.concept_id,
+   binding })`. Mismatch → `400`.
+9. **Adjudicate.** `adjudicate({ claim, candidate_concept,
+   signal_config: bound.binding.signal_config,
+   engine_version: bound.binding.engine_version,
+   siblings, prior_observations })`. Engine errors → §9.
+10. **Build witness payload adapter.** `witness_adapters.ts` returns a
+    `WitnessPayloadAdapter` that produces a depth-0 `WitnessRowInput`
+    only when the decision admits (§8). Non-admit → adapter returns
+    `null`.
+11. **Persist via gateway.**
+    ```
+    const gateway = makeRpcAdmitGateway(serviceClient);
+    const result  = await persistInitialAdmission({
+      decision, gateway, witnessAdapter,
+      actor: { kind: 'engine', id: engine_version_id },
+    });
+    ```
+    `persistInitialAdmission` enforces back-annotation (§11) and
+    idempotency (§10) internally.
+12. **Merge override limitations.** The response surfaces
+    `bound.override_limitations` and `bound.applied_override_metadata`
+    so callers can see calibration routing without DB introspection.
+13. **Respond.** `200` with the response body in §5.2.
+
+The function never reads or writes any table directly; **all writes go
+through `rae_persist_initial_admission`**.
 
 ---
 
-## 4. Zod request schema
+## 5. Request JSON Schema
 
-`request_schema.ts`:
+### 5.1 Request (Zod, strict)
+
+All objects use `.strict()` — unknown keys are rejected.
 
 ```ts
-const RawObservationClaimSchema = z.object({
-  source_table: z.string().min(1),
-  source_row_id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  raw_name: z.string().min(1),
-  raw_unit: z.string().nullable(),
-  raw_value: z.number().nullable(),
-  raw_method: z.string().nullable(),
-  raw_reference_low: z.number().nullable(),
-  raw_reference_high: z.number().nullable(),
-  observed_at: z.string().datetime(),
-  panel_grouping_key: z.string().nullable(),
-});
+RawObservationClaim = z.object({
+  source_table:        z.string().min(1),
+  source_row_id:       z.string().uuid(),
+  user_id:             z.string().uuid(),
+  raw_name:            z.string().min(1),
+  raw_unit:            z.string().nullable(),
+  raw_value:           z.number().finite().nullable(),
+  raw_method:          z.string().nullable(),
+  raw_reference_low:   z.number().finite().nullable(),
+  raw_reference_high:  z.number().finite().nullable(),
+  observed_at:         z.string().datetime(),
+  panel_grouping_key:  z.string().nullable(),
+}).strict();
 
-const CandidateConceptSchema = z.object({
-  concept_id: z.string().min(1),
+CandidateConcept = z.object({
+  concept_id:   z.string().uuid(),
   display_name: z.string().min(1),
-  expected_unit: z.string().nullable(),
-  expected_method: z.string().nullable(),
-  panel_membership: z.array(z.string()).default([]),
-});
+  source:       z.enum(['ontology', 'override']),
+}).strict();
 
-const SiblingSchema = z.object({
-  source_row_id: z.string().uuid(),
-  raw_name: z.string(),
-  raw_unit: z.string().nullable(),
-  raw_value: z.number().nullable(),
-});
-
-const PriorObservationSchema = z.object({
-  witness_id: z.string().uuid(),
-  observed_at: z.string().datetime(),
-  unit_normalized_value: z.number().nullable(),
-  canonical_unit: z.string().nullable(),
-});
-
-const BackAnnotationSchema = z.object({
-  existing_witness_id: z.string().uuid(),
-});
-
-const PolicyOverrideSchema = z.enum([
-  "calibration_all_routes_to_review",
-  "back_annotation",
-]);
-
-export const AdmitRequestSchema = z.object({
-  engine_version_id: z.string().uuid(),
-  engine_actor_id: z.string().min(1).optional(),
-  raw_observation: RawObservationClaimSchema,
-  candidate_concept: CandidateConceptSchema,
-  siblings: z.array(SiblingSchema).max(64).optional(),
-  prior_observations: z.array(PriorObservationSchema).max(256).optional(),
-  policy_override: PolicyOverrideSchema.optional(),
-  back_annotation: BackAnnotationSchema.optional(),
-}).strict()
-  .refine(
-    (b) => b.raw_observation.user_id !== undefined,
-    { message: "user_id required on raw_observation" },
-  )
-  .refine(
-    (b) => b.policy_override !== "back_annotation" || !!b.back_annotation,
-    { message: "back_annotation required when policy_override='back_annotation'" },
-  );
+RequestSchema = z.object({
+  engine_version_id:   z.string().uuid(),
+  claim:               RawObservationClaim,
+  candidate_concept:   CandidateConcept,
+  siblings:            z.array(RawObservationClaim).max(64).default([]),
+  prior_observations:  z.array(RawObservationClaim).max(256).default([]),
+  policy_override:     z.enum([
+                         'default',
+                         'calibration_all_routes_to_review',
+                         'back_annotation',
+                       ]).optional(),
+  request_id:          z.string().uuid().optional(), // caller idempotency hint
+}).strict();
 ```
 
-Strict mode rejects unknown fields → no silent extra payload.
-
----
-
-## 5. Auth & admin boundary
-
-- Request **must** carry a user JWT; service-role JWTs are rejected
-  (validate `user.aud === "authenticated"` and `user.role !== "service_role"`).
-- Admin gate: `has_role(user.id, 'admin')` via `anonClient.rpc('has_role', ...)`.
-  Non-admin → 403 `{ error: "forbidden_admin_required" }`.
-- Once admin verified, **all subsequent DB work uses the service-role
-  client** (loaders + RPC). The user JWT is not propagated downstream;
-  the RPC is `SECURITY DEFINER` and asserts shape internally.
-- `verify_jwt = false` in `supabase/config.toml` (Lovable default). In-code
-  validation above is the actual security boundary.
-
----
-
-## 6. `policy_override` handling
-
-| Inbound `policy_override` | Effect |
-|---|---|
-| absent | `policy_hint = "default"`. Concept-override path may still force calibration via `bindCandidateConceptForAdmission` (handled inside the binding). |
-| `"calibration_all_routes_to_review"` | Set `binding.engine_version.calibration_mode = true` post-bind (idempotent if already true). `policy_hint = "calibration_all_routes_to_review"`. Append limitation `policy_override:calibration_all_routes_to_review`. |
-| `"back_annotation"` | `policy_hint = "back_annotation"`. Requires `back_annotation.existing_witness_id`. Append limitation `policy_override:back_annotation`. The actual back-annotation tuple verification happens server-side in `rae_persist_initial_admission` — the edge function does **not** read `witness_objects`. |
-
-Override never introduces a fifth admission state. The orchestrator + DB
-function remain the only deciders of `current_state`.
-
-`founder_review_flag` is forced `true` whenever:
-- a concept_override was applied, OR
-- `policy_override` was used, OR
-- DB reports `back_annotation_concept_drift:` limitation (future, when
-  `witness_objects.ontology_concept_id` exists).
-
----
-
-## 7. Witness adapters
-
-`witness_adapters.ts` exposes:
+### 5.2 Response (success, `200`)
 
 ```ts
-export interface WitnessRowInput {
-  user_id: string;
-  source_table: string;
-  source_row_id: string;
-  observed_at: string;                  // biological_timestamp
-  observed_value: unknown;              // jsonb
-  observed_unit: string | null;
-  signal: string;                       // candidate_concept_id by default
-  testimony: string;                    // confidence_basis text
-  limitations: string[];
-  confidence_value: number;
-  confidence_basis: string;
-  registry_seed_version: string;
-  transformation_version: string;
-  validity_window_seconds: number | null;
+{
+  caw_id:                 string,            // uuid (from decision.caw)
+  current_state:          AdmissionState,    // exactly one of the 4 locked states
+  produced_witness_id:    string | null,     // null for needs_review/rejected
+  policy_at_decision:     CalibrationPolicy,
+  applied_override:       AppliedOverrideMetadata | null,
+  override_limitations:   string[],          // tokens to surface in caller UI/logs
+  engine_version_id:      string,
+  ontology_version:       string,
+  registry_seed_version:  string,
 }
-
-export function buildWitnessPayloadFromDecision(
-  decision: AdmissionDecision,
-  ctx: { request_user_id: string; raw: RawObservationClaim; engine: EngineVersionConfig },
-): WitnessPayloadAdapter | null
 ```
 
-Rules:
-1. Returns `null` unless `decision.caw.current_state ∈ {auto_admitted, human_confirmed}`.
-2. Hard-asserts `decision.caw.user_id === ctx.request_user_id` (defense in
-   depth against spoofed payloads).
-3. Maps:
-   - `witness_id` = freshly minted UUID (deterministic per `caw_id` for
-     idempotency: `uuidv5(caw_id, RAE_NS)` — keeps RPC `ON CONFLICT` clean).
-   - `source_window` = `"point"` (default per spec).
-   - `domain_of_access` = `"clinical_lab"` for the lab path; pulled from
-     the engine binding metadata (`engine.domain_of_access` if present,
-     fallback `"clinical_lab"`).
-   - `epistemic_role` = `"observation"`.
-   - `reliability_class` = derived from `decision.caw.confidence_value`
-     bands (≥0.85 `"high"`, ≥0.6 `"medium"`, else `"low"`).
-   - `compression_depth` = `0`.
-   - `observed_value` = `{ value, unit_normalized_value, plausibility_band }`
-     pulled from the value SignalEvidence.
-   - `observed_unit` = canonical unit from UnitEvidence (or raw fallback).
-   - `testimony` = `decision.caw.confidence_basis`.
-   - `limitations` = `decision.caw.limitations` (already merged with
-     override tokens).
-   - `confidence_value` / `confidence_basis` = from CAW.
-   - `biological_timestamp` = `ctx.raw.observed_at`.
-   - `validity_window_seconds` = registry-declared; `null` if absent.
-   - `transformation_version` = `engine.semver`.
-   - `registry_seed_version` = `engine.registry_seed_version`.
-   - `ancestry_witness_ids` = `[]` (depth-0).
-   - `derived_from_packet_id` = `null`.
-   - `conflict_candidates` = `null`.
-4. Adapter does **no I/O** and imports nothing from storage or witnessify.
+### 5.3 Response (error)
 
-`maybeWitnessPayload(decision, body)` in `index.ts` is a one-line wrapper
-that calls the adapter and returns `null` for review/rejected states.
+```ts
+{ error: { code: string, message: string, details?: unknown } }
+```
+`code` is a stable string (e.g. `registry_gap`, `back_annotation_mismatch`),
+suitable for caller branching. See §9.
 
 ---
 
-## 8. Error mapping (caller-facing)
+## 6. Authentication and Authorization Model
 
-| Source | Detection | HTTP | body.error |
+- **Caller auth.** The function requires an `Authorization: Bearer <JWT>`
+  header issued by the platform's auth system. Anonymous calls → `401`.
+- **Admin gate.** A user-scoped client invokes
+  `public.has_role(auth.uid(), 'admin')` (existing `SECURITY DEFINER`
+  helper). Non-admin → `403`. The function does not accept any client-
+  supplied role hint.
+- **Service-role boundary.** Once authorization passes, **all** subsequent
+  DB reads (`loadEngineBinding`) and the single RPC write
+  (`rae_persist_initial_admission`) use a service-role client constructed
+  from `SUPABASE_SERVICE_ROLE_KEY`. This is required because the RPC and
+  some registry reads cross RLS boundaries that admin users do not hold
+  directly.
+- **Two-client rule.** The user-scoped client is used **only** for the
+  admin check. It is never reused for engine I/O. The service-role client
+  is constructed lazily after the admin check passes; it is never created
+  for unauthenticated requests.
+- **No service-role key leakage.** The key is read from the function's
+  environment, never echoed in responses or logs.
+
+`verify_jwt` for this function: **default (`true`)**. No `config.toml`
+override is required.
+
+---
+
+## 7. Policy Override Handling
+
+The orchestrator already owns policy semantics via
+`EngineVersionConfig.calibration_mode` and the policy field on the CAW
+draft. The edge function only **selects** which policy path is in force
+for this request.
+
+| `policy_override` value | Effect |
+|---|---|
+| omitted / `default` | Use `engine_version` exactly as loaded. No mutation. |
+| `calibration_all_routes_to_review` | Force `engine_version.calibration_mode = true` before adjudication. The orchestrator routes every outcome to `needs_review` and stamps `policy_at_decision = 'calibration_all_routes_to_review'`. |
+| `back_annotation` | Pass through unchanged to the orchestrator; the back-annotation policy is enforced at the storage layer (§11). The edge function only records the requested policy in the response. |
+
+If a `concept_override` was applied by `bindCandidateConceptForAdmission`,
+the resulting binding **already has** `calibration_mode = true`. A caller
+`policy_override` of `default` does **not** un-set it — overrides compose
+by widening the review path, never by narrowing it. **No fifth admission
+state is introduced.**
+
+---
+
+## 8. Witness Adapter Design
+
+`witness_adapters.ts` exports a single factory:
+
+```ts
+export function makeDepth0WitnessAdapter(
+  engineVersionId: string,
+): WitnessPayloadAdapter
+```
+
+Behavior:
+
+1. Receives the `ConceptAssignmentWitnessDraft` from
+   `persistInitialAdmission`.
+2. If `draft.current_state` ∈ { `needs_review`, `rejected` }, returns
+   `null`. The gateway then writes the CAW row with no witness.
+3. Otherwise (`auto_admitted` or `human_confirmed`) builds a
+   `WitnessRowInput` whose:
+   - `witness_id` is deterministic via
+     `uuidv5(RAE_CAW_NAMESPACE, draft.caw_id + ':depth0')`. This makes
+     replays idempotent end-to-end.
+   - `confidence_value`, `confidence_basis`, and `limitations` are copied
+     verbatim from the draft (already validated by the orchestrator to
+     satisfy P1a-style invariants: ≥20-char basis, ≥1 non-blank
+     limitation).
+   - `provenance` records `{ engine_version_id, kind: 'rae_depth0' }`.
+4. The adapter is **pure**: no I/O, no `witnessify_impl` import, no DOM
+   text generation. The persisted `WitnessRowInput` is the **only** thing
+   the gateway forwards to the RPC under `witness_payload`.
+
+`witnessify_impl.ts` is intentionally **not** imported. Depth-0 admission
+witnesses for RAE are structurally simpler than the full witnessify
+pipeline and must remain decoupled from it; reusing that module would
+drag in surface dependencies that this function must not touch.
+
+---
+
+## 9. Error Mapping Table
+
+All errors are normalized in `error_mapping.ts`.
+
+| Internal error | HTTP | `error.code` | Notes |
 |---|---|---|---|
-| JSON parse | try/catch | 400 | `invalid_json` |
-| Zod | `safeParse` | 400 | `invalid_request` (+ `fields`) |
-| Missing JWT | header absent | 401 | `unauthenticated` |
-| Invalid JWT / no user | `getUser()` null | 401 | `unauthenticated` |
-| Service-role JWT | role check | 403 | `service_role_forbidden` |
-| Non-admin | `has_role` false | 403 | `forbidden_admin_required` |
-| `RegistryGapError` | thrown by loader | 422 | `registry_gap` (+ detail) |
-| `CandidateConceptShapeError` | adapter | 400 | `candidate_concept_shape` |
-| `CandidateConceptMismatchError` | adapter | 400 | `candidate_concept_mismatch` |
-| `AdmitPayloadInvalidError` | gateway map of `22023` | 400 | `payload_invalid` |
-| `AdmitBackAnnotationMismatchError` | gateway map of `P0001` `back_annotation tuple mismatch` | 409 | `back_annotation_mismatch` |
-| `AdmitBackAnnotationMissingError` | gateway map of `P0001` `not found` | 404 | `back_annotation_witness_not_found` |
-| `AdmitWitnessUnresolvableError` | gateway map of `P0001` witness insert | 500 | `witness_insert_failed` |
-| `AdmitTransportError` | network / unknown SQLSTATE | 502 | `gateway_transport` |
-| Anything else | top-level catch | 500 | `internal_error` (+ `correlation_id`) |
+| Zod parse failure | `400` | `invalid_request` | Issues echoed; no stack |
+| Missing/invalid JWT | `401` | `unauthenticated` | |
+| `has_role` returns false | `403` | `forbidden` | |
+| `MalformedClaimError` | `400` | `malformed_claim` | |
+| `NoCandidateConceptError` | `400` | `no_candidate_concept` | |
+| Concept-id mismatch (adapter) | `400` | `candidate_concept_mismatch` | |
+| `InvalidSignalShapeError` | `422` | `invalid_signal_shape` | |
+| `UnitNormalizationError` | `422` | `unit_normalization_failed` | |
+| `RegistryGapError` (loader or orchestrator) | `422` | `registry_gap` | |
+| `StorageInputError` | `400` | `storage_input` | |
+| `BackAnnotationVerificationError` | `409` | `back_annotation_mismatch` | See §11 |
+| `WitnessifyFailureError` | `502` | `witness_persist_failed` | |
+| `TransactionRollbackError` | `500` | `transaction_rolled_back` | |
+| RPC error mapped via `mapRpcError` | per mapper | per mapper | Already typed |
+| Anything else | `500` | `internal_error` | Message scrubbed |
 
-Storage errors are the typed errors already exported by
-`gateway_rpc.ts`; the edge function only re-maps them — it does not
-inspect SQLSTATE itself.
+No SQLSTATE codes or DB messages are leaked to the caller.
 
 ---
 
-## 9. Static scans (`static_scan.test.ts`)
+## 10. Idempotency Behavior
 
-Source of `index.ts`, `request_schema.ts`, `witness_adapters.ts` must:
-- import from only:
-  - `npm:@supabase/supabase-js`
-  - `npm:zod`
-  - `_shared/rae/edge_loaders.ts`
-  - `_shared/rae/concept_binding_adapter.ts`
-  - `_shared/rae/orchestrator.ts`
-  - `_shared/rae/storage/admit.ts`
-  - `_shared/rae/storage/gateway_rpc.ts`
-  - `_shared/rae/types.ts`
-- forbid:
-  - `witnessify_impl`
-  - `_shared/rae/storage/` paths other than `admit.ts` / `gateway_rpc.ts`
-  - any of the P1a tables (`reasoning_traces`, `terrain_renders`,
-    `patient_narratives`, `action_plans`, `cie_assessments`,
-    `clusters`, `cluster_relations`, `cluster_evidence`, `witness_objects`,
-    `concept_assignment_witnesses`, `rae_state_transitions`,
-    `patient_lab_observations`)
-  - write verbs on Supabase client: `.insert`, `.update`, `.delete`,
-    `.upsert`
-  - raw SQL: `select `, `insert into`, `update `, `delete from`,
-    `execute_sql`, `rpc("execute`
-  - `.rpc("rae_` calls **except** through `gateway_rpc.ts`
-    (i.e., `index.ts` itself must not call any `rae_*` RPC directly)
-- require: exactly one `.rpc("has_role"...)` call in `index.ts` and
-  no other `.rpc(` outside the gateway.
-
-Add the new files to `spec_alignment.test.ts` allowlist.
+- The orchestrator's `computeCawId(claim, candidate_concept,
+  engine_version_id)` is deterministic via `uuidv5` over a stable
+  namespace. The same `(claim, candidate_concept, engine_version_id)`
+  tuple yields the same `caw_id` across calls.
+- `rae_persist_initial_admission` is the single write boundary and is
+  designed to be idempotent on `caw_id`: a re-submission returns the
+  existing row rather than writing a duplicate. The edge function
+  surfaces that result transparently — callers cannot tell whether the
+  row was newly created or returned.
+- The depth-0 witness id is itself derived from `caw_id` (§8), so witness
+  insertion is also idempotent within the same RPC.
+- The optional `request_id` field in the request is **advisory**. It is
+  recorded in logs only and does not influence persistence; idempotency
+  is owned by `caw_id`.
+- Replays after a partial failure follow `persistInitialAdmission`'s
+  contract: the gateway either commits CAW + witness atomically or rolls
+  both back; the edge function never observes a half-written state.
 
 ---
 
-## 10. Tests written **before** implementation
+## 11. Back-Annotation Behavior
 
-`index.test.ts` (Deno test, mocks supabase client + gateway):
-
-1. `OPTIONS` → 204 + corsHeaders.
-2. `GET` → 405.
-3. invalid JSON → 400 `invalid_json`.
-4. Zod fail (missing `engine_version_id`) → 400 `invalid_request`.
-5. no Authorization header → 401.
-6. JWT resolves to no user → 401.
-7. authenticated non-admin → 403 `forbidden_admin_required`.
-8. admin + `RegistryGapError` from loader → 422 `registry_gap`.
-9. admin + concept mismatch (cc.concept_id ≠ binding lookup) → 400
-   `candidate_concept_mismatch`.
-10. happy `auto_admitted` path → 200, response includes
-    `produced_witness_id`, gateway called once with `witness_payload`
-    non-null.
-11. `needs_review` decision → 200, `produced_witness_id: null`,
-    gateway called with `witness_payload: null`.
-12. `policy_override="back_annotation"` without `back_annotation` block
-    → 400 `invalid_request`.
-13. `policy_override="back_annotation"` with mismatched tuple → gateway
-    throws `AdmitBackAnnotationMismatchError` → 409.
-14. `policy_override="calibration_all_routes_to_review"` → response
-    `policy_at_decision === "calibration_all_routes_to_review"`,
-    `founder_review_flag === true`, limitations contain
-    `policy_override:calibration_all_routes_to_review`.
-15. concept_override active → response `applied_override` non-null and
-    `current_state === "needs_review"`.
-16. idempotency: second call returns `mode: "existing"` and same
-    `caw_id` / `produced_witness_id`.
-
-`witness_adapters.test.ts`:
-
-a. returns `null` for `needs_review` / `rejected`.
-b. returns full adapter for `auto_admitted` with all required fields.
-c. cross-user `caw.user_id ≠ request_user_id` → throws.
-d. derives `reliability_class` bands from confidence value.
-e. uses `engine.semver` as `transformation_version` and
-   `engine.registry_seed_version` for the seed field.
-f. deterministic `witness_id` for the same `caw_id`.
-
-`static_scan.test.ts`: as in §9.
-
-`spec_alignment.test.ts`: extend allowlist for the four new files.
-
-All tests authored and committed BEFORE `index.ts` is implemented; a
-final pre-implementation run shows them failing only on “module not
-found” / “not yet implemented” for `index.ts` and adapters, not on
-guard violations.
+- "Back-annotation" means stamping the underlying source-table row with
+  the resulting `caw_id` so downstream consumers can find the witness
+  trail. This is performed **inside the RPC**, never by the edge
+  function.
+- The edge function performs **no direct read or write** of the source
+  table named in `claim.source_table`. It does not pre-fetch, validate,
+  or back-annotate it from TypeScript.
+- `persistInitialAdmission` invokes the gateway, which calls the RPC.
+  If the RPC's hard verification step detects that the source row's
+  `caw_id` field is already populated with a different value (i.e. a
+  back-annotation conflict), it raises an error that the gateway maps to
+  `BackAnnotationVerificationError`, which §9 surfaces as
+  `409 back_annotation_mismatch`.
+- Under `policy_override = 'back_annotation'`, the orchestrator's
+  policy field reflects the requested mode and the storage layer applies
+  its existing back-annotation rules; the edge function adds no new
+  behavior.
 
 ---
 
-## 11. Non-goals
+## 12. Static Scan Constraints
 
-- No FHIR shape, no public API framing.
-- No new admission state.
-- No edits to orchestrator semantics, `admit.ts`, `gateway_rpc.ts`,
-  `concept_binding*`, or `edge_loaders.ts`.
-- No schema changes, no migrations.
-- No UI changes.
-- No reads against `witness_objects` from the edge function — that
-  remains DB-side in `rae_persist_initial_admission`.
-- No direct `.rpc("rae_*")` from `index.ts`.
+`static_scan.test.ts` reads each file in
+`supabase/functions/rae-admit-observation/` as text and asserts:
+
+**Forbidden imports** (must not appear in any source file in the dir):
+- `witnessify_impl`
+- Any path under `_shared/rae/signals/` (signals are orchestrator-internal)
+- Any P1a reasoning surface (the existing migration-guard regex set)
+- Direct imports of `_shared/witness.ts` for narrative generation
+
+**Forbidden DB access** (in `index.ts`, `witness_adapters.ts`,
+`request_schema.ts`, `error_mapping.ts`):
+- `.from(` (no direct table access)
+- `.insert(`, `.update(`, `.delete(`, `.upsert(`
+- Any `rpc(` call other than the gateway's
+  `rae_persist_initial_admission` (which lives in `gateway_rpc.ts`, not
+  in this directory)
+- Raw SQL string heuristics (`select ... from`, `insert into`,
+  `update ... set`, `delete from`)
+
+**Allowed RAE shared imports** (allow-list, not deny-list):
+- `_shared/rae/edge_loaders.ts`
+- `_shared/rae/concept_binding_adapter.ts`
+- `_shared/rae/orchestrator.ts`
+- `_shared/rae/storage/admit.ts`
+- `_shared/rae/storage/gateway_rpc.ts`
+- `_shared/rae/types.ts`
+
+Any other RAE import fails the scan.
+
+The `spec_alignment.test.ts` allow-list is extended (in the
+implementation prompt, not now) to cover the new files.
 
 ---
 
-## 12. Out-of-scope follow-ups (recorded for future prompts)
+## 13. Test Plan (written before implementation)
 
-- Soft drift (`back_annotation_concept_drift:`) re-enabled once
-  `witness_objects.ontology_concept_id` exists.
-- A non-admin "submit-for-review" variant (would be a separate edge
-  function, not this one).
-- Batch endpoint (`rae-admit-observations-batch`) reusing the same
-  modules.
+Tests are authored and committed **before** `index.ts` exists. All DB
+and HTTP dependencies are mocked; no real network or RPC calls are made.
+
+### 13.1 `request_schema.test.ts`
+- Accepts a minimal valid request.
+- Accepts a request with `siblings` and `prior_observations`.
+- Rejects unknown top-level keys (`.strict()`).
+- Rejects non-UUID `engine_version_id`, `source_row_id`, `user_id`,
+  `concept_id`.
+- Rejects non-finite `raw_value`, `raw_reference_low/high`.
+- Rejects invalid `observed_at` (non-ISO).
+- Rejects empty `raw_name` and empty `display_name`.
+- Rejects `siblings.length > 64` and `prior_observations.length > 256`.
+- Rejects unknown `policy_override` enum values.
+
+### 13.2 `witness_adapters.test.ts`
+- Returns `null` for `current_state = 'needs_review'`.
+- Returns `null` for `current_state = 'rejected'`.
+- Returns a `WitnessRowInput` for `auto_admitted` with deterministic
+  `witness_id` derived from `caw_id`.
+- Returns a `WitnessRowInput` for `human_confirmed`.
+- Copies `confidence_value`, `confidence_basis`, `limitations` verbatim.
+- Two calls with the same draft produce identical adapter outputs
+  (idempotency at the adapter level).
+- No `witnessify_impl` import (asserted in static scan, mirrored here as
+  a unit assertion on the file's import list).
+
+### 13.3 `index.test.ts` (with mocked loader / orchestrator / gateway)
+- `OPTIONS` returns CORS headers and `204`.
+- `GET` / `PUT` / `DELETE` return `405`.
+- Missing JWT → `401 unauthenticated`.
+- Non-admin user → `403 forbidden` (mocked `has_role` → false).
+- Malformed JSON body → `400 invalid_request`.
+- Schema failure → `400 invalid_request` with issue list.
+- `loadEngineBinding` throws `RegistryGapError` → `422 registry_gap`.
+- Concept-id mismatch → `400 candidate_concept_mismatch`.
+- `concept_override` present → response shows `calibration_mode` path
+  and `current_state = 'needs_review'`; `applied_override` populated.
+- `policy_override = 'calibration_all_routes_to_review'` → forces
+  `needs_review` regardless of scores.
+- `policy_override = 'back_annotation'` → orchestrator sees the policy;
+  gateway raises `BackAnnotationVerificationError` → `409`.
+- Happy path `auto_admitted` → `200` with non-null
+  `produced_witness_id`.
+- `needs_review` happy path → `200` with `produced_witness_id = null`.
+- Re-submission with identical input → identical `caw_id` and identical
+  `produced_witness_id` (idempotency).
+- `WitnessifyFailureError` → `502 witness_persist_failed`.
+- `TransactionRollbackError` → `500 transaction_rolled_back`.
+- Unexpected `Error` → `500 internal_error` with scrubbed message.
+
+### 13.4 `static_scan.test.ts`
+- Asserts every constraint enumerated in §12.
+
+### 13.5 Cross-cutting
+- Run `spec_alignment.test.ts` (after allow-list update) — all RAE
+  shared modules still pass.
+- Run all P1a migration guards — must remain green; this function must
+  not appear in any P1a guard's scanned set.
+
+---
+
+## 14. Non-Goals
+
+- **No new admission state.** The four-state vocabulary
+  (`auto_admitted`, `needs_review`, `rejected`, `human_confirmed`) is
+  preserved unchanged.
+- **No state transitions** beyond initial admission. Confirm/reject
+  flows are a separate, future endpoint.
+- **No bulk endpoints.** One claim per request.
+- **No P1a reasoning surface access.** Not read, not written, not
+  imported.
+- **No `witnessify_impl` reuse** for depth-0 admission witnesses.
+- **No direct DB writes** from TypeScript. The single write path is the
+  gateway RPC.
+- **No raw SQL** anywhere in the function's source tree.
+- **No FHIR / OpenAPI / external API framing.** The contract is internal
+  JSON only.
+- **No UI** changes. This is a backend transport layer.
+- **No schema or migration changes** in this design or in the eventual
+  implementation prompt.
+
+---
+
+## 15. Open Questions (for CodexOS approval)
+
+1. **Admin role granularity.** Is `'admin'` the correct role gate, or
+   should a narrower `'rae_operator'` role be introduced before the
+   first production caller? (Default assumption: `'admin'`.)
+2. **`request_id` handling.** Should `request_id` be persisted alongside
+   the CAW for operator log correlation, or remain log-only as currently
+   designed? (Default: log-only; persistence would require a schema
+   change, which is out of scope.)
+3. **`policy_override = 'back_annotation'` exposure.** Should this
+   policy be admin-only at the request level, or is the existing
+   admin-only function gate sufficient? (Default: function gate is
+   sufficient.)
+4. **Sibling / prior caps.** The proposed caps (64 siblings, 256 prior
+   observations) are conservative defaults to keep request size bounded.
+   CodexOS to confirm or adjust.
+5. **Response shape stability.** The §5.2 response is intended to be
+   stable for downstream tooling. Should we version it (e.g. include a
+   `schema_version: '1'` field) before first use?
+6. **Error code namespace.** Confirm the §9 `error.code` strings — these
+   become a public contract once any external caller branches on them.
+
+---
+
+*End of design. No edge function code, schema, or migration is produced
+by this document.*
