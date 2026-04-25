@@ -609,6 +609,125 @@ Deno.test("§9.8 — closed write set: admit.ts performs no DB I/O of its own", 
 });
 
 // ---------------------------------------------------------------------------
+// 8b. Static source scan: closed write set enforced on gateway_rpc.ts.
+//     The RPC binding may only call .rpc("rae_persist_initial_admission",…).
+//     No .from(...).insert/update/delete/upsert. No raw SQL. No reasoning
+//     surfaces. No P1a / forbidden tables.
+// ---------------------------------------------------------------------------
+Deno.test("§9.8b — closed write set: gateway_rpc.ts only calls the approved RPC", async () => {
+  const src = await Deno.readTextFile(
+    new URL("./gateway_rpc.ts", import.meta.url).pathname,
+  );
+  const stripped = src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  // (a) No supabase-client write/read calls outside .rpc(...).
+  const forbiddenClientCalls = [
+    /\.from\(['"][^'"]+['"]\)\s*\.\s*(insert|update|delete|upsert|select)\b/,
+    /\bfrom\(['"][^'"]+['"]\)\.upsert\b/,
+    /\.storage\b/,
+    /\.auth\b/,
+    /\.channel\(/,
+  ];
+  for (const pat of forbiddenClientCalls) {
+    assert(
+      !pat.test(stripped),
+      `gateway_rpc.ts must not contain client call matching ${pat}`,
+    );
+  }
+
+  // (b) No raw SQL.
+  const forbiddenSqlKeywords = [
+    /\bINSERT\s+INTO\b/i,
+    /\bUPDATE\s+\w+\s+SET\b/i,
+    /\bDELETE\s+FROM\b/i,
+    /\bUPSERT\s+INTO\b/i,
+    /\bSELECT\s+\w+\s+FROM\b/i,
+    /\bTRUNCATE\b/i,
+    /\bDROP\s+TABLE\b/i,
+    /\bALTER\s+TABLE\b/i,
+    /\bCREATE\s+TABLE\b/i,
+  ];
+  for (const pat of forbiddenSqlKeywords) {
+    assert(
+      !pat.test(stripped),
+      `gateway_rpc.ts must not contain raw SQL matching ${pat}`,
+    );
+  }
+
+  // (c) No reference to forbidden tables, in code or comments.
+  const forbiddenTables = [
+    "rae_engine_versions",
+    "rae_signal_config",
+    "rae_engine_concept_overrides",
+    "observation_review_queue",
+    "ontology_concept_proposals",
+    "review_queue_audit_log",
+    "clusters",
+    "cluster_evidence",
+    "derived_patterns",
+    "patient_narratives",
+    "action_plans",
+    "terrain_renders",
+    "observation_packets",
+    "patient_lab_observations",
+    "patient_lab_uploads",
+    "profiles",
+    "user_roles",
+  ];
+  for (const tbl of forbiddenTables) {
+    const pat = new RegExp(`["'\\b]${tbl}["'\\b]`);
+    assert(
+      !pat.test(stripped),
+      `gateway_rpc.ts must not reference forbidden table "${tbl}"`,
+    );
+  }
+
+  // (d) Exactly one allowed RPC name. Count occurrences of .rpc( and
+  //     verify every one targets rae_persist_initial_admission.
+  const rpcCalls = [...src.matchAll(/\.rpc\s*<[^>]*>\s*\(\s*["']([^"']+)["']/g)]
+    .concat([...src.matchAll(/\.rpc\s*\(\s*["']([^"']+)["']/g)]);
+  assert(rpcCalls.length > 0, "gateway_rpc.ts must call .rpc(...) at least once");
+  for (const m of rpcCalls) {
+    assertEquals(
+      m[1],
+      "rae_persist_initial_admission",
+      `gateway_rpc.ts may only call rae_persist_initial_admission, got ${m[1]}`,
+    );
+  }
+
+  // (e) No imports from reasoning surfaces or P1a/witnessify_impl direct.
+  const importRe = /^\s*import[^"']+["']([^"']+)["']/gm;
+  const imports = [...src.matchAll(importRe)].map((m) => m[1]);
+  for (const spec of imports) {
+    assert(
+      spec.startsWith("../") || spec.startsWith("./") ||
+        spec.startsWith("jsr:@std/") ||
+        spec.startsWith("https://deno.land/std"),
+      `gateway_rpc.ts: unexpected import shape: ${spec}`,
+    );
+    assert(
+      !spec.includes("witnessify_impl"),
+      "gateway_rpc.ts must not import witnessify_impl directly",
+    );
+    for (const forbidden of [
+      "generate-clusters",
+      "generate-narrative",
+      "generate-action-plan",
+      "generate-terrain-render",
+      "patient-chat",
+      "witnessify-observations",
+    ]) {
+      assert(
+        !spec.includes(forbidden),
+        `gateway_rpc.ts must not import surface ${forbidden}`,
+      );
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Spec alignment: storage layer never imports reasoning surfaces.
 // ---------------------------------------------------------------------------
 Deno.test("storage spec-alignment — no imports from reasoning surfaces or witnessify_impl direct", async () => {
