@@ -165,6 +165,14 @@ through `rae_persist_initial_admission`**.
 
 All objects use `.strict()` — unknown keys are rejected.
 
+**C7.** The request's `candidate_concept` MUST be the full
+`CandidateConcept` shape from `_shared/rae/orchestrator.ts` so the
+orchestrator can adjudicate without an ontology side-load. The edge
+function does **not** hydrate concepts from the ontology in this
+version (see Open Question #7). Callers are responsible for passing
+the full ontology projection. Field-for-field drift between this
+schema and `orchestrator.ts CandidateConcept` is a release blocker.
+
 ```ts
 RawObservationClaim = z.object({
   source_table:        z.string().min(1),
@@ -180,10 +188,32 @@ RawObservationClaim = z.object({
   panel_grouping_key:  z.string().nullable(),
 }).strict();
 
+// Mirrors orchestrator.ts CandidateConcept exactly.
+UnitConversion = z.object({
+  to_canonical_factor: z.number().finite(),
+  offset:              z.number().finite().optional(),
+}).strict();
+
+RangePair = z.object({
+  low:  z.number().finite().nullable(),
+  high: z.number().finite().nullable(),
+}).strict();
+
 CandidateConcept = z.object({
-  concept_id:   z.string().uuid(),
-  display_name: z.string().min(1),
-  source:       z.enum(['ontology', 'override']),
+  concept_id:                 z.string().uuid(),
+  canonical_name:             z.string().min(1),
+  synonyms:                   z.array(z.string()).optional(),
+  ambiguous_alternatives:     z.array(z.string()).optional(),
+  canonical_unit:             z.string().min(1),
+  unit_conversions:           z.record(z.string(), UnitConversion).optional(),
+  plausibility_band:          RangePair.nullable(),
+  known_assays:               z.array(z.string()).optional(),
+  method_optional:            z.boolean().optional(),
+  canonical_reference_range:  RangePair.nullable(),
+  expected_panel_concept_ids: z.array(z.string()).optional(),
+  panel_id:                   z.string().nullable().optional(),
+  dynamics_rule_id:           z.string().nullable(),
+  delta_ceiling:              z.number().finite().nullable(),
 }).strict();
 
 RequestSchema = z.object({
@@ -197,6 +227,10 @@ RequestSchema = z.object({
                          'calibration_all_routes_to_review',
                          'back_annotation',
                        ]).optional(),
+  // Required iff policy_at_decision will be 'back_annotation'.
+  // The edge function never invents a witness id; storage layer
+  // enforces the actual presence rule.
+  back_annotation_witness_id: z.string().uuid().optional(),
   request_id:          z.string().uuid().optional(), // caller idempotency hint
 }).strict();
 ```
