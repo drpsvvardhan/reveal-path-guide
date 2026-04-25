@@ -30,6 +30,28 @@ function shortVal(v: unknown): string {
 }
 
 /**
+ * Stable JSON stringify with sorted object keys. Used to compare values
+ * (notably arrays of objects) without being fooled by key-ordering
+ * differences introduced by parsers like Zod, which re-emits object keys
+ * in schema-declaration order.
+ */
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) {
+    return "[" + v.map(stableStringify).join(",") + "]";
+  }
+  const obj = v as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return (
+    "{" +
+    keys
+      .map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k]))
+      .join(",") +
+    "}"
+  );
+}
+
+/**
  * Compute a flat list of diffs from `before` to `after`.
  * - Object children are diffed recursively.
  * - Arrays are compared as opaque values (changed if not deep-equal).
@@ -64,7 +86,7 @@ export function diffManifests(
   // Fallback: deep-equal via stable JSON; otherwise mark as changed.
   let equal = false;
   try {
-    equal = JSON.stringify(before) === JSON.stringify(after);
+    equal = stableStringify(before) === stableStringify(after);
   } catch {
     equal = false;
   }
