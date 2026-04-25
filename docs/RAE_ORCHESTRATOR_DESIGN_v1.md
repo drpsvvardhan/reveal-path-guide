@@ -270,10 +270,14 @@ that performs this small derivation.
   per signal_id), `coherence_result === "fail"`, calibration mode active,
   and the back-annotation flag if applicable. No blank entries.
 - `policy_at_decision` — §3 step 7.
-- `founder_review_flag` — `true` iff `current_state === "needs_review"`
-  and the trigger was the longitudinal gate (CodexOS OQ-5 audit alert),
-  or `policy_at_decision === "back_annotation"`. Otherwise `false`.
-- `produced_witness_id` — §7.
+- `founder_review_flag` — `true` iff
+  `current_state === "needs_review"` OR
+  `policy_at_decision === "back_annotation"`. Otherwise `false`.
+  All `needs_review` CAWs require founder review, not just the subset
+  triggered by longitudinal gate failure.
+- `produced_witness_id` — always `null` at the orchestrator boundary;
+  back-filled by the witness layer when `witness_intent =
+  "produce_depth0_witness"`. See §7.
 
 `current_state_entered_at`, `created_at`, `updated_at` are storage-layer
 concerns and are not part of the orchestrator's draft.
