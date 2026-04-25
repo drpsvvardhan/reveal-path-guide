@@ -25,13 +25,16 @@
 //
 // BINDING (D-9):
 //   RAE is a decision layer over existing biological witnesses, not a new
-//   witness ontology. The four witness ontology fields (source_window,
-//   domain_of_access, epistemic_role, reliability_class) are derived from
-//   the same witness_signal_registry P1a uses; RAE never invents them.
-//   The caller (index.ts) is responsible for fetching a registry row via
-//   loadRegistryWitnessFields and passing the resulting RegistryWitnessFields
-//   into both adapter factories. On registry miss the loader raises
-//   RegistryGapError — these adapters are never asked to fall back.
+//   witness ontology. RAE-produced depth-0 witnesses must use existing P1A
+//   witness ontology values; v1 defaults lab observations to lab /
+//   biochemical_state_snapshot / direct_measure / high until registry-backed
+//   domain expansion is implemented.
+//
+//   When the caller supplies a RegistryWitnessFields (sourced from
+//   witness_signal_registry via loadRegistryWitnessFields) the adapter uses
+//   those values verbatim. Otherwise the v1 lab defaults below are stamped.
+//   No invalid placeholder enum values (e.g. "rae:initial_admission",
+//   "engine_admitted") are ever emitted.
 // ============================================================================
 
 import {
@@ -48,6 +51,26 @@ import type {
   WitnessPayloadShape,
 } from "../_shared/rae/storage/gateway_rpc.ts";
 import type { RegistryWitnessFields } from "../_shared/rae/edge_loaders.ts";
+
+// ---------------------------------------------------------------------------
+// D-9 v1 lab defaults.
+//
+// RAE is a decision layer over existing biological witnesses, not a new
+// witness ontology. RAE-produced depth-0 witnesses must use existing P1A
+// witness ontology values; v1 defaults lab observations to
+// lab / biochemical_state_snapshot / direct_measure / high until
+// registry-backed domain expansion is implemented.
+// ---------------------------------------------------------------------------
+
+export const RAE_DEPTH0_LAB_DEFAULTS: RegistryWitnessFields = {
+  source_window: "lab",
+  signal: "lab.observation",
+  domain_of_access: "biochemical_state_snapshot",
+  epistemic_role: "direct_measure",
+  reliability_class: "high",
+  compression_depth: 0,
+  registry_seed_version: "rae_v1_lab_defaults",
+};
 
 // Re-export so tests and callers have a single import surface for the
 // registry-derived contract.
@@ -128,32 +151,36 @@ export function computeDepth0WitnessId(caw_id: string): string {
 
 export function makeRaeDepth0WitnessifyAdapter(
   engineVersionId: string,
-  registryFields: RegistryWitnessFields,
+  registryFields?: RegistryWitnessFields,
 ): WitnessifyAdapter {
   if (typeof engineVersionId !== "string" || engineVersionId.trim() === "") {
     throw new Error(
       "makeRaeDepth0WitnessifyAdapter: engineVersionId must be a non-empty string",
     );
   }
-  if (
-    !registryFields ||
-    typeof registryFields.source_window !== "string" ||
-    typeof registryFields.signal !== "string" ||
-    typeof registryFields.domain_of_access !== "string" ||
-    typeof registryFields.epistemic_role !== "string" ||
-    typeof registryFields.reliability_class !== "string" ||
-    typeof registryFields.compression_depth !== "number" ||
-    typeof registryFields.registry_seed_version !== "string"
-  ) {
-    throw new Error(
-      "makeRaeDepth0WitnessifyAdapter: registryFields must be a complete RegistryWitnessFields " +
-        "(source_window, signal, domain_of_access, epistemic_role, reliability_class, " +
-        "compression_depth, registry_seed_version) sourced from witness_signal_registry",
-    );
+  // If a registry row is supplied it must be complete; otherwise fall back
+  // to the v1 lab defaults so we always emit valid P1A enum values.
+  let rf: RegistryWitnessFields;
+  if (registryFields === undefined) {
+    rf = { ...RAE_DEPTH0_LAB_DEFAULTS };
+  } else {
+    if (
+      typeof registryFields.source_window !== "string" ||
+      typeof registryFields.signal !== "string" ||
+      typeof registryFields.domain_of_access !== "string" ||
+      typeof registryFields.epistemic_role !== "string" ||
+      typeof registryFields.reliability_class !== "string" ||
+      typeof registryFields.compression_depth !== "number" ||
+      typeof registryFields.registry_seed_version !== "string"
+    ) {
+      throw new Error(
+        "makeRaeDepth0WitnessifyAdapter: when registryFields is supplied it must be " +
+          "a complete RegistryWitnessFields (source_window, signal, domain_of_access, " +
+          "epistemic_role, reliability_class, compression_depth, registry_seed_version)",
+      );
+    }
+    rf = { ...registryFields };
   }
-
-  // Frozen copy so downstream mutation cannot drift the adapter's contract.
-  const rf: RegistryWitnessFields = { ...registryFields };
 
   return function witnessifyAdapter(
     decision: AdmissionDecisionV1,
