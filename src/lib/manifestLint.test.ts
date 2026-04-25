@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { lintManifest, buildLintReport } from "./manifestLint";
 import type { ManifestPreview } from "./manifestSchema";
 
@@ -199,5 +200,52 @@ describe("buildLintReport", () => {
       expect(typeof it.message).toBe("string");
       expect(["info", "warning"]).toContain(it.severity);
     }
+  });
+
+  it("buildLintReport output conforms to a Zod schema for the payload", () => {
+    const LintItemSchema = z.object({
+      path: z.string().min(1),
+      message: z.string().min(1),
+      severity: z.enum(["info", "warning"]),
+    });
+    const LintReportSchema = z.object({
+      schema_version: z.string().nullable(),
+      generated_at: z.string().refine(
+        (s) => !Number.isNaN(Date.parse(s)),
+        { message: "generated_at must be an ISO timestamp" },
+      ),
+      counts: z.object({
+        total: z.number().int().nonnegative(),
+        warning: z.number().int().nonnegative(),
+        info: z.number().int().nonnegative(),
+      }),
+      items: z.array(LintItemSchema),
+    }).superRefine((val, ctx) => {
+      if (val.counts.total !== val.items.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "counts.total must match items.length",
+        });
+      }
+      const w = val.items.filter((i) => i.severity === "warning").length;
+      const inf = val.items.filter((i) => i.severity === "info").length;
+      if (val.counts.warning !== w || val.counts.info !== inf) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "counts.warning/info must match items grouped by severity",
+        });
+      }
+    });
+
+    // Case 1: manifest with mixed warnings + info.
+    const items1 = lintManifest(m);
+    const report1 = buildLintReport(m, items1, new Date("2025-03-04T05:06:07.000Z"));
+    expect(() => LintReportSchema.parse(JSON.parse(JSON.stringify(report1)))).not.toThrow();
+
+    // Case 2: clean manifest — empty items, null schema_version variant.
+    const clean: ManifestPreview = { patient: m.patient };
+    const items2 = lintManifest(clean);
+    const report2 = buildLintReport(clean, items2);
+    expect(() => LintReportSchema.parse(JSON.parse(JSON.stringify(report2)))).not.toThrow();
   });
 });
