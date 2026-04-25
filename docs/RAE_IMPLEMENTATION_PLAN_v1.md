@@ -335,17 +335,20 @@ Examples (prose, not exhaustive):
 
 1. `<TS>_rae_engine_versions.sql` — must precede CAW because CAW fks
    into it.
-2. `<TS>_rae_signal_registry_extension.sql` — must precede the engine
-   loading band parameters.
+2. `<TS>_rae_signal_config.sql` — sibling table to
+   `witness_signal_registry`; must precede CAW writes because the
+   orchestrator loads band parameters from it. `witness_signal_registry`
+   is not modified.
 3. `<TS>_rae_concept_assignment_witness.sql` — table, enum,
    constraints, RLS, ancestry trigger.
 4. `<TS>_rae_state_transitions.sql` — append-only audit log.
-5. `<TS>_rae_back_annotation.sql` — deferred to step 6 of §9 below.
+5. *No back-annotation migration.* Back-annotation reuses existing
+   CAW columns (§9, OQ-6).
 
 No other migrations are proposed in v1. No alteration of
-`witness_objects`, `witness_signal_registry` (except the additive
-extension), `patient_lab_observations`, or any reasoning-surface
-table. No new RLS policies on existing tables.
+`witness_objects`, `witness_signal_registry`,
+`patient_lab_observations`, or any reasoning-surface table. No new
+RLS policies on existing tables.
 
 ---
 
