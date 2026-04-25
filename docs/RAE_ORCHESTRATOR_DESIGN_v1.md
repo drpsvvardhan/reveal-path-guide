@@ -19,10 +19,18 @@ config, claim, ontology, history, and policy meet.
 The orchestrator converts **one** `RawObservationClaim` plus **one**
 candidate ontology concept into **one** `ConceptAssignmentWitnessDraft`.
 
-It optionally produces a biological witness object **only** when the
-resulting `current_state` is `auto_admitted` (outside calibration mode) or
-`human_confirmed` (handled by a separate review flow, not the initial
-orchestrator pass).
+It does **not** construct a witness payload. Witness construction
+remains the responsibility of the existing P1a witnessify discipline.
+The orchestrator's only output beyond the CAW draft is a discrete
+**`witness_intent`** signal that tells the downstream layer whether a
+depth-0 witness should be minted from this admission:
+
+- `witness_intent = "produce_depth0_witness"` — when `current_state =
+  auto_admitted` AND `policy_at_decision = "default"`.
+- `witness_intent = "none"` — in every other case.
+
+The orchestrator never invents witness IDs, never builds witness shape,
+and never writes to `witness_objects`.
 
 Out of scope for the orchestrator itself:
 - Selecting which candidate concept to evaluate (caller's job, e.g. a
