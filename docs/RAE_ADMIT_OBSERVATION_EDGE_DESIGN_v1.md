@@ -306,6 +306,15 @@ the resulting binding **already has** `calibration_mode = true`. A caller
 by widening the review path, never by narrowing it. **No fifth admission
 state is introduced.**
 
+**C8 — `effect` is synthesized, not loaded.** `loadEngineBinding` returns
+a raw `concept_override` row of shape `{ engine_version_id,
+candidate_concept_id, reason }` and nothing more. The
+`AppliedOverrideMetadata.effect` field surfaced in §5.2 is **computed by
+`applyConceptOverrideToBinding` inside `concept_binding_adapter.ts`** —
+it is never read from any DB column. The edge function therefore takes
+`effect` from `bound.applied_override_metadata`, never from
+`bound.binding.concept_override`.
+
 ---
 
 ## 8. Witness Adapter Design
