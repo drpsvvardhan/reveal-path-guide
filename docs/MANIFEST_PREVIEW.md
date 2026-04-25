@@ -51,8 +51,30 @@ mirrors the production `PatientRevealManifest` shape:
 - **Optional but typed:** `schema_version` (must match `\d+\.\d+\.\d+`),
   `todayBar`, `weeklySnapshot`, `studyOverview`, `patientThesis`,
   `layerFindings`, `helpingVsFeeding`, `symptomBridges`,
-  `reversibility`, `confidenceBreakdown`, `careMap`
+  `reversibility`, `confidenceBreakdown`, `careMap`, `patientJourney`
 - Unknown top-level keys pass through untouched
+
+### `patientJourney` shape
+
+Optional top-level field that drives the **Patient journey** timeline
+section.
+
+```ts
+patientJourney?: {
+  currentPhase?: string;       // shown as a highlighted card at the top
+  nextStep?: string;           // shown next to currentPhase
+  timeline?: Array<{
+    dateLabel: string;         // required, free-form (e.g. "Day 12", "Mar 4")
+    title: string;             // required, short event headline
+    description?: string;
+    status?: "complete" | "current" | "upcoming";
+    icon?: string;             // optional emoji or short glyph
+  }>;
+}
+```
+
+If none of `timeline`, `currentPhase`, or `nextStep` are provided, the
+section falls back to the standard `EmptyHint` card.
 
 On validation failure, errors are grouped by their top-level field
 (`patient`, `careMap`, etc.) so you can scan section-by-section. A

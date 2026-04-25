@@ -14,6 +14,7 @@ import {
   Pill,
   Calendar,
   Users,
+  Route,
 } from "lucide-react";
 import type { ManifestPreview } from "@/lib/manifestSchema";
 import { EmptyHint } from "./EmptyHint";
@@ -496,6 +497,87 @@ function SymptomBridgesSection({ m }: { m: ManifestPreview }) {
 }
 
 // ---------------------------------------------------------------------------
+// Patient journey — vertical timeline
+// ---------------------------------------------------------------------------
+function PatientJourneySection({ m }: { m: ManifestPreview }) {
+  const j = m.patientJourney;
+  if (!j || ((j.timeline ?? []).length === 0 && !j.currentPhase && !j.nextStep)) {
+    return <EmptyHint label="Patient journey" field="patientJourney" />;
+  }
+  const events = j.timeline ?? [];
+  const toneFor = (status?: string) => {
+    if (status === "complete") return { dot: "bg-emerald-500", ring: "ring-emerald-500/20", label: "Complete", labelClass: "text-emerald-600" };
+    if (status === "current") return { dot: "bg-primary", ring: "ring-primary/20", label: "Current", labelClass: "text-primary" };
+    if (status === "upcoming") return { dot: "bg-muted-foreground/40", ring: "ring-muted-foreground/10", label: "Upcoming", labelClass: "text-muted-foreground" };
+    return { dot: "bg-muted-foreground/40", ring: "ring-muted-foreground/10", label: "", labelClass: "text-muted-foreground" };
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+          <Route className="h-3.5 w-3.5" />
+          Patient journey
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {(j.currentPhase || j.nextStep) && (
+          <div className="grid gap-3 md:grid-cols-2">
+            {j.currentPhase && (
+              <div className="rounded-md border bg-primary/5 p-3">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-primary">
+                  Current phase
+                </p>
+                <p className="text-sm mt-1">{j.currentPhase}</p>
+              </div>
+            )}
+            {j.nextStep && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wide font-medium text-muted-foreground">
+                  Next step
+                </p>
+                <p className="text-sm mt-1">{j.nextStep}</p>
+              </div>
+            )}
+          </div>
+        )}
+        {events.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No timeline events listed.</p>
+        ) : (
+          <ol className="relative border-l-2 border-muted ml-2 space-y-4">
+            {events.map((e, i) => {
+              const tone = toneFor(e.status);
+              return (
+                <li key={i} className="pl-4 relative">
+                  <span
+                    className={`absolute -left-[7px] top-1.5 h-3 w-3 rounded-full ring-4 ${tone.dot} ${tone.ring}`}
+                    aria-hidden
+                  />
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      {e.icon && <span aria-hidden>{e.icon}</span>}
+                      {e.title}
+                    </p>
+                    <span className="text-xs text-muted-foreground font-mono">{e.dateLabel}</span>
+                  </div>
+                  {e.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{e.description}</p>
+                  )}
+                  {tone.label && (
+                    <p className={`text-[10px] uppercase tracking-wide font-medium mt-1 ${tone.labelClass}`}>
+                      {tone.label}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section map (data-driven)
 // ---------------------------------------------------------------------------
 export const sectionRenderers: Record<string, (m: ManifestPreview) => JSX.Element> = {
@@ -508,6 +590,7 @@ export const sectionRenderers: Record<string, (m: ManifestPreview) => JSX.Elemen
   reversibility: (m) => <ReversibilitySection m={m} />,
   confidenceBreakdown: (m) => <ConfidenceSection m={m} />,
   careMap: (m) => <CareMapSection m={m} />,
+  patientJourney: (m) => <PatientJourneySection m={m} />,
 };
 
 export interface SectionMeta {
@@ -525,6 +608,7 @@ export const sectionMeta: SectionMeta[] = [
   { key: "reversibility", label: "Reversibility" },
   { key: "confidenceBreakdown", label: "Confidence" },
   { key: "careMap", label: "Care map" },
+  { key: "patientJourney", label: "Patient journey" },
 ];
 
 export const sectionOrder = sectionMeta.map((s) => s.key);
