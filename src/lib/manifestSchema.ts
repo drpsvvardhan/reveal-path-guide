@@ -147,7 +147,10 @@ const JourneyEventSchema = z
     title: z.string(),
     description: z.string().optional().default(""),
     status: z.enum(["complete", "current", "upcoming"]).optional(),
-    icon: z.string().optional(),
+    icon: z
+      .string()
+      .max(8, { message: "patientJourney.timeline[].icon must be ≤8 chars" })
+      .optional(),
   })
   .passthrough();
 
