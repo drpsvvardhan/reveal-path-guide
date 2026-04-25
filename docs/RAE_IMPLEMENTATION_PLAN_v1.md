@@ -4,7 +4,14 @@
 `docs/P1A_STATE_SNAPSHOT.md` (substrate state). Governed by Patient Reveal
 THESIS v4.2.*
 
-**Status:** Proposal awaiting CodexOS review.
+**Status:** Approved by CodexOS for schema implementation. Three
+corrections from the CodexOS review have been applied: (1)
+back-annotation does not introduce a fifth admission state; (2) RAE
+signal config lives in a sibling table `rae_signal_config`, not as an
+extension of `witness_signal_registry`; (3) CAW naming is fixed —
+conceptual object `concept_assignment_witness` (singular), table
+`public.concept_assignment_witnesses` (plural). All eight open
+questions are resolved (§13).
 **Scope:** Translate the RAE Design v1 spec into a concrete implementation
 plan: storage objects, type contracts, migrations, tests, and the VV-001
 calibration flow for the 923 unwitnessed observations.
@@ -35,22 +42,26 @@ CodexOS approval — would create.
    — creates `public.rae_state_transitions` (append-only audit log of
    every state change with actor, timestamp, prior state, new state,
    reason).
-3. `supabase/migrations/<TS>_rae_signal_registry_extension.sql`
-   — extends `public.witness_signal_registry` (or adds a sibling table
-   `public.rae_signal_config`) with per-concept band parameters,
-   synonyms, plausibility bands, panel associations, dynamics ceilings,
-   and signal weights. Choice between extension and sibling table is a
-   design question (§14, OQ-3).
+3. `supabase/migrations/<TS>_rae_signal_config.sql`
+   — creates `public.rae_signal_config`, a **sibling** table to
+   `public.witness_signal_registry`. Holds RAE-specific per-concept
+   band parameters: synonyms, unit conversions, plausibility bands,
+   known assay methods, reference-range catalogs, panel associations,
+   longitudinal dynamics ceilings, and per-signal weights.
+   `witness_signal_registry` is **not modified**. Rationale: keeps the
+   P1a witness registry stable and preserves RAE extractability
+   (spec §10.2). Resolves OQ-3.
 4. `supabase/migrations/<TS>_rae_engine_versions.sql`
    — creates `public.rae_engine_versions` (engine version metadata:
    id, semver, registry_seed_version, ontology_version, threshold
    parameters, calibration_mode flag, activated_at).
-5. `supabase/migrations/<TS>_rae_back_annotation.sql` (deferred until
-   §11.2 of the spec is exercised) — adds nullable
-   `back_annotated_witness_id` linkage from
-   `concept_assignment_witnesses` into the existing 92 P1a
-   `witness_objects` rows so grandfathered witnesses can carry
-   retrospective admission records without re-admission.
+5. *No separate back-annotation migration.* Per OQ-6 resolution,
+   back-annotation is represented entirely via existing CAW columns:
+   `policy_at_decision = 'back_annotation'`, the `produced_witness_id`
+   fk pointing at the pre-existing witness, a `limitations` entry
+   naming the grandfather status, and (where divergent) the
+   `founder_review_flag` boolean (§1.1). No new state, no new linkage
+   column, no schema change to `witness_objects`.
 
 ### 0.2 Edge functions (proposed; not authored)
 
@@ -105,6 +116,16 @@ See §8 below. All tests live alongside the modules they cover.
 
 ### 1.1 Proposed table — `public.concept_assignment_witnesses`
 
+**Naming convention (binding).** The conceptual object is
+`concept_assignment_witness` (singular). The Postgres table is
+`public.concept_assignment_witnesses` (plural). All docs, migrations,
+TypeScript types (`ConceptAssignmentWitness`,
+`ConceptAssignmentWitnessDraft`), edge functions, and tests use
+exactly these two forms. The short identifier `caw_id` is permitted
+only as a column or local variable name — never as a table, type, or
+module name. No abbreviations (`caw_table`, `assignment_witness`,
+`concept_witness`) are introduced.
+
 Single table. Append-mostly. State changes are recorded by updating the
 row's `current_state` column **and** appending a row to
 `rae_state_transitions` (§3). The CAW row is the current view; the
@@ -134,7 +155,8 @@ transitions table is the audit chain.
 | `confidence_basis` (text, ≥ 20 chars) | Mirrors the P1a `confidence_basis_meaningful` invariant. |
 | `limitations` (text[], ≥ 1 entry, no blanks) | Mirrors P1a `witness_objects_limitations_nonempty`. |
 | `produced_witness_id` (uuid, nullable, fk → `witness_objects.witness_id`) | Set when state ∈ {`auto_admitted`, `human_confirmed`} and a biological witness was produced. NULL otherwise. |
-| `policy_at_decision` (text) | E.g. `calibration_all_routes_to_review`, `default`. Records the operational policy in force when the decision was made (spec §6.4). |
+| `policy_at_decision` (text) | One of `default`, `calibration_all_routes_to_review`, `back_annotation`. Records the operational policy in force when the decision was made (spec §6.4 + OQ-6). |
+| `founder_review_flag` (boolean, default `false`) | Raised when the CAW requires explicit founder attention without changing its admission state. Used in particular for back-annotated CAWs whose engine disposition diverges from the grandfathered witness (OQ-6). Not a substitute for the four admission states. |
 | `created_at`, `updated_at` (timestamptz) | Standard. |
 
 **Check constraints (proposed):**
@@ -148,6 +170,9 @@ transitions table is the audit chain.
 - `caw_human_states_require_human_actor` — when
   `current_state = 'human_confirmed'`, `current_state_actor_kind = 'human'`.
 - `caw_signal_results_seven` — `jsonb_array_length(signal_results) = 7`.
+- `caw_policy_at_decision_valid` — `policy_at_decision IN ('default','calibration_all_routes_to_review','back_annotation')`.
+- `caw_back_annotation_requires_witness` — when `policy_at_decision = 'back_annotation'`, `produced_witness_id IS NOT NULL` (back-annotation always points at a pre-existing witness; OQ-6).
+- `caw_back_annotation_state_valid` — when `policy_at_decision = 'back_annotation'`, `current_state IN ('auto_admitted','human_confirmed','rejected')` (no admission state outside the locked four; divergent dispositions are carried by `founder_review_flag`, not by a new state).
 
 **Trigger (proposed):**
 
@@ -310,17 +335,20 @@ Examples (prose, not exhaustive):
 
 1. `<TS>_rae_engine_versions.sql` — must precede CAW because CAW fks
    into it.
-2. `<TS>_rae_signal_registry_extension.sql` — must precede the engine
-   loading band parameters.
+2. `<TS>_rae_signal_config.sql` — sibling table to
+   `witness_signal_registry`; must precede CAW writes because the
+   orchestrator loads band parameters from it. `witness_signal_registry`
+   is not modified.
 3. `<TS>_rae_concept_assignment_witness.sql` — table, enum,
    constraints, RLS, ancestry trigger.
 4. `<TS>_rae_state_transitions.sql` — append-only audit log.
-5. `<TS>_rae_back_annotation.sql` — deferred to step 6 of §9 below.
+5. *No back-annotation migration.* Back-annotation reuses existing
+   CAW columns (§9, OQ-6).
 
 No other migrations are proposed in v1. No alteration of
-`witness_objects`, `witness_signal_registry` (except the additive
-extension), `patient_lab_observations`, or any reasoning-surface
-table. No new RLS policies on existing tables.
+`witness_objects`, `witness_signal_registry`,
+`patient_lab_observations`, or any reasoning-surface table. No new
+RLS policies on existing tables.
 
 ---
 
@@ -555,22 +583,37 @@ Per spec §11.2, the 92 are grandfathered.
    `witness_objects` rows remain valid.
 2. **Back-annotation, when feasible.** During VV-001 calibration, the
    `rae-backfill-923` function (or a sibling `rae-back-annotate-92`
-   function) runs RAE over each of the 92 source observations,
-   producing a CAW with `produced_witness_id` pointing at the
-   *existing* witness. The CAW's state reflects what RAE would have
-   admitted on:
-   - `auto_admitted` if RAE would have admitted under default policy,
-   - `human_confirmed` if RAE would have routed to review and the
-     founder confirms the existing witness, or
-   - a new state value `back_annotated_divergent` (proposed; OQ-6) if
-     RAE would not have admitted — flagged for founder review without
-     auto-rejection.
+   function) runs RAE over each of the 92 source observations and
+   produces a CAW with:
+   - `policy_at_decision = 'back_annotation'`,
+   - `produced_witness_id` pointing at the *existing* witness
+     (constraint `caw_back_annotation_requires_witness`),
+   - `current_state` selected from the locked four states
+     (constraint `caw_back_annotation_state_valid`):
+     - `auto_admitted` if RAE would have admitted under default
+       policy and the engine disposition matches the grandfathered
+       witness's concept,
+     - `human_confirmed` if RAE would have routed to review and the
+       founder confirms the existing witness,
+     - `rejected` if the founder, on review, agrees the original
+       witness should not stand under the new gate (does **not**
+       remove the existing witness; see step 4),
+   - `founder_review_flag = true` whenever the engine's disposition
+     diverges from the existing witness's concept (the OQ-6
+     resolution: divergence is a flag, not a fifth state),
+   - a `limitations` entry: `"back-annotated to pre-RAE witness;
+     admission did not gate the original write"`.
 3. **No state transition is performed on the existing 92 witnesses
    themselves.** They remain unchanged. Back-annotation is
-   documentation, not re-admission, mirroring spec §11.2.
-4. **A CAW back-annotated to a pre-RAE witness carries a limitation
-   entry**: "back-annotated to pre-RAE witness; admission did not
-   gate the original write".
+   documentation, not re-admission, mirroring spec §11.2. Even when
+   the back-annotation CAW is `rejected`, the underlying
+   `witness_objects` row is not deleted or marked; the CAW records
+   the disagreement and surfaces it for founder action.
+4. **No fifth admission state is introduced.** The four states from
+   spec §6.1 (`auto_admitted`, `needs_review`, `rejected`,
+   `human_confirmed`) are exhaustive and locked. Divergent
+   back-annotations are carried entirely by `founder_review_flag`
+   plus `policy_at_decision` plus `limitations`.
 
 ---
 
@@ -605,9 +648,7 @@ work toward them is out of scope for v1:
 
 ---
 
-## 11. Risks and open questions for CodexOS review
-
-### 11.1 Risks
+## 11. Risks
 
 - **R-1: Drift toward RAE-as-reasoner.** The orchestrator will be
   tempted to encode "if downstream cluster X exists, admit." Guard:
@@ -624,54 +665,20 @@ work toward them is out of scope for v1:
 - **R-4: Back-annotation polluting the 92.** If back-annotation
   produces CAWs that look like normal admissions, downstream queries
   may double-count. Mitigation: explicit `policy_at_decision =
-  'back_annotation'` and a CAW-level limitation entry; queries that
-  count admissions filter on policy.
+  'back_annotation'`, the `founder_review_flag` boolean, and a
+  CAW-level limitation entry; queries that count admissions filter
+  on `policy_at_decision = 'default'`.
 - **R-5: Calibration-mode lift error.** Lifting the override before
   the per-concept backlog is zero would silently graduate the engine.
-  Mitigation: a scheduled audit (§8.6) and a check constraint
-  proposal (OQ-5) preventing lift while backlog > 0.
+  Mitigation: a scheduled audit alert (per OQ-5 resolution: audit
+  alert, not DB constraint). The audit job runs on every
+  `rae_engine_versions` policy change and on a daily cadence.
 - **R-6: P1a invariant 4 (readiness) interaction.** A CAW whose
   limitations are severe must still be readable by readiness
   reasoners; if downstream code mistakenly treats severity as
   rejection, recommendations could be silently withheld for valid
   admissions. Spec §4.5 names this; the mitigation is not in RAE but
   in the readiness reasoner. Flag for downstream review only.
-
-### 11.2 Open questions
-
-- **OQ-1.** Is a single CAW table with `current_state` the right
-  shape, or should states live as immutable rows in
-  `rae_state_transitions` only, with the CAW row materialized as a
-  view? Proposed: single table + transitions log. Rationale: cheaper
-  reads, simpler RLS. CodexOS to confirm.
-- **OQ-2.** Should `produced_witness_id` be a fk into
-  `witness_objects.witness_id` (proposed) or a soft reference?
-  Proposed: hard fk, with `ON DELETE RESTRICT` (witnesses cannot be
-  hard-deleted while a CAW references them).
-- **OQ-3.** Per-concept signal config: extend
-  `witness_signal_registry` or add a sibling `rae_signal_config`?
-  Proposed: sibling table, to keep RAE extractable (spec §10.2) and
-  to leave the P1a registry shape untouched.
-- **OQ-4.** Where should "policy" live: per-engine-version
-  (proposed), per-concept-per-engine-version (richer), or per-CAW
-  override? Implementation thread to decide; v1 leans
-  per-engine-version with per-concept lift override.
-- **OQ-5.** A check constraint preventing lift of
-  calibration-all-routes-to-review while founder backlog > 0 — is
-  this enforceable as a DB constraint or only as an audit alert?
-  Defer to implementation thread.
-- **OQ-6.** Is `back_annotated_divergent` a fifth admission state, a
-  flag on a CAW, or a `policy_at_decision` value? Proposed: a
-  `policy_at_decision` value plus a limitation entry. CodexOS to
-  confirm we are not silently introducing a fifth state.
-- **OQ-7.** Should the calibration review surface a hard refusal to
-  bulk-confirm (proposed), or merely warn? Proposed: hard refusal
-  (drift D). CodexOS to confirm.
-- **OQ-8.** The CIE response path is explicitly out of scope (spec
-  §7.8). Should the spec_alignment guard test additionally assert
-  that the orchestrator never reads `cie_responses`,
-  `cie_domain_scores`, `cie_gate_scores`? Proposed: yes, mirror the
-  P1a guard tests already in place.
 
 ---
 
@@ -686,4 +693,70 @@ work toward them is out of scope for v1:
 
 ---
 
-Awaiting CodexOS review before schema implementation.
+## 13. CodexOS resolutions and applied corrections
+
+### 13.1 Three corrections applied from CodexOS review
+
+1. **No fifth admission state.** The four states in spec §6.1 —
+   `auto_admitted`, `needs_review`, `rejected`, `human_confirmed` —
+   are exhaustive and locked. The earlier proposal of
+   `back_annotated_divergent` is withdrawn. Divergent back-annotation
+   is represented by `policy_at_decision = 'back_annotation'` plus
+   `founder_review_flag = true` plus a `limitations` entry. Enforced
+   by check constraints `caw_policy_at_decision_valid` and
+   `caw_back_annotation_state_valid` (§1.1).
+2. **Sibling `rae_signal_config` is mandatory.** RAE-specific signal
+   bands, weights, synonyms, and panel associations live in a new
+   sibling table `public.rae_signal_config`.
+   `public.witness_signal_registry` is **not modified** by RAE.
+   Rationale: keeps the P1a witness registry stable and preserves
+   RAE extractability (spec §10.2).
+3. **CAW naming is fixed.** Conceptual object:
+   `concept_assignment_witness` (singular). Postgres table:
+   `public.concept_assignment_witnesses` (plural). TypeScript types:
+   `ConceptAssignmentWitness` and `ConceptAssignmentWitnessDraft`.
+   The short identifier `caw_id` appears only as a column or local
+   variable name. No mixed naming in any docs, migrations, or code.
+
+### 13.2 Resolved open questions
+
+- **OQ-1 — Approved.** Single `concept_assignment_witnesses` table
+  with `current_state`, plus the append-only `rae_state_transitions`
+  log. The CAW row is the current view; the transitions log is the
+  audit chain.
+- **OQ-2 — Approved.** `produced_witness_id` is a hard fk into
+  `witness_objects.witness_id` with `ON DELETE RESTRICT`. Witnesses
+  cannot be hard-deleted while a CAW references them.
+- **OQ-3 — Approved.** Sibling `rae_signal_config` table.
+  `witness_signal_registry` remains unchanged.
+- **OQ-4 — Approved.** Policy lives at engine-version scope
+  (`rae_engine_versions.calibration_mode`) with a per-concept lift
+  override (proposed: a `rae_engine_concept_overrides` child table
+  recording, per `(engine_version_id, candidate_concept_id)`,
+  whether `calibration_all_routes_to_review` has been lifted). No
+  per-CAW policy override.
+- **OQ-5 — Resolved as audit alert, not DB constraint.** A scheduled
+  audit job (cron-driven) reports any concept whose override was
+  lifted while its founder-review backlog was non-zero. The check
+  constraint earlier proposed in R-5 is withdrawn.
+- **OQ-6 — Resolved as no fifth state.** Carried by
+  `policy_at_decision = 'back_annotation'`, `founder_review_flag`,
+  and a `limitations` entry. See §13.1 #1.
+- **OQ-7 — Approved.** The `rae-calibration-review` function hard-
+  refuses bulk-confirm. Each disposition is one row, one timestamp,
+  one `reason`. Drift D mitigation.
+- **OQ-8 — Approved.** The orchestrator's import-graph and read-set
+  guards explicitly assert it never reads `cie_responses`,
+  `cie_domain_scores`, `cie_gate_scores`, or `derived_patterns`.
+  Mirrors the existing P1a `p1a_migration_guard.test.ts` pattern.
+
+### 13.3 Approval status
+
+With the three corrections in §13.1 applied and the eight open
+questions resolved in §13.2, this plan is **approved by CodexOS for
+schema implementation**. The next thread takes this document as
+input and produces the four migrations enumerated in §0.1, the
+TypeScript contracts in §6, the seven signal modules, the
+orchestrator, the calibration review surface, and the test set in
+§7. No section of this plan is to be revised by the implementation
+thread; revisions return here for CodexOS review.
