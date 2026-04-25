@@ -319,38 +319,68 @@ it is never read from any DB column. The edge function therefore takes
 
 ## 8. Witness Adapter Design
 
-`witness_adapters.ts` exports a single factory:
+**C5 — two distinct adapters, two distinct types.** The storage and
+gateway layers expose two separate adapter contracts; conflating them is
+a type error. `witness_adapters.ts` exports **both** factories:
 
 ```ts
-export function makeDepth0WitnessAdapter(
+// (a) Consumed by persistInitialAdmission via input.witnessify_adapter.
+//     Builds the slim row from the orchestrator decision.
+export function makeRaeDepth0WitnessifyAdapter(
   engineVersionId: string,
-): WitnessPayloadAdapter
+): WitnessifyAdapter; // (decision: AdmissionDecisionV1) => WitnessRowInput
+
+// (b) Consumed by makeRpcAdmitGateway via options.witnessPayloadAdapter.
+//     Lifts the slim row into the full WitnessPayloadShape the RPC needs.
+export function makeRaeDepth0WitnessPayloadAdapter(
+): WitnessPayloadAdapter; // (row: WitnessRowInput) => WitnessPayloadShape
 ```
 
-Behavior:
+### 8.1 `WitnessifyAdapter` (decision → row)
 
-1. Receives the `ConceptAssignmentWitnessDraft` from
-   `persistInitialAdmission`.
-2. If `draft.current_state` ∈ { `needs_review`, `rejected` }, returns
-   `null`. The gateway then writes the CAW row with no witness.
-3. Otherwise (`auto_admitted` or `human_confirmed`) builds a
-   `WitnessRowInput` whose:
+1. Invoked by `persistInitialAdmission` **only** when
+   `decision.witness_intent === "produce_depth0_witness"`. The
+   orchestrator owns the skip decision; this adapter never returns
+   `null` and never inspects `current_state` to decide whether to run.
+2. Builds a `WitnessRowInput` whose:
    - `witness_id` is deterministic via
-     `uuidv5(RAE_CAW_NAMESPACE, draft.caw_id + ':depth0')`. This makes
-     replays idempotent end-to-end.
-   - `confidence_value`, `confidence_basis`, and `limitations` are copied
-     verbatim from the draft (already validated by the orchestrator to
-     satisfy P1a-style invariants: ≥20-char basis, ≥1 non-blank
-     limitation).
-   - `provenance` records `{ engine_version_id, kind: 'rae_depth0' }`.
-4. The adapter is **pure**: no I/O, no `witnessify_impl` import, no DOM
-   text generation. The persisted `WitnessRowInput` is the **only** thing
-   the gateway forwards to the RPC under `witness_payload`.
+     `uuidv5(RAE_CAW_NAMESPACE, draft.caw_id + ":depth0")`. This makes
+     replays idempotent end-to-end (matches §10).
+   - `user_id`, `source_table`, `source_row_id` are copied from
+     `decision.caw`.
+   - `ontology_concept_id` is set to `decision.caw.candidate_concept_id`.
+   - `passthrough` carries the fields the RPC's witness path needs
+     downstream (e.g. `confidence_value`, `confidence_basis`,
+     `limitations`, `engine_version_id`). The storage layer does not
+     inspect this object; the payload adapter (§8.2) reads it.
 
-`witnessify_impl.ts` is intentionally **not** imported. Depth-0 admission
-witnesses for RAE are structurally simpler than the full witnessify
-pipeline and must remain decoupled from it; reusing that module would
-drag in surface dependencies that this function must not touch.
+### 8.2 `WitnessPayloadAdapter` (row → full payload)
+
+Lifts a `WitnessRowInput` into the `WitnessPayloadShape` defined in
+`gateway_rpc.ts`. This is where the **full** field set required by the
+RPC is materialised, including (non-exhaustive): `source_window`,
+`signal`, `domain_of_access`, `epistemic_role`, `reliability_class`,
+`compression_depth`, `observed_value`, `observed_unit`, `testimony`,
+`limitations`, `confidence_value`, `confidence_basis`,
+`transformation_version`, `registry_seed_version`. The adapter:
+
+- Reads everything it needs from `row` (and `row.passthrough`); it does
+  no I/O.
+- Sets `compression_depth = 0` (depth-0 admission).
+- Sets `transformation_version` and `registry_seed_version` from the
+  values stamped on the row's passthrough by §8.1 (themselves sourced
+  from the loaded `EngineBinding`).
+- Cannot return `null`; the type forbids it. "Skip witness" is
+  expressed by the orchestrator via `witness_intent === "none"` and is
+  enforced in §8.1, not here.
+
+### 8.3 Purity and forbidden imports
+
+Both adapters are **pure**: no I/O, no `witnessify_impl` import, no DOM
+text generation. Depth-0 admission witnesses for RAE are structurally
+simpler than the full witnessify pipeline and must remain decoupled
+from it; reusing `witnessify_impl.ts` would drag in surface
+dependencies this function must not touch.
 
 ---
 
