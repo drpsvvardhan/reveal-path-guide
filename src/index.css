@@ -185,3 +185,23 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Manifest preview — print/export view.
+ * When `body.manifest-print-mode` is active (set by the Print button on
+ * /manifest-preview), hide everything except the rendered preview column.
+ * ------------------------------------------------------------------------- */
+@media print {
+  body.manifest-print-mode header,
+  body.manifest-print-mode .print\:hidden {
+    display: none !important;
+  }
+  body.manifest-print-mode main {
+    display: block !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  body.manifest-print-mode .manifest-print-target {
+    width: 100% !important;
+  }
+}
