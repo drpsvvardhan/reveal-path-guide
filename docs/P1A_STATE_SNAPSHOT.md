@@ -104,7 +104,7 @@ be justified against the invariant, not against the code.
 | 1 | Witness layer schema | `supabase/migrations/20260420000000_p1a_witness_layer_schema.sql` | Three tables, four enums, fifteen check constraints, trigger, view, RLS |
 | 2 | Witness contracts | `supabase/functions/_shared/witness.ts` | Canonical types, WitnessObject interface, validateWitness, error classes |
 | 3 | Build script + GitHub workflow | `scripts/build-witness-registry.ts` + `.github/workflows/generate-witness-registry.yml` | Deterministic registry seed SQL generator, byte-reproducible |
-| 4 | Registry seed | `supabase/migrations/20260420000100_p1a_witness_registry_seed.sql` | 554 canonical signal contracts |
+| 4 | Registry seed | `supabase/migrations/20260420134700_p1a_witness_registry_seed.sql` | 554 canonical signal contracts |
 | 5 | Witnessify implementation + tests | `supabase/functions/_shared/witnessify_impl.ts` + `witnessify_impl.test.ts` | Pure transformation, 12 tests, deterministic UUIDv5 IDs |
 | 6 | Uniqueness migration (fixed) | `supabase/migrations/20260421010000_p1a_witness_uniqueness_constraint_fix.sql` | Non-partial unique index enabling Pattern Z idempotency |
 | 7 | Backfill edge function | `supabase/functions/witnessify-observations/` (three files) | Idempotent backfill for historical observations |
