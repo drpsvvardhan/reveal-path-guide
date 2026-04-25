@@ -239,3 +239,43 @@ Deno.test("request_schema: rejects non-uuid back_annotation_witness_id", () => {
   );
   assert(!parsed.success);
 });
+
+// ---------------------------------------------------------------------------
+// Optional `concept_id` on RawObservationClaim (P1).
+// ---------------------------------------------------------------------------
+// Currently consumed only for siblings; permitted on every claim shape so
+// we don't have to split the schema yet.
+
+Deno.test("request_schema: accepts optional concept_id on a claim", () => {
+  const parsed = RawObservationClaimSchema.safeParse(
+    mkClaim({ concept_id: UUID_C }),
+  );
+  assert(parsed.success, JSON.stringify(parsed));
+});
+
+Deno.test("request_schema: omitting concept_id is still valid", () => {
+  const parsed = RawObservationClaimSchema.safeParse(mkClaim());
+  assert(parsed.success);
+  assertEquals(
+    (parsed.data as { concept_id?: string }).concept_id,
+    undefined,
+  );
+});
+
+Deno.test("request_schema: rejects non-uuid concept_id on a claim", () => {
+  const parsed = RawObservationClaimSchema.safeParse(
+    mkClaim({ concept_id: "not-a-uuid" }),
+  );
+  assert(!parsed.success);
+});
+
+Deno.test("request_schema: accepts siblings carrying their own concept_id", () => {
+  const parsed = RequestSchema.safeParse(mkRequest({
+    siblings: [
+      mkClaim({ concept_id: UUID_E }),
+      mkClaim({ raw_name: "HDL" }), // concept_id omitted
+    ],
+  }));
+  assert(parsed.success);
+  assertEquals(parsed.data.siblings.length, 2);
+});
