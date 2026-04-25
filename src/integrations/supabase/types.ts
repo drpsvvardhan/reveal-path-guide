@@ -604,6 +604,102 @@ export type Database = {
           },
         ]
       }
+      concept_assignment_witnesses: {
+        Row: {
+          candidate_concept_id: string
+          caw_id: string
+          coherence_result: string
+          composite_identity_score: number
+          confidence_basis: string
+          confidence_value: number
+          created_at: string
+          current_state: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id: string
+          current_state_actor_kind: string
+          current_state_entered_at: string
+          engine_version_id: string
+          founder_review_flag: boolean
+          id: string
+          limitations: string[]
+          ontology_version: string
+          policy_at_decision: string
+          produced_witness_id: string | null
+          registry_seed_version: string
+          signal_results: Json
+          source_row_id: string
+          source_table: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          candidate_concept_id: string
+          caw_id: string
+          coherence_result: string
+          composite_identity_score: number
+          confidence_basis: string
+          confidence_value: number
+          created_at?: string
+          current_state: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id: string
+          current_state_actor_kind: string
+          current_state_entered_at?: string
+          engine_version_id: string
+          founder_review_flag?: boolean
+          id?: string
+          limitations: string[]
+          ontology_version: string
+          policy_at_decision?: string
+          produced_witness_id?: string | null
+          registry_seed_version: string
+          signal_results: Json
+          source_row_id: string
+          source_table: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          candidate_concept_id?: string
+          caw_id?: string
+          coherence_result?: string
+          composite_identity_score?: number
+          confidence_basis?: string
+          confidence_value?: number
+          created_at?: string
+          current_state?: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id?: string
+          current_state_actor_kind?: string
+          current_state_entered_at?: string
+          engine_version_id?: string
+          founder_review_flag?: boolean
+          id?: string
+          limitations?: string[]
+          ontology_version?: string
+          policy_at_decision?: string
+          produced_witness_id?: string | null
+          registry_seed_version?: string
+          signal_results?: Json
+          source_row_id?: string
+          source_table?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_assignment_witnesses_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_assignment_witnesses_produced_witness_id_fkey"
+            columns: ["produced_witness_id"]
+            isOneToOne: false
+            referencedRelation: "witness_objects"
+            referencedColumns: ["witness_id"]
+          },
+        ]
+      }
       derived_patterns: {
         Row: {
           category: string
@@ -1852,6 +1948,11 @@ export type Database = {
         | "imaging"
         | "omics"
         | "narrative"
+      rae_admission_state:
+        | "auto_admitted"
+        | "needs_review"
+        | "rejected"
+        | "human_confirmed"
       witness_domain_of_access:
         | "embodied_perception"
         | "symptom_continuity"
@@ -2040,6 +2141,12 @@ export const Constants = {
         "imaging",
         "omics",
         "narrative",
+      ],
+      rae_admission_state: [
+        "auto_admitted",
+        "needs_review",
+        "rejected",
+        "human_confirmed",
       ],
       witness_domain_of_access: [
         "embodied_perception",
