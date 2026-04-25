@@ -250,6 +250,8 @@ export interface HandleDeps {
   ) => Promise<boolean>;
   /** Engine-binding loader (default = shared edge_loaders). */
   loadEngineBinding: typeof loadEngineBinding;
+  /** Witness-signal-registry loader (default = shared edge_loaders). */
+  loadRegistryWitnessFields: typeof loadRegistryWitnessFields;
   /** Concept-binding adapter (default = shared concept_binding_adapter). */
   bindCandidateConceptForAdmission: typeof bindCandidateConceptForAdmission;
   /** Orchestrator (default = shared orchestrator). */
@@ -316,6 +318,7 @@ const DEFAULT_DEPS: HandleDeps = {
   getUserIdFromJwt: defaultGetUserIdFromJwt,
   hasAdminRole: defaultHasAdminRole,
   loadEngineBinding,
+  loadRegistryWitnessFields,
   bindCandidateConceptForAdmission,
   adjudicate,
   persistInitialAdmission,
@@ -442,6 +445,22 @@ async function handle(
       candidate_concept_id: reqBody.candidate_concept.concept_id,
     });
 
+    // Registry-derived witness ontology fields. RAE is a decision layer
+    // over existing biological witnesses; the four witness ontology fields
+    // (source_window, domain_of_access, epistemic_role, reliability_class)
+    // come from the same witness_signal_registry P1a uses. Missing row =>
+    // RegistryGapError (mapped to HTTP 422).
+    const registryLookupKey = deriveRegistryLookupKey(
+      reqBody.claim.source_table,
+      reqBody.candidate_concept.concept_id,
+    );
+    const registryFields: RegistryWitnessFields =
+      await deps.loadRegistryWitnessFields(toReadOnlyDbClient(serviceClient), {
+        source_window: registryLookupKey.source_window,
+        signal: registryLookupKey.signal,
+        registry_seed_version: binding.engine_version.registry_seed_version,
+      });
+
     // §7 — caller-supplied policy override. The orchestrator owns the
     // semantics; the edge function only widens the review path. A
     // request-level `back_annotation` value is NOT honored here in v1
@@ -492,6 +511,7 @@ async function handle(
     // §4.10 — build the two adapters (witnessify + payload).
     const witnessifyAdapter = makeRaeDepth0WitnessifyAdapter(
       reqBody.engine_version_id,
+      registryFields,
     );
     const witnessPayloadAdapter = makeRaeDepth0WitnessPayloadAdapter();
 
