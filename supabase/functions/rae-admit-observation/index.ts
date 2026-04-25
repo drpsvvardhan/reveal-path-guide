@@ -55,6 +55,25 @@ import { persistInitialAdmission } from "../_shared/rae/storage/admit.ts";
 import { makeRpcAdmitGateway } from "../_shared/rae/storage/gateway_rpc.ts";
 
 // ---------------------------------------------------------------------------
+// Local typed seam helpers (P6).
+// ---------------------------------------------------------------------------
+// loadEngineBinding and makeRpcAdmitGateway each accept a structural
+// subset of the supabase-js client. We narrow the supabase-js client to
+// those subsets here so that the rest of the handler never needs an
+// `as unknown as` escape hatch. Casts are confined to this module.
+
+type ReadOnlyDbClientShape = Parameters<typeof loadEngineBinding>[0];
+type RpcCapableClientShape = Parameters<typeof makeRpcAdmitGateway>[0];
+
+function toReadOnlyDbClient(client: unknown): ReadOnlyDbClientShape {
+  return client as ReadOnlyDbClientShape;
+}
+
+function toRpcCapableClient(client: unknown): RpcCapableClientShape {
+  return client as RpcCapableClientShape;
+}
+
+// ---------------------------------------------------------------------------
 // JSON helpers.
 // ---------------------------------------------------------------------------
 
@@ -68,6 +87,88 @@ function jsonResponse(status: number, body: unknown): Response {
 function errorResponse(err: unknown): Response {
   const m = mapErrorToResponse(err);
   return jsonResponse(m.http_status, m.body);
+}
+
+// ---------------------------------------------------------------------------
+// Transport → orchestrator projection helpers (P5).
+// ---------------------------------------------------------------------------
+// The request schema is a transport contract; the orchestrator consumes
+// slimmer / differently-named shapes. Each helper below is the single
+// site of that translation. They are pure and synchronous.
+
+/**
+ * Project the request's CandidateConcept into the orchestrator's shape.
+ * The only difference is `unit_conversions[unit].{to_canonical_factor,
+ * offset}` (transport) -> `{factor, conversion_id}` (orchestrator).
+ * `conversion_id` is synthesized deterministically per unit key so the
+ * orchestrator's audit trail is stable for repeated requests.
+ */
+function projectCandidateConcept(
+  cc: AdmitObservationRequest["candidate_concept"],
+): OrchestratorCandidateConcept {
+  return {
+    ...cc,
+    unit_conversions: cc.unit_conversions
+      ? Object.fromEntries(
+        Object.entries(cc.unit_conversions).map(([unitKey, c]) => [
+          unitKey,
+          {
+            factor: c.to_canonical_factor,
+            conversion_id: `req:${unitKey}`,
+          },
+        ]),
+      )
+      : undefined,
+  };
+}
+
+/**
+ * Project request sibling claims into PanelSibling rows.
+ * Per decision (4), siblings without `concept_id` are dropped silently and
+ * the drop count is surfaced in the success response under
+ * `diagnostics.dropped_siblings`. We never fabricate a concept_id from
+ * the candidate concept.
+ */
+function projectSiblings(
+  siblings: AdmitObservationRequest["siblings"],
+): { rows: Array<{ observation_id: string; concept_id: string }>; dropped: number } {
+  const rows: Array<{ observation_id: string; concept_id: string }> = [];
+  let dropped = 0;
+  for (const s of siblings) {
+    if (typeof s.concept_id === "string" && s.concept_id.length > 0) {
+      rows.push({
+        observation_id: s.source_row_id,
+        concept_id: s.concept_id,
+      });
+    } else {
+      dropped += 1;
+    }
+  }
+  return { rows, dropped };
+}
+
+/**
+ * Project request prior observations into orchestrator PriorObservation
+ * rows. Drops entries missing a finite numeric raw_value; that count is
+ * surfaced as `diagnostics.dropped_prior_observations`.
+ */
+function projectPriorObservations(
+  priors: AdmitObservationRequest["prior_observations"],
+): { rows: Array<{ witness_id: string; value: number; observed_at: string }>; dropped: number } {
+  const rows: Array<{ witness_id: string; value: number; observed_at: string }> = [];
+  let dropped = 0;
+  for (const p of priors) {
+    if (typeof p.raw_value === "number" && Number.isFinite(p.raw_value)) {
+      rows.push({
+        witness_id: p.source_row_id,
+        value: p.raw_value,
+        observed_at: p.observed_at,
+      });
+    } else {
+      dropped += 1;
+    }
+  }
+  return { rows, dropped };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,9 +294,9 @@ async function handle(req: Request): Promise<Response> {
 
   try {
     // §4.7 — load engine binding.
-    // The shared loader's ReadOnlyDbClient is a structural subset of the
-    // supabase-js client; the cast is safe at this seam.
-    const binding = await loadEngineBinding(serviceClient as unknown as Parameters<typeof loadEngineBinding>[0], {
+    // toReadOnlyDbClient narrows the supabase-js client to the shared
+    // loader's structural subset. The cast is confined to that helper.
+    const binding = await loadEngineBinding(toReadOnlyDbClient(serviceClient), {
       engine_version_id: reqBody.engine_version_id,
       candidate_concept_id: reqBody.candidate_concept.concept_id,
     });
@@ -213,31 +314,11 @@ async function handle(req: Request): Promise<Response> {
       };
     }
 
-    // §4.8 — bind candidate concept (validates + applies any concept
-    // override + computes the response-safe metadata).
-    //
-    // The request schema's UnitConversion projection ({to_canonical_factor,
-    // offset}) is the response/transport contract; orchestrator's internal
-    // UnitConversion ({factor, conversion_id}) is normalized here at the
-    // wiring boundary. The factor maps 1:1; conversion_id is synthesized
-    // deterministically from the unit key so the orchestrator's audit
-    // trail remains stable.
-    const candidateConceptForOrchestrator: OrchestratorCandidateConcept = {
-      ...reqBody.candidate_concept,
-      unit_conversions: reqBody.candidate_concept.unit_conversions
-        ? Object.fromEntries(
-          Object.entries(reqBody.candidate_concept.unit_conversions).map(
-            ([unitKey, c]) => [
-              unitKey,
-              {
-                factor: c.to_canonical_factor,
-                conversion_id: `req:${unitKey}`,
-              },
-            ],
-          ),
-        )
-        : undefined,
-    };
+    // §4.8 — bind candidate concept. Projection is performed by the
+    // single-purpose helper above so this site stays declarative.
+    const candidateConceptForOrchestrator = projectCandidateConcept(
+      reqBody.candidate_concept,
+    );
 
     const bound = bindCandidateConceptForAdmission({
       candidate_concept: candidateConceptForOrchestrator,
@@ -249,23 +330,14 @@ async function handle(req: Request): Promise<Response> {
     });
 
     // §4.9 — adjudicate.
-    //
-    // Project the request's RawObservationClaim-shaped sibling and prior
-    // arrays into the slim PanelSibling / PriorObservation shapes the
-    // orchestrator's panel and longitudinal signals consume. Caller-
-    // provided `source_row_id` doubles as the sibling observation_id;
-    // the prior's value+timestamp come straight off the claim.
-    const siblings = reqBody.siblings.map((s) => ({
-      observation_id: s.source_row_id,
-      concept_id: reqBody.candidate_concept.concept_id,
-    }));
-    const priorObservations = reqBody.prior_observations
-      .filter((p) => typeof p.raw_value === "number" && Number.isFinite(p.raw_value))
-      .map((p) => ({
-        witness_id: p.source_row_id,
-        value: p.raw_value as number,
-        observed_at: p.observed_at,
-      }));
+    // Per decision (4): sibling rows without an explicit `concept_id` are
+    // dropped (we do NOT fabricate from the candidate concept). Drop
+    // counts surface in the response `diagnostics`.
+    const { rows: siblings, dropped: dropped_siblings } = projectSiblings(
+      reqBody.siblings,
+    );
+    const { rows: priorObservations, dropped: dropped_prior_observations } =
+      projectPriorObservations(reqBody.prior_observations);
 
     const decision = adjudicate({
       claim: reqBody.claim,
@@ -283,9 +355,9 @@ async function handle(req: Request): Promise<Response> {
     const witnessPayloadAdapter = makeRaeDepth0WitnessPayloadAdapter();
 
     // §4.11 — construct the gateway and persist via the RPC.
-    // RpcCapableClient is a narrow structural subset of the supabase-js
-    // client; the cast is safe at this seam.
-    const runInTxn = makeRpcAdmitGateway(serviceClient as unknown as Parameters<typeof makeRpcAdmitGateway>[0], {
+    // toRpcCapableClient narrows the supabase-js client to the gateway's
+    // structural subset. The cast is confined to that helper.
+    const runInTxn = makeRpcAdmitGateway(toRpcCapableClient(serviceClient), {
       witnessPayloadAdapter,
     });
 
@@ -307,6 +379,7 @@ async function handle(req: Request): Promise<Response> {
 
     // §4.12 + §5.2 — response envelope. Override metadata + limitations
     // surface so callers can see calibration routing without DB lookups.
+    // `diagnostics` carries non-fatal projection drops (decision 3+4).
     const caw = persistResult.caw;
     return jsonResponse(200, {
       caw_id: caw.caw_id,
@@ -318,6 +391,10 @@ async function handle(req: Request): Promise<Response> {
       engine_version_id: caw.engine_version_id,
       ontology_version: caw.ontology_version,
       registry_seed_version: caw.registry_seed_version,
+      diagnostics: {
+        dropped_siblings,
+        dropped_prior_observations,
+      },
     });
   } catch (e) {
     return errorResponse(e);
