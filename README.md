@@ -127,6 +127,7 @@ The biomarker ontology is hosted in a public Supabase Storage bucket at `ontolog
 ## Further reading
 
 - [`architecture.md`](./architecture.md) — deeper architectural map of the system, data model, and trust boundaries
+- [`docs/MANIFEST_PREVIEW.md`](./docs/MANIFEST_PREVIEW.md) — `/manifest-preview` tool: validating and previewing patient manifest JSON locally
 - [Vizzhy platform documentation](../) — the broader non-ergodic biological intelligence thesis, BioTwin generator, Cardiac Canon, and Compendium volumes live in the platform repository
 
 ---
