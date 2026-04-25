@@ -604,6 +604,102 @@ export type Database = {
           },
         ]
       }
+      concept_assignment_witnesses: {
+        Row: {
+          candidate_concept_id: string
+          caw_id: string
+          coherence_result: string
+          composite_identity_score: number
+          confidence_basis: string
+          confidence_value: number
+          created_at: string
+          current_state: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id: string
+          current_state_actor_kind: string
+          current_state_entered_at: string
+          engine_version_id: string
+          founder_review_flag: boolean
+          id: string
+          limitations: string[]
+          ontology_version: string
+          policy_at_decision: string
+          produced_witness_id: string | null
+          registry_seed_version: string
+          signal_results: Json
+          source_row_id: string
+          source_table: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          candidate_concept_id: string
+          caw_id: string
+          coherence_result: string
+          composite_identity_score: number
+          confidence_basis: string
+          confidence_value: number
+          created_at?: string
+          current_state: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id: string
+          current_state_actor_kind: string
+          current_state_entered_at?: string
+          engine_version_id: string
+          founder_review_flag?: boolean
+          id?: string
+          limitations: string[]
+          ontology_version: string
+          policy_at_decision?: string
+          produced_witness_id?: string | null
+          registry_seed_version: string
+          signal_results: Json
+          source_row_id: string
+          source_table: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          candidate_concept_id?: string
+          caw_id?: string
+          coherence_result?: string
+          composite_identity_score?: number
+          confidence_basis?: string
+          confidence_value?: number
+          created_at?: string
+          current_state?: Database["public"]["Enums"]["rae_admission_state"]
+          current_state_actor_id?: string
+          current_state_actor_kind?: string
+          current_state_entered_at?: string
+          engine_version_id?: string
+          founder_review_flag?: boolean
+          id?: string
+          limitations?: string[]
+          ontology_version?: string
+          policy_at_decision?: string
+          produced_witness_id?: string | null
+          registry_seed_version?: string
+          signal_results?: Json
+          source_row_id?: string
+          source_table?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_assignment_witnesses_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_assignment_witnesses_produced_witness_id_fkey"
+            columns: ["produced_witness_id"]
+            isOneToOne: false
+            referencedRelation: "witness_objects"
+            referencedColumns: ["witness_id"]
+          },
+        ]
+      }
       derived_patterns: {
         Row: {
           category: string
@@ -1216,6 +1312,183 @@ export type Database = {
         }
         Relationships: []
       }
+      rae_engine_concept_overrides: {
+        Row: {
+          candidate_concept_id: string
+          created_at: string
+          engine_version_id: string
+          id: string
+          lifted: boolean
+          lifted_at: string | null
+          lifted_by: string | null
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_concept_id: string
+          created_at?: string
+          engine_version_id: string
+          id?: string
+          lifted?: boolean
+          lifted_at?: string | null
+          lifted_by?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_concept_id?: string
+          created_at?: string
+          engine_version_id?: string
+          id?: string
+          lifted?: boolean
+          lifted_at?: string | null
+          lifted_by?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_engine_concept_overrides_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rae_engine_versions: {
+        Row: {
+          activated_at: string | null
+          calibration_mode: boolean
+          created_at: string
+          id: string
+          notes: string | null
+          ontology_version: string
+          parameters: Json
+          registry_seed_version: string
+          semver: string
+          threshold_admission: number
+          threshold_rejection_floor: number
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          calibration_mode?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ontology_version: string
+          parameters?: Json
+          registry_seed_version: string
+          semver: string
+          threshold_admission: number
+          threshold_rejection_floor: number
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          calibration_mode?: boolean
+          created_at?: string
+          id?: string
+          notes?: string | null
+          ontology_version?: string
+          parameters?: Json
+          registry_seed_version?: string
+          semver?: string
+          threshold_admission?: number
+          threshold_rejection_floor?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rae_signal_config: {
+        Row: {
+          candidate_concept_id: string
+          created_at: string
+          engine_version_id: string
+          id: string
+          notes: string | null
+          parameters: Json
+          signal_id: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          candidate_concept_id: string
+          created_at?: string
+          engine_version_id: string
+          id?: string
+          notes?: string | null
+          parameters?: Json
+          signal_id: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          candidate_concept_id?: string
+          created_at?: string
+          engine_version_id?: string
+          id?: string
+          notes?: string | null
+          parameters?: Json
+          signal_id?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_signal_config_engine_version_id_fkey"
+            columns: ["engine_version_id"]
+            isOneToOne: false
+            referencedRelation: "rae_engine_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rae_state_transitions: {
+        Row: {
+          actor_id: string
+          actor_kind: string
+          caw_id: string
+          created_at: string
+          from_state: Database["public"]["Enums"]["rae_admission_state"] | null
+          id: string
+          policy: string
+          reason: string
+          to_state: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Insert: {
+          actor_id: string
+          actor_kind: string
+          caw_id: string
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["rae_admission_state"] | null
+          id?: string
+          policy?: string
+          reason: string
+          to_state: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Update: {
+          actor_id?: string
+          actor_kind?: string
+          caw_id?: string
+          created_at?: string
+          from_state?: Database["public"]["Enums"]["rae_admission_state"] | null
+          id?: string
+          policy?: string
+          reason?: string
+          to_state?: Database["public"]["Enums"]["rae_admission_state"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rae_state_transitions_caw_id_fkey"
+            columns: ["caw_id"]
+            isOneToOne: false
+            referencedRelation: "concept_assignment_witnesses"
+            referencedColumns: ["caw_id"]
+          },
+        ]
+      }
       reconsideration_events: {
         Row: {
           assessment_id: string
@@ -1719,6 +1992,11 @@ export type Database = {
         | "imaging"
         | "omics"
         | "narrative"
+      rae_admission_state:
+        | "auto_admitted"
+        | "needs_review"
+        | "rejected"
+        | "human_confirmed"
       witness_domain_of_access:
         | "embodied_perception"
         | "symptom_continuity"
@@ -1907,6 +2185,12 @@ export const Constants = {
         "imaging",
         "omics",
         "narrative",
+      ],
+      rae_admission_state: [
+        "auto_admitted",
+        "needs_review",
+        "rejected",
+        "human_confirmed",
       ],
       witness_domain_of_access: [
         "embodied_perception",
