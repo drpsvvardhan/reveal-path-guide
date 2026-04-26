@@ -1,0 +1,33 @@
+name: RAE Integration Harness
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  rae-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    concurrency:
+      group: rae-integration-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.7.13
+      - name: Run integration harness
+        run: |
+          bash scripts/test-integration.sh 2>&1 | tee /tmp/rae_harness_run.log
+        env:
+          RAE_TEST_PG_PORT: 54329
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rae-integration-log-${{ github.run_id }}
+          path: /tmp/rae_harness_run.log
