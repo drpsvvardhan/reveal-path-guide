@@ -667,3 +667,107 @@ Deno.test(
     });
   },
 );
+
+// ---------------------------------------------------------------------------
+// Test 6 (D-4): longitudinal partial band limitation persists on CAW
+// ---------------------------------------------------------------------------
+//
+// Signal 7 (longitudinal) emits a `partial` band when the observed delta
+// lies above 0.8 * delta_ceiling but at or below the ceiling itself
+// (spec §5.8). The signal note carries plain prose — the same
+// convention used by signals/value.ts and signals/refRange.ts for their
+// partial bands. This test asserts the prose limitation round-trips
+// onto the persisted CAW row.
+// ---------------------------------------------------------------------------
+
+const LONGITUDINAL_PARTIAL_LIMITATION =
+  "longitudinal delta within ceiling but at edge of biological dynamics";
+
+Deno.test(
+  "integration: longitudinal partial band limitation persists on CAW",
+  async () => {
+    await withRollback(async (db) => {
+      await seedIntegrationFixtures(db);
+
+      const ids = freshIdentity();
+
+      const longitudinalSignalResult = {
+        signal_id: "longitudinal",
+        band: "partial",
+        score: 1,
+        weight: 0.2,
+        contributes_to_denominator: true,
+        evidence: {
+          signal_id: "longitudinal",
+          prior_witness_ids: [],
+          dynamics_rule_id: "edge_default",
+          delta_observed: 0.85,
+          delta_ceiling: 1.0,
+          result: "edge_of_dynamics",
+        },
+        notes: [LONGITUDINAL_PARTIAL_LIMITATION],
+      };
+
+      const caw = buildCawDraft({
+        cawId: ids.caw_id,
+        userId: FIXED_USER_ID,
+        sourceTable: HBA1C_SOURCE_TABLE,
+        sourceRowId: ids.source_row_id,
+        candidateConceptId: HBA1C_CONCEPT_ID,
+        engineVersionId: ENGINE_VERSION_PROD_ID,
+        currentState: "auto_admitted",
+        compositeIdentityScore: 0.95,
+        limitations: [
+          "integration test fixture",
+          LONGITUDINAL_PARTIAL_LIMITATION,
+        ],
+      });
+      // Embed the partial-band signal_result so the persisted row is
+      // self-consistent (limitations + signal_results both reflect the
+      // edge-of-dynamics state).
+      (caw as { signal_results: Record<string, unknown> }).signal_results = {
+        longitudinal: longitudinalSignalResult,
+      };
+
+      const witness = buildDepth0WitnessPayload({
+        witnessId: ids.witness_id,
+        userId: FIXED_USER_ID,
+        sourceTable: HBA1C_SOURCE_TABLE,
+        sourceRowId: ids.source_row_id,
+      });
+
+      const payload = {
+        caw,
+        witness_intent: "produce_depth0_witness",
+        witness_payload: witness,
+        from_state: null,
+        to_state: "auto_admitted",
+        actor_kind: "engine",
+        actor_id: "rae_integration_test",
+        reason: "integration D-4: longitudinal partial band persists",
+        policy: "default",
+      };
+
+      await db.queryObject(
+        `SELECT public.rae_persist_initial_admission($1::jsonb)`,
+        [JSON.stringify(payload)],
+      );
+
+      const cawRows = await db.queryObject<{ limitations: string[] }>(
+        `SELECT limitations
+           FROM public.concept_assignment_witnesses
+          WHERE caw_id = $1`,
+        [ids.caw_id],
+      );
+      assertEquals(cawRows.rows.length, 1, "exactly one CAW row");
+      const limitations = cawRows.rows[0].limitations;
+      assert(Array.isArray(limitations), "limitations must be an array");
+      assert(
+        limitations.includes(LONGITUDINAL_PARTIAL_LIMITATION),
+        `expected longitudinal edge-of-dynamics limitation in ${
+          JSON.stringify(limitations)
+        }`,
+      );
+    });
+  },
+);
