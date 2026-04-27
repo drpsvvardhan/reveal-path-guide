@@ -263,6 +263,20 @@ transitions outside the set are runtime errors.
 - `human_confirmed → rejected` by `actor_kind = 'engine'`.
 - Any transition without `actor_kind`, `actor_id`, `reason`.
 
+#### Sanctioned tightening of spec §6.2
+
+Spec §6.2 permits an engine-driven `rejected → auto_admitted` transition
+when a registry change is judged sufficient to overturn the prior
+rejection. The v1 implementation does not encode this edge: `stateMachine.ts`
+omits it from the allowed set, so any attempt is a runtime error. The
+rationale is alignment with drift D in spec §12.4 — engine-driven
+graduation without founder review is the exact failure mode the
+drift-mitigation discipline forbids. As a consequence, every path out
+of `rejected` in v1 requires a human actor (`actor_kind = 'human'`),
+typically via the calibration review surface. This tightening is
+founder-sanctioned and will be revisited if registry-driven re-admission
+ever becomes a real workflow that justifies the audit complexity.
+
 ### 3.3 Calibration mode policy
 
 `rae_engine_versions.calibration_mode` (boolean) gates the orchestrator's
