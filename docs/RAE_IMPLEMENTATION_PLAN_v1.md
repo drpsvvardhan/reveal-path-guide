@@ -706,6 +706,26 @@ work toward them is out of scope for v1:
   admissions. Spec §4.5 names this; the mitigation is not in RAE but
   in the readiness reasoner. Flag for downstream review only.
 
+### 11.1 Known deferred gaps
+
+- **Back-annotation soft-drift detection (spec §11.2, plan §9).**
+  Concept-divergence detection on the 92 grandfathered witnesses
+  during back-annotation requires `witness_objects` to carry an
+  `ontology_concept_id` column.
+- That column does not exist in the P1a schema today.
+- Therefore the soft-drift check implemented in
+  `_shared/rae/storage/admit.ts` is unreachable in the RPC path:
+  the join required to surface a drift signal cannot be expressed.
+- The gap is intentional and known, not an oversight; it is recorded
+  in migration `20260425024109` as an inline comment and here as the
+  authoritative ledger entry.
+- **Trigger condition for closing:** a future migration adds
+  `witness_objects.ontology_concept_id` (and backfills it). At that
+  point the soft-drift check in `admit.ts` re-enables automatically
+  with no further code change required.
+- Status: **deferred, not lost.** Tracked here and in
+  `docs/P1A_STATE_SNAPSHOT.md` known-backlog.
+
 ---
 
 ## 12. Composition with the four P1a invariants
