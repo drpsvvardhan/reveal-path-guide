@@ -598,6 +598,13 @@ This is the operational realization of spec §9 and §11 step 5–7.
 - VV-001 calibration on the 923 will determine whether the two cases
   warrant distinct dispositions (e.g., abstain vs partial); revisit
   the threshold and the case split during 923 calibration.
+- Signal 7 (longitudinal) emits `partial` when the observed delta
+  falls above `0.8 * delta_ceiling` and at or below the ceiling
+  itself (spec §5.8: "coherence preserved within tolerance, but the
+  change is at the edge of biological dynamics"). The 0.8 fraction
+  is the v1 hardcoded default and is calibration-tunable.
+  VV-001 calibration on the 923 will inform whether the threshold
+  should shift; revisit during 923 calibration.
 
 ---
 
