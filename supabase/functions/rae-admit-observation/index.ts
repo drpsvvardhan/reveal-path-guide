@@ -508,6 +508,17 @@ async function handle(
       prior_observations: priorObservations,
     });
 
+    // D-8: merge concept-override limitations into the persisted CAW so the
+    // CAW's audit trail enumerates every limitation that applies to the
+    // admission (per spec §4.3 and the contract stated in
+    // concept_binding.ts line 177-178). Pure: in-memory array spread.
+    if (bound.override_limitations.length > 0) {
+      decision.caw.limitations = [
+        ...decision.caw.limitations,
+        ...bound.override_limitations,
+      ];
+    }
+
     // §4.10 — build the two adapters (witnessify + payload).
     const witnessifyAdapter = makeRaeDepth0WitnessifyAdapter(
       reqBody.engine_version_id,
