@@ -99,7 +99,11 @@ export interface LongitudinalEvidence {
   dynamics_rule_id: string | null;
   delta_observed: number | null;
   delta_ceiling: number | null;
-  result: "coherent" | "incoherent" | "insufficient_history";
+  result:
+    | "coherent"
+    | "incoherent"
+    | "insufficient_history"
+    | "edge_of_dynamics";
 }
 
 export type SignalEvidence =

@@ -97,26 +97,55 @@ export function evaluateLongitudinal(
   }
 
   const delta = Math.abs(input.current_value - nearest.value);
-  const coherent = delta <= input.delta_ceiling;
+  // Spec §5.8: a change inside the ceiling but near its upper edge is a
+  // partial — "coherence preserved within tolerance, but the change is
+  // at the edge of biological dynamics." The 0.8 fraction is the v1
+  // hardcoded edge threshold; calibration-tunable on the 923 (see
+  // RAE_IMPLEMENTATION_PLAN_v1.md §8.7).
+  const EDGE_FRACTION = 0.8;
+  const ceiling = input.delta_ceiling;
+  const exceedsCeiling = delta > ceiling;
+  const atEdge = !exceedsCeiling && delta > EDGE_FRACTION * ceiling;
+
+  let band: SignalResult["band"];
+  let score: number;
+  let result: LongitudinalEvidence["result"];
+  const notes: string[] = [];
+
+  if (exceedsCeiling) {
+    band = "fail";
+    score = 0;
+    result = "incoherent";
+    notes.push(`delta ${delta} exceeds ceiling ${ceiling}`);
+  } else if (atEdge) {
+    band = "partial";
+    score = 1;
+    result = "edge_of_dynamics";
+    notes.push(
+      "longitudinal delta within ceiling but at edge of biological dynamics",
+    );
+  } else {
+    band = "pass";
+    score = 1;
+    result = "coherent";
+  }
 
   const evidence: LongitudinalEvidence = {
     signal_id: "longitudinal",
     prior_witness_ids: priors.map((p) => p.witness_id),
     dynamics_rule_id: input.dynamics_rule_id,
     delta_observed: delta,
-    delta_ceiling: input.delta_ceiling,
-    result: coherent ? "coherent" : "incoherent",
+    delta_ceiling: ceiling,
+    result,
   };
 
   return {
     signal_id: "longitudinal",
-    band: coherent ? "pass" : "fail",
-    score: coherent ? 1 : 0,
+    band,
+    score,
     weight: input.weight,
     contributes_to_denominator: true,
     evidence,
-    notes: coherent
-      ? []
-      : [`delta ${delta} exceeds ceiling ${input.delta_ceiling}`],
+    notes,
   };
 }
