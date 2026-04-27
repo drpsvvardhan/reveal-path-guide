@@ -22,6 +22,7 @@ jobs:
           deno-version: v2.7.13
       - name: Run integration harness
         run: |
+          set -o pipefail
           bash scripts/test-integration.sh 2>&1 | tee /tmp/rae_harness_run.log
         env:
           RAE_TEST_PG_PORT: 54329
