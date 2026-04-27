@@ -1,6 +1,8 @@
 import React, { useCallback, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useDefinitionContext } from "@/hooks/useDefinitionContext";
+import { composeDefinition, resolveConceptId } from "@/lib/definitionTemplates";
 
 interface TappableProseProps {
   text: string;
@@ -12,9 +14,11 @@ const COMMON_WORD_RESPONSE = "This is a common word — no technical meaning in 
 const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
   const [activeWord, setActiveWord] = useState<string | null>(null);
   const [definition, setDefinition] = useState<string | null>(null);
+  const [grounding, setGrounding] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const definitionCtx = useDefinitionContext();
 
   // Split text into words preserving whitespace/punctuation
   const tokens = React.useMemo(() => {
@@ -56,7 +60,22 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
 
       setActiveWord(cleanWord);
       setDefinition(null);
+      setGrounding(null);
       setLoading(true);
+
+      // Concept-word interception: bypass the edge call when the tapped
+      // word maps to a known concept, and compose patient-grounded text
+      // client-side from the selector.
+      const conceptId = resolveConceptId(cleanWord);
+      if (conceptId) {
+        const composed = composeDefinition(conceptId, definitionCtx);
+        if (composed) {
+          setDefinition(composed.vizzhy);
+          setGrounding(composed.grounding);
+          setLoading(false);
+          return;
+        }
+      }
 
       const sentence = extractSentence(charOffset);
       // Section context: up to 500 chars centered around the word
@@ -86,7 +105,7 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
         }
       }
     },
-    [extractSentence, text]
+    [extractSentence, text, definitionCtx]
   );
 
   // Track character offset for each token
@@ -114,6 +133,7 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
                 setOpenIndex(null);
                 setActiveWord(null);
                 setDefinition(null);
+                setGrounding(null);
               }
             }}
           >
@@ -154,6 +174,11 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
                 ) : (
                   <div>
                     <p className="text-sm text-foreground leading-relaxed">{definition}</p>
+                    {grounding && (
+                      <p className="text-sm text-foreground/85 leading-relaxed mt-2">
+                        {grounding}
+                      </p>
+                    )}
                     <p className="text-[9px] text-muted-foreground/40 mt-2 font-sans tracking-wider uppercase">
                       Vizzhy
                     </p>
