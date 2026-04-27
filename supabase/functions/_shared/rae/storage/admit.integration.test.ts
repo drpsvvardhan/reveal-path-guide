@@ -570,3 +570,100 @@ Deno.test(
     });
   },
 );
+
+// ---------------------------------------------------------------------------
+// Test 5 (D-8): concept override active causes CAW limitations to carry
+// override tokens
+// ---------------------------------------------------------------------------
+//
+// Exercises the SQL persistence layer: when the edge function merges the
+// concept-override limitation tokens into decision.caw.limitations (the
+// D-8 fix in rae-admit-observation/index.ts), those tokens must round-trip
+// onto the persisted CAW row. This test constructs the merged limitations
+// manually and asserts the persisted shape.
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "integration: concept override active causes CAW limitations to carry override tokens",
+  async () => {
+    await withRollback(async (db) => {
+      await seedIntegrationFixtures(db);
+
+      const overrideReason = "v1 calibration: HbA1c held in review";
+      await seedConceptOverride(db, {
+        engineVersionId: ENGINE_VERSION_PROD_ID,
+        conceptId: HBA1C_CONCEPT_ID,
+        reason: overrideReason,
+        lifted: false,
+      });
+
+      const ids = freshIdentity();
+
+      const overrideLimitations = [
+        `concept_override_applied:${HBA1C_CONCEPT_ID}`,
+        "concept_override_effect:forced_needs_review_via_calibration_mode",
+        `concept_override_reason:${overrideReason}`,
+      ];
+
+      const caw = buildCawDraft({
+        cawId: ids.caw_id,
+        userId: FIXED_USER_ID,
+        sourceTable: HBA1C_SOURCE_TABLE,
+        sourceRowId: ids.source_row_id,
+        candidateConceptId: HBA1C_CONCEPT_ID,
+        engineVersionId: ENGINE_VERSION_PROD_ID,
+        currentState: "needs_review",
+        compositeIdentityScore: 0.95,
+        limitations: [
+          "integration test fixture",
+          ...overrideLimitations,
+        ],
+      });
+
+      const payload = {
+        caw,
+        witness_intent: "none",
+        from_state: null,
+        to_state: "needs_review",
+        actor_kind: "engine",
+        actor_id: "rae_integration_test",
+        reason: "integration D-8: override limitations persist on CAW",
+        policy: "calibration_all_routes_to_review",
+      };
+
+      await db.queryObject(
+        `SELECT public.rae_persist_initial_admission($1::jsonb)`,
+        [JSON.stringify(payload)],
+      );
+
+      const cawRows = await db.queryObject<{
+        limitations: string[];
+      }>(
+        `SELECT limitations
+           FROM public.concept_assignment_witnesses
+          WHERE caw_id = $1`,
+        [ids.caw_id],
+      );
+      assertEquals(cawRows.rows.length, 1, "exactly one CAW row");
+      const limitations = cawRows.rows[0].limitations;
+      assert(Array.isArray(limitations), "limitations must be an array");
+
+      const hasApplied = limitations.some((t) =>
+        typeof t === "string" && t.startsWith("concept_override_applied:")
+      );
+      const hasEffect = limitations.includes(
+        "concept_override_effect:forced_needs_review_via_calibration_mode",
+      );
+      const hasReason = limitations.some((t) =>
+        typeof t === "string" && t.startsWith("concept_override_reason:")
+      );
+      assert(hasApplied, `expected concept_override_applied:* in ${JSON.stringify(limitations)}`);
+      assert(hasEffect, `expected concept_override_effect token in ${JSON.stringify(limitations)}`);
+      assert(hasReason, `expected concept_override_reason:* in ${JSON.stringify(limitations)}`);
+
+      // Reference TEST_REGISTRY_SEED_VERSION so import stays meaningful
+      // alongside the other tests.
+      assertNotEquals(TEST_REGISTRY_SEED_VERSION, "");
+    });
+  },
+);
