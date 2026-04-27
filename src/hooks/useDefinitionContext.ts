@@ -58,14 +58,18 @@ function summarizeTerrain(axes: DefinitionAxis[]): {
 }
 
 export function useDefinitionContext(): DefinitionContext {
-  const { gateScores } = useCIEAssessment();
-  const { manifest } = useManifest();
-  const { patterns } = useDerivedPatterns();
-  const { clusters } = useClusters();
-  // TerrainRender is fetched but axis values still flow through gateScores.
-  // Reading the context here keeps it as a future enrichment slot without
-  // breaking the hook tree if the substrate later persists axis values.
-  useTerrainRender();
+  // Each provider may be absent on routes outside the patient shell
+  // (Auth, ClinicalShare, NotFound, etc.). Tolerate missing providers
+  // by treating their absence as "no data" rather than throwing.
+  // Hook call order is preserved — only the post-useContext throw is caught.
+  const safe = <T,>(fn: () => T, fallback: T): T => {
+    try { return fn(); } catch { return fallback; }
+  };
+  const { gateScores } = safe(() => useCIEAssessment(), { gateScores: {} } as ReturnType<typeof useCIEAssessment>);
+  const { manifest } = safe(() => useManifest(), { manifest: undefined } as unknown as ReturnType<typeof useManifest>);
+  const { patterns } = safe(() => useDerivedPatterns(), { patterns: [] } as unknown as ReturnType<typeof useDerivedPatterns>);
+  const { clusters } = safe(() => useClusters(), { clusters: [] } as unknown as ReturnType<typeof useClusters>);
+  safe(() => useTerrainRender(), null);
 
   return useMemo<DefinitionContext>(() => {
     // 1. axes
