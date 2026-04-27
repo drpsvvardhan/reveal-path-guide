@@ -278,3 +278,172 @@ export function composeDefinition(
 }
 
 export const KNOWN_CONCEPT_IDS = Object.keys(TEMPLATES);
+
+/**
+ * Multi-word concept phrases. Order matters — longer phrases first so the
+ * matcher tries 3-grams before 2-grams. Each phrase maps to a `conceptId`
+ * that may exist in TEMPLATES (uses its grounding) or be a phrase-only
+ * pseudo-concept (Vizzhy-only definition, no grounding).
+ *
+ * Vizzhy-only entries use `phraseOnlyDefinition`; matched as known so the
+ * tapped span is highlighted as a single unit and the edge-function call
+ * is bypassed.
+ */
+export interface PhraseEntry {
+  phrase: string; // lowercased, single space between words
+  conceptId?: string; // resolves to TEMPLATES entry
+  phraseOnlyDefinition?: string; // used when no conceptId match
+}
+
+export const KNOWN_PHRASES: PhraseEntry[] = [
+  // Mapped to existing concepts
+  { phrase: "biological terrain", conceptId: "terrain" },
+  { phrase: "your terrain", conceptId: "terrain" },
+  { phrase: "named contradiction", conceptId: "contradiction" },
+  { phrase: "named contradictions", conceptId: "contradiction" },
+  { phrase: "cluster tension", conceptId: "contradiction" },
+  { phrase: "cluster tensions", conceptId: "contradiction" },
+  { phrase: "active cluster", conceptId: "cluster" },
+  { phrase: "active clusters", conceptId: "cluster" },
+
+  // Phrase-only Vizzhy definitions (no grounding yet)
+  {
+    phrase: "advanced glycation",
+    phraseOnlyDefinition:
+      "Advanced glycation is the slow caramelizing of proteins by sugar — a marker of how much wear your tissues are carrying from years of glucose exposure.",
+  },
+  {
+    phrase: "advanced glycation end products",
+    phraseOnlyDefinition:
+      "Advanced glycation end products are the residues left when sugar bonds permanently to your tissues — Vizzhy reads them as accumulated metabolic wear.",
+  },
+  {
+    phrase: "phase angle",
+    phraseOnlyDefinition:
+      "Phase angle is a single number that reads cell-membrane integrity — how electrically intact your cells are. Higher means younger-behaving tissue.",
+  },
+  {
+    phrase: "visceral fat",
+    phraseOnlyDefinition:
+      "Visceral fat is the deep abdominal fat wrapped around your organs — metabolically louder than the fat under your skin, and the one Vizzhy watches.",
+  },
+  {
+    phrase: "insulin resistance",
+    phraseOnlyDefinition:
+      "Insulin resistance is when your cells stop hearing insulin's signal — your pancreas has to shout louder to get glucose into the cell.",
+  },
+  {
+    phrase: "metabolic flexibility",
+    phraseOnlyDefinition:
+      "Metabolic flexibility is your body's ability to switch fuel sources — burning fat or glucose as needed without getting stuck on one.",
+  },
+  {
+    phrase: "muscle mass",
+    phraseOnlyDefinition:
+      "Muscle mass is your active tissue reservoir — not strength alone, but the metabolic engine Vizzhy watches as a marker of resilience.",
+  },
+  {
+    phrase: "lean mass",
+    phraseOnlyDefinition:
+      "Lean mass is everything in you that isn't fat — muscle, bone, organs, water. Vizzhy reads it as the structural side of your composition.",
+  },
+  {
+    phrase: "body composition",
+    phraseOnlyDefinition:
+      "Body composition is the ratio of what you're made of — fat, muscle, water, bone — read together rather than collapsed into one weight number.",
+  },
+  {
+    phrase: "intracellular water",
+    phraseOnlyDefinition:
+      "Intracellular water is the fluid held inside your cells — a quiet read on cellular health and how well-hydrated your tissue actually is.",
+  },
+  {
+    phrase: "extracellular water",
+    phraseOnlyDefinition:
+      "Extracellular water is the fluid sitting outside your cells. When the ratio shifts upward, Vizzhy reads it as inflammation or fluid stress.",
+  },
+  {
+    phrase: "liver stiffness",
+    phraseOnlyDefinition:
+      "Liver stiffness is a measure of how much scar tissue your liver carries — the firmer the read, the more remodeling has happened.",
+  },
+  {
+    phrase: "liver fat",
+    phraseOnlyDefinition:
+      "Liver fat is fat stored inside the liver itself, not around it — a quieter signal than weight, but a louder one for metabolic health.",
+  },
+  {
+    phrase: "fatty liver",
+    phraseOnlyDefinition:
+      "Fatty liver is fat accumulating inside liver cells — often silent, often early, and one of the more reversible findings Vizzhy tracks.",
+  },
+  {
+    phrase: "controlled attenuation parameter",
+    phraseOnlyDefinition:
+      "Controlled attenuation parameter is the FibroScan number for liver fat — measured in dB/m, read alongside liver stiffness.",
+  },
+  {
+    phrase: "calcium score",
+    phraseOnlyDefinition:
+      "A calcium score is a CT-derived count of calcified plaque in your coronary arteries — Vizzhy reads it as cumulative cardiovascular history.",
+  },
+  {
+    phrase: "coronary calcium",
+    phraseOnlyDefinition:
+      "Coronary calcium is hardened plaque in the arteries that feed your heart — present means there's been remodeling, regardless of current symptoms.",
+  },
+  {
+    phrase: "biological age",
+    phraseOnlyDefinition:
+      "Biological age is what your body reads as, separate from your chronological age — a synthesis Vizzhy builds from the seven coordinates.",
+  },
+  {
+    phrase: "heart rate variability",
+    phraseOnlyDefinition:
+      "Heart rate variability is the small beat-to-beat changes in your heart rhythm — a read on how flexibly your nervous system is operating.",
+  },
+  {
+    phrase: "vo2 max",
+    phraseOnlyDefinition:
+      "VO2 max is the ceiling of how much oxygen your body can use under load — the single strongest signal of cardiopulmonary capacity.",
+  },
+  {
+    phrase: "resting metabolic rate",
+    phraseOnlyDefinition:
+      "Resting metabolic rate is the energy your body burns at rest — the metabolic baseline Vizzhy uses to interpret intake and recovery.",
+  },
+  {
+    phrase: "blood pressure",
+    phraseOnlyDefinition:
+      "Blood pressure is the force your circulating blood exerts on artery walls — read as a daily snapshot of vascular load.",
+  },
+];
+
+/** Try matching a phrase starting at `startIndex` in a token array.
+ *  Returns { length, conceptId?, phraseOnlyDefinition? } for the longest
+ *  match (greedy 3-gram → 2-gram), or null. */
+export function matchPhrase(
+  tokensLower: string[],
+  startIndex: number
+): { length: number; conceptId?: string; phraseOnlyDefinition?: string } | null {
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Try 4 → 3 → 2 word windows
+  for (const len of [4, 3, 2]) {
+    if (startIndex + len > tokensLower.length) continue;
+    const window = tokensLower
+      .slice(startIndex, startIndex + len)
+      .map(norm)
+      .filter(Boolean);
+    if (window.length !== len) continue;
+    const candidate = window.join(" ");
+    const hit = KNOWN_PHRASES.find((p) => p.phrase === candidate);
+    if (hit) {
+      return {
+        length: len,
+        conceptId: hit.conceptId,
+        phraseOnlyDefinition: hit.phraseOnlyDefinition,
+      };
+    }
+  }
+  return null;
+}
