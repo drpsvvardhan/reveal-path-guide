@@ -16,16 +16,7 @@ import { useNarrative } from "@/context/NarrativeContext";
 import { CIE_DOMAINS } from "@/lib/cieSeedData";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
-// Gate-to-radar mapping: 7 most clinically meaningful gates
-const RADAR_GATES = [
-  { gateId: "BRI", label: "Brain" },
-  { gateId: "BCS", label: "Barrier" },
-  { gateId: "FPIS", label: "Fuel" },
-  { gateId: "TIS", label: "Tissue" },
-  { gateId: "CLI", label: "Longevity" },
-  { gateId: "HPI", label: "Potential" },
-  { gateId: "GRIP", label: "Risk" },
-];
+import { RADAR_GATES, deriveTerrainAxes } from "@/lib/terrainAxes";
 
 interface BiologyDomain {
   name: string;
@@ -87,11 +78,9 @@ const ThesisSection: React.FC = () => {
 
   // Build terrain radar axes from real gate scores only
   const terrainAxes = useMemo(() => {
-    if (Object.keys(gateScores).length === 0) return [];
-
-    return RADAR_GATES.map((rg) => ({
-      label: rg.label,
-      score: gateScores[rg.gateId] ? Math.round(gateScores[rg.gateId].score) : 50,
+    return deriveTerrainAxes(gateScores).map((a) => ({
+      label: a.label,
+      score: a.score,
     }));
   }, [gateScores]);
 
