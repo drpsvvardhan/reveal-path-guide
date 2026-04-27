@@ -47,7 +47,8 @@ trap cleanup EXIT INT TERM
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
 log "starting ${PG_IMAGE} on port ${PG_PORT}"
-docker run -d --rm \
+docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+docker run -d \
   --name "${CONTAINER_NAME}" \
   -e POSTGRES_PASSWORD="${PG_PASSWORD}" \
   -e POSTGRES_USER="${PG_USER}" \
