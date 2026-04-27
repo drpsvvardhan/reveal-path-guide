@@ -37,6 +37,7 @@ import {
   seedIntegrationFixtures,
   seedConceptOverride,
   TEST_REGISTRY_SEED_VERSION,
+  SEVEN_SIGNAL_IDS,
 } from "./admit.integration.fixtures.ts";
 
 // ---------------------------------------------------------------------------
@@ -708,6 +709,17 @@ Deno.test(
         notes: [LONGITUDINAL_PARTIAL_LIMITATION],
       };
 
+      // Build a 7-element signal_results array matching the
+      // caw_signal_results_seven check constraint. Order must match
+      // SEVEN_SIGNAL_IDS exactly; longitudinal is index 6 and carries
+      // the partial-band shape, the other six match buildCawDraft's
+      // default uniform pass shape.
+      const signalResults = SEVEN_SIGNAL_IDS.map((id) =>
+        id === "longitudinal"
+          ? longitudinalSignalResult
+          : { signal_id: id, score: 0.9, contributed: true }
+      );
+
       const caw = buildCawDraft({
         cawId: ids.caw_id,
         userId: FIXED_USER_ID,
@@ -717,17 +729,12 @@ Deno.test(
         engineVersionId: ENGINE_VERSION_PROD_ID,
         currentState: "auto_admitted",
         compositeIdentityScore: 0.95,
+        signalResults,
         limitations: [
           "integration test fixture",
           LONGITUDINAL_PARTIAL_LIMITATION,
         ],
       });
-      // Embed the partial-band signal_result so the persisted row is
-      // self-consistent (limitations + signal_results both reflect the
-      // edge-of-dynamics state).
-      (caw as { signal_results: Record<string, unknown> }).signal_results = {
-        longitudinal: longitudinalSignalResult,
-      };
 
       const witness = buildDepth0WitnessPayload({
         witnessId: ids.witness_id,
