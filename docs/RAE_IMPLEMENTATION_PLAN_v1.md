@@ -263,6 +263,20 @@ transitions outside the set are runtime errors.
 - `human_confirmed → rejected` by `actor_kind = 'engine'`.
 - Any transition without `actor_kind`, `actor_id`, `reason`.
 
+#### Sanctioned tightening of spec §6.2
+
+Spec §6.2 permits an engine-driven `rejected → auto_admitted` transition
+when a registry change is judged sufficient to overturn the prior
+rejection. The v1 implementation does not encode this edge: `stateMachine.ts`
+omits it from the allowed set, so any attempt is a runtime error. The
+rationale is alignment with drift D in spec §12.4 — engine-driven
+graduation without founder review is the exact failure mode the
+drift-mitigation discipline forbids. As a consequence, every path out
+of `rejected` in v1 requires a human actor (`actor_kind = 'human'`),
+typically via the calibration review surface. This tightening is
+founder-sanctioned and will be revisited if registry-driven re-admission
+ever becomes a real workflow that justifies the audit complexity.
+
 ### 3.3 Calibration mode policy
 
 `rae_engine_versions.calibration_mode` (boolean) gates the orchestrator's
@@ -573,6 +587,18 @@ This is the operational realization of spec §9 and §11 step 5–7.
   override was lifted while its backlog was non-zero. Such an event
   is a drift incident.
 
+### 8.7 Calibration targets (open at v1 ship)
+
+- Signal 6 (panel) currently emits `partial` when the ratio of
+  expected sibling concepts present in co-observations is `>= 0.5`.
+  The threshold is deliberate but not yet calibrated.
+- The spec §5.7 "registry-unrecognized co-marker" case is not
+  separately distinguished from the simple "missing some siblings"
+  case in v1; both collapse into the same `partial` band today.
+- VV-001 calibration on the 923 will determine whether the two cases
+  warrant distinct dispositions (e.g., abstain vs partial); revisit
+  the threshold and the case split during 923 calibration.
+
 ---
 
 ## 9. Treatment of the 92 already-witnessed observations
@@ -679,6 +705,26 @@ work toward them is out of scope for v1:
   rejection, recommendations could be silently withheld for valid
   admissions. Spec §4.5 names this; the mitigation is not in RAE but
   in the readiness reasoner. Flag for downstream review only.
+
+### 11.1 Known deferred gaps
+
+- **Back-annotation soft-drift detection (spec §11.2, plan §9).**
+  Concept-divergence detection on the 92 grandfathered witnesses
+  during back-annotation requires `witness_objects` to carry an
+  `ontology_concept_id` column.
+- That column does not exist in the P1a schema today.
+- Therefore the soft-drift check implemented in
+  `_shared/rae/storage/admit.ts` is unreachable in the RPC path:
+  the join required to surface a drift signal cannot be expressed.
+- The gap is intentional and known, not an oversight; it is recorded
+  in migration `20260425024109` as an inline comment and here as the
+  authoritative ledger entry.
+- **Trigger condition for closing:** a future migration adds
+  `witness_objects.ontology_concept_id` (and backfills it). At that
+  point the soft-drift check in `admit.ts` re-enables automatically
+  with no further code change required.
+- Status: **deferred, not lost.** Tracked here and in
+  `docs/P1A_STATE_SNAPSHOT.md` known-backlog.
 
 ---
 

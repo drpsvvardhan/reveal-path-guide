@@ -196,13 +196,11 @@ export interface ConceptAssignmentWitness extends ConceptAssignmentWitnessDraft 
   updated_at: string;
 }
 
-// 8. AdmissionDecision — orchestrator return type.
-export interface AdmissionDecision {
-  caw: ConceptAssignmentWitnessDraft;
-  produced_witness_id: string | null;
-}
-
-// 9. StateTransitionRequest — input shape for the state machine.
+// 8. StateTransitionRequest — input shape for the state machine.
+// (Note: the orchestrator's runtime return type is `AdmissionDecisionV1`,
+// defined locally in orchestrator.ts. The earlier `AdmissionDecision`
+// shape exported here was unused and has been removed; do not re-add
+// without first consolidating with `AdmissionDecisionV1`.)
 export interface StateTransitionRequest {
   from_state: AdmissionState | null;
   to_state: AdmissionState;

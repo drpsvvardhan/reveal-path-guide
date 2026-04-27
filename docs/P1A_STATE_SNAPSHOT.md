@@ -356,6 +356,12 @@ runs under this account.
 Deprecation warning on Node 20 actions. Deadline September 16, 2026.
 Upgrade to `@v5` versions when the action publishers release them.
 
+### 9.7 witness_objects.ontology_concept_id pending
+
+`witness_objects.ontology_concept_id` pending; gates RAE
+back-annotation soft-drift detection (see
+`docs/RAE_IMPLEMENTATION_PLAN_v1.md` §11.1).
+
 ---
 
 ## 10. What P1a explicitly does NOT do
