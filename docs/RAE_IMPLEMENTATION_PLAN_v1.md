@@ -587,6 +587,18 @@ This is the operational realization of spec §9 and §11 step 5–7.
   override was lifted while its backlog was non-zero. Such an event
   is a drift incident.
 
+### 8.7 Calibration targets (open at v1 ship)
+
+- Signal 6 (panel) currently emits `partial` when the ratio of
+  expected sibling concepts present in co-observations is `>= 0.5`.
+  The threshold is deliberate but not yet calibrated.
+- The spec §5.7 "registry-unrecognized co-marker" case is not
+  separately distinguished from the simple "missing some siblings"
+  case in v1; both collapse into the same `partial` band today.
+- VV-001 calibration on the 923 will determine whether the two cases
+  warrant distinct dispositions (e.g., abstain vs partial); revisit
+  the threshold and the case split during 923 calibration.
+
 ---
 
 ## 9. Treatment of the 92 already-witnessed observations
