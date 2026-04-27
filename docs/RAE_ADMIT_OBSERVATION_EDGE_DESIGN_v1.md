@@ -306,6 +306,15 @@ the resulting binding **already has** `calibration_mode = true`. A caller
 by widening the review path, never by narrowing it. **No fifth admission
 state is introduced.**
 
+**Binding asymmetry (do not relax).** `policy_override` is permitted to
+widen review only — i.e., to force outcomes that would otherwise
+`auto_admit` into `needs_review`. It must never narrow review by forcing
+`needs_review` outcomes into auto-admit, nor by suppressing rejection
+routing. Any future enum value that would have a narrowing effect
+(e.g., `force_auto_admit`, `skip_review`) is forbidden by this design;
+such a capability requires a separate, explicitly authorized surface
+with its own audit story, not an extension of `policy_override`.
+
 **C8 — `effect` is synthesized, not loaded.** `loadEngineBinding` returns
 a raw `concept_override` row of shape `{ engine_version_id,
 candidate_concept_id, reason }` and nothing more. The
