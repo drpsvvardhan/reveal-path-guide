@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import FlowLine from "@/components/visuals/FlowLine";
-import TappableProse from "@/components/terrain/TappableProse";
+import TappableRegion from "@/components/terrain/TappableRegion";
 
 interface PatientSectionLayoutProps {
   eyebrow?: string;
@@ -27,6 +27,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
   actionBar,
 }) => {
   return (
+    <TappableRegion>
     <motion.section
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
@@ -64,10 +65,11 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               {headerExtra && <div className="mt-2">{headerExtra}</div>}
               {intro && (
                 <div className="mt-5 md:mt-6 max-w-xl">
-                  <TappableProse
-                    text={intro}
+                  <p
                     className="text-base md:text-lg text-muted-foreground leading-relaxed font-sans font-light"
-                  />
+                  >
+                    {intro}
+                  </p>
                 </div>
               )}
             </div>
@@ -102,6 +104,7 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
         )}
       </div>
     </motion.section>
+    </TappableRegion>
   );
 };
 
