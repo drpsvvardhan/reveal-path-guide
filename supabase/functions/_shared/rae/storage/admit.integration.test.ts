@@ -35,6 +35,7 @@ import {
   ENGINE_VERSION_PROD_ID,
   FIXED_USER_ID,
   seedIntegrationFixtures,
+  seedConceptOverride,
   TEST_REGISTRY_SEED_VERSION,
 } from "./admit.integration.fixtures.ts";
 
