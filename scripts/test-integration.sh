@@ -55,6 +55,11 @@ docker run -d --rm \
   -p "${PG_PORT}:5432" \
   "${PG_IMAGE}" >/dev/null
 
+sleep 3
+log "container status after start:"
+docker ps -a --filter "name=${CONTAINER_NAME}" --format \
+  'table {{.Names}}\t{{.Status}}\t{{.State}}' || true
+
 # Wait for readiness.
 log "waiting for postgres to accept connections"
 for i in $(seq 1 120); do
@@ -65,6 +70,12 @@ for i in $(seq 1 120); do
 done
 if ! docker exec "${CONTAINER_NAME}" pg_isready -U "${PG_USER}" -d "${PG_DB}" >/dev/null 2>&1; then
   err "postgres did not become ready in 120s"
+  err "----- container status -----"
+  docker ps -a --filter "name=${CONTAINER_NAME}" >&2 || true
+  err "----- container logs (last 100 lines) -----"
+  docker logs --tail 100 "${CONTAINER_NAME}" >&2 || true
+  err "----- docker info -----"
+  docker info 2>&1 | head -30 >&2 || true
   exit 3
 fi
 
