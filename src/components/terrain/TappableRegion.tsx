@@ -45,10 +45,11 @@ function getCaretRange(x: number, y: number): { node: Text; offset: number } | n
     }
   }
   // Firefox
-  // @ts-expect-error caretPositionFromPoint is non-standard typing
-  if (typeof document.caretPositionFromPoint === "function") {
-    // @ts-expect-error see above
-    const pos = document.caretPositionFromPoint(x, y);
+  const docAny = document as unknown as {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof docAny.caretPositionFromPoint === "function") {
+    const pos = docAny.caretPositionFromPoint(x, y);
     if (pos && pos.offsetNode?.nodeType === Node.TEXT_NODE) {
       return { node: pos.offsetNode as Text, offset: pos.offset };
     }
