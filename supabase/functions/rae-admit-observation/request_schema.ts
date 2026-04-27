@@ -11,7 +11,7 @@
 //     `CandidateConcept` (C7). Drift here is a release blocker.
 // ============================================================================
 
-import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
+import { z } from "npm:zod@3.23.8";
 
 // ---------------------------------------------------------------------------
 // Sub-schemas mirrored from orchestrator.ts.
