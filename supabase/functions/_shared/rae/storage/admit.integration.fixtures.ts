@@ -255,3 +255,28 @@ export function buildCawDraft(
 
 // Re-export postgres client types so callers can stay decoupled.
 export type { Client, Transaction };
+
+/**
+ * Seed one rae_engine_concept_overrides row scoped to a given engine
+ * version + candidate concept. Used by the D-8 integration test to
+ * exercise concept-override-driven CAW limitation persistence.
+ * Rides the caller's transaction; ROLLBACK cleans up.
+ */
+export interface SeedConceptOverrideOpts {
+  engineVersionId: string;
+  conceptId: string;
+  reason: string;
+  lifted?: boolean;
+}
+
+export async function seedConceptOverride(
+  sql: SqlExecutor,
+  opts: SeedConceptOverrideOpts,
+): Promise<void> {
+  await sql.queryArray(
+    `INSERT INTO public.rae_engine_concept_overrides
+       (engine_version_id, candidate_concept_id, reason, lifted)
+     VALUES ($1, $2, $3, $4)`,
+    [opts.engineVersionId, opts.conceptId, opts.reason, opts.lifted ?? false],
+  );
+}
