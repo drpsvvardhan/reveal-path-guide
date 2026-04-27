@@ -57,14 +57,14 @@ docker run -d --rm \
 
 # Wait for readiness.
 log "waiting for postgres to accept connections"
-for i in $(seq 1 60); do
+for i in $(seq 1 120); do
   if docker exec "${CONTAINER_NAME}" pg_isready -U "${PG_USER}" -d "${PG_DB}" >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
 if ! docker exec "${CONTAINER_NAME}" pg_isready -U "${PG_USER}" -d "${PG_DB}" >/dev/null 2>&1; then
-  err "postgres did not become ready in 60s"
+  err "postgres did not become ready in 120s"
   exit 3
 fi
 
