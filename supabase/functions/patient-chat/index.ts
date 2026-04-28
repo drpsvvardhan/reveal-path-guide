@@ -1098,18 +1098,63 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       if (authData.user.id !== userId) {
-        return new Response(
-          JSON.stringify({
-            error:
-              "Unauthorized userId: the authenticated session does not " +
-              "match the requested userId. patient-chat does not support " +
-              "cross-user data access.",
-          }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json", ...corsHeaders },
+        // ----------------------------------------------------------------
+        // View-as branch (deliberate, reviewed). Per the scope decision
+        // above: if/when patient-chat is opened to clinician/admin
+        // impersonation, it must be a narrow, audited branch — not a
+        // relaxation of identity binding. This branch grants access ONLY
+        // when the authenticated session belongs to an admin
+        // (public.has_role(uid, 'admin')) AND there is an active,
+        // non-revoked, non-expired row in admin_view_as_sessions for the
+        // (admin → requested userId) pair. Anything else → 401.
+        // ----------------------------------------------------------------
+        const serviceRoleKeyForViewAs = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const adminClient = createClient(supabaseUrl, serviceRoleKeyForViewAs);
+
+        const { data: isAdmin } = await adminClient.rpc("has_role", {
+          _user_id: authData.user.id,
+          _role: "admin",
+        });
+
+        let viewAsAuthorized = false;
+        if (isAdmin === true) {
+          const { data: session } = await adminClient
+            .from("admin_view_as_sessions")
+            .select("id")
+            .eq("admin_user_id", authData.user.id)
+            .eq("target_user_id", userId)
+            .is("revoked_at", null)
+            .gt("expires_at", new Date().toISOString())
+            .limit(1)
+            .maybeSingle();
+          viewAsAuthorized = !!session?.id;
+
+          if (viewAsAuthorized) {
+            // Audit the access (best-effort; failure does not block).
+            await adminClient.from("admin_view_as_audit").insert({
+              session_id: session!.id,
+              admin_user_id: authData.user.id,
+              target_user_id: userId,
+              event_type: "patient_chat_access",
+              event_detail: { surface: "patient-chat" },
+            }).then(() => {}, () => {});
           }
-        );
+        }
+
+        if (!viewAsAuthorized) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Unauthorized userId: the authenticated session does not " +
+                "match the requested userId, and no active view-as session " +
+                "authorizes this access.",
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json", ...corsHeaders },
+            }
+          );
+        }
       }
     }
 
