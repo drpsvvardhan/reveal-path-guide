@@ -232,16 +232,33 @@ const TappableRegion: React.FC<{
       </div>
       {tooltip &&
         createPortal(
-          <div
-            data-tappable-tooltip
-            className="fixed z-50 w-64 p-3 rounded-lg border border-border/50 bg-card/95 backdrop-blur-sm shadow-lg pointer-events-auto"
-            style={{
-              left: Math.min(tooltip.x, window.innerWidth - 280),
-              top: Math.max(8, tooltip.y - 12),
-              transform: "translate(-50%, -100%)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+          (() => {
+            const TT_WIDTH = 256; // w-64
+            const MARGIN = 12;
+            const halfW = TT_WIDTH / 2;
+            // Clamp horizontal so the centered tooltip stays fully on-screen
+            const clampedX = Math.min(
+              Math.max(tooltip.x, halfW + MARGIN),
+              window.innerWidth - halfW - MARGIN
+            );
+            // Decide whether to render above or below the click point.
+            // Estimate tooltip height; if not enough space above, flip below.
+            const ESTIMATED_HEIGHT = 180;
+            const spaceAbove = tooltip.y;
+            const placeBelow = spaceAbove < ESTIMATED_HEIGHT + MARGIN;
+            const top = placeBelow
+              ? Math.min(tooltip.y + 16, window.innerHeight - MARGIN)
+              : Math.max(MARGIN, tooltip.y - 12);
+            const transform = placeBelow
+              ? "translate(-50%, 0)"
+              : "translate(-50%, -100%)";
+            return (
+              <div
+                data-tappable-tooltip
+                className="fixed z-50 w-64 p-3 rounded-lg border border-border/50 bg-card/95 backdrop-blur-sm shadow-lg pointer-events-auto max-h-[80vh] overflow-y-auto"
+                style={{ left: clampedX, top, transform }}
+                onClick={(e) => e.stopPropagation()}
+              >
             {tooltip.loading ? (
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -266,7 +283,9 @@ const TappableRegion: React.FC<{
                 </p>
               </div>
             )}
-          </div>,
+              </div>
+            );
+          })(),
           document.body
         )}
       {/* Backdrop to dismiss */}
