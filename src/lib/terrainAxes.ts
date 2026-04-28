@@ -50,7 +50,16 @@ export function deriveTerrainAxes(
   gateScores: Record<string, GateScoreLike>
 ): TerrainAxisValue[] {
   if (!gateScores || Object.keys(gateScores).length === 0) return [];
-  return RADAR_GATES.map((rg) => {
+  // Defensive dedupe: guarantee each gateId / label appears exactly once on
+  // the rendered radar, even if RADAR_GATES is ever extended with overlap.
+  const seenIds = new Set<string>();
+  const seenLabels = new Set<string>();
+  return RADAR_GATES.filter((rg) => {
+    if (seenIds.has(rg.gateId) || seenLabels.has(rg.label)) return false;
+    seenIds.add(rg.gateId);
+    seenLabels.add(rg.label);
+    return true;
+  }).map((rg) => {
     const gs = gateScores[rg.gateId];
     return {
       id: rg.gateId,
