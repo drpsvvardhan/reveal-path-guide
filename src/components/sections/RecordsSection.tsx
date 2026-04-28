@@ -560,15 +560,28 @@ const RecordsSection: React.FC = () => {
           {/* Hero: framework-compliant prose portrait */}
           <TerrainPortraitHero />
 
-          {/* Confidence distribution summary (derived from cluster tiers) */}
+          {/* Confidence distribution summary — reads canonical tier counts
+              directly from clustersByTier. Each tier is reported on its own
+              so the summary cannot diverge from the right-rail tier
+              breakdown (Item E, Trajectory Correction v2 §1.2). */}
           {(() => {
-            const supported = clustersByTier.robust.length + clustersByTier.supported.length;
-            const developing = clustersByTier.developing.length;
-            const emerging = clustersByTier.tentative.length + clustersByTier.emerging.length;
-            if (supported + developing + emerging === 0) return null;
+            const TIERS: Array<{ tier: ClusterTier; label: string }> = [
+              { tier: "robust", label: "robust" },
+              { tier: "supported", label: "supported" },
+              { tier: "developing", label: "developing" },
+              { tier: "tentative", label: "tentative" },
+              { tier: "emerging", label: "emerging" },
+            ];
+            const present = TIERS
+              .map((t) => ({ ...t, count: clustersByTier[t.tier].length }))
+              .filter((t) => t.count > 0);
+            if (present.length === 0) return null;
+            const phrase = present
+              .map((t) => `${t.count} ${t.label}`)
+              .join(", ");
             return (
               <p className="text-xs text-muted-foreground text-center py-6">
-                Across your findings: {supported} supported, {developing} developing, {emerging} emerging.
+                Across your findings: {phrase}.
               </p>
             );
           })()}
