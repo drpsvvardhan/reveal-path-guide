@@ -20,6 +20,7 @@ export interface AskAnythingContext {
 
 export interface ReasoningContext {
   askContext?: AskAnythingContext | null;
+  askContextLoading?: boolean;
   dataWindow?: {
     from: string;
     to: string;
@@ -114,6 +115,7 @@ const ChipGroup: React.FC<{
 const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChipTap }) => {
   const {
     askContext,
+    askContextLoading = false,
     dataWindow,
     messageCount = 0,
   } = context;
@@ -239,11 +241,20 @@ const ChatReasoningTrace: React.FC<ChatReasoningTraceProps> = ({ context, onChip
           </div>
         </div>
 
-        {totalChips === 0 && (
+        {totalChips === 0 && askContextLoading && (
           <div className="py-8 text-center">
             <Eye className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-xs text-muted-foreground italic max-w-[240px] mx-auto leading-relaxed">
               Loading your biomarker context…
+            </p>
+          </div>
+        )}
+        {totalChips === 0 && !askContextLoading && (
+          <div className="py-8 text-center">
+            <Eye className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-xs text-muted-foreground italic max-w-[240px] mx-auto leading-relaxed">
+              No biomarkers in scope yet. Upload labs or complete your
+              assessment so your companion has data to ground in.
             </p>
           </div>
         )}

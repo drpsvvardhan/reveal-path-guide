@@ -170,30 +170,46 @@ const ClusterCard: React.FC<ClusterCardProps> = ({ cluster }) => {
                         Confidence audit
                       </p>
 
-                      {/* Five dimensions */}
+                      {/* Five dimensions — null/undefined renders as
+                          "unmeasured" rather than silently defaulting to a
+                          number (Trajectory Correction v2 §1.2 Item F). */}
                       <div className="space-y-1.5">
-                        {[
-                          { label: "Breadth", value: cluster.confidence_dimensions.breadth },
-                          { label: "Depth", value: cluster.confidence_dimensions.depth },
-                          { label: "Time", value: cluster.confidence_dimensions.time },
-                          { label: "Coherence", value: cluster.confidence_dimensions.coherence_strength },
-                          { label: "Completeness", value: 1 - cluster.confidence_dimensions.missing_data_penalty },
-                        ].map((dim) => (
-                          <div key={dim.label} className="flex items-center gap-2">
-                            <span className="text-[10px] text-muted-foreground w-[80px] shrink-0">
-                              {dim.label}
-                            </span>
-                            <div className="flex-1 h-[6px] rounded-full bg-border overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-secondary transition-all"
-                                style={{ width: `${Math.max(0, Math.min(1, dim.value)) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] font-mono text-foreground w-[36px] text-right">
-                              {dim.value.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
+                        {(() => {
+                          const cd = cluster.confidence_dimensions;
+                          const completeness =
+                            cd?.missing_data_penalty == null
+                              ? null
+                              : 1 - cd.missing_data_penalty;
+                          const dims: Array<{ label: string; value: number | null }> = [
+                            { label: "Breadth", value: cd?.breadth ?? null },
+                            { label: "Depth", value: cd?.depth ?? null },
+                            { label: "Time", value: cd?.time ?? null },
+                            { label: "Coherence", value: cd?.coherence_strength ?? null },
+                            { label: "Completeness", value: completeness },
+                          ];
+                          return dims.map((dim) => {
+                            const measured = typeof dim.value === "number" && Number.isFinite(dim.value);
+                            const v = measured ? (dim.value as number) : 0;
+                            return (
+                              <div key={dim.label} className="flex items-center gap-2">
+                                <span className="text-[10px] text-muted-foreground w-[80px] shrink-0">
+                                  {dim.label}
+                                </span>
+                                <div className="flex-1 h-[6px] rounded-full bg-border overflow-hidden">
+                                  {measured && (
+                                    <div
+                                      className="h-full rounded-full bg-secondary transition-all"
+                                      style={{ width: `${Math.max(0, Math.min(1, v)) * 100}%` }}
+                                    />
+                                  )}
+                                </div>
+                                <span className="text-[10px] font-mono text-muted-foreground w-[88px] text-right">
+                                  {measured ? (v).toFixed(2) : "not yet measured"}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
 
                       {/* Overall score */}

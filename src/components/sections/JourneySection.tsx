@@ -145,18 +145,30 @@ const JourneySection: React.FC = () => {
         : "Identify what supports and what burdens your terrain",
     });
 
-    // Noticed
-    const highSeverity = patterns.length > 0
-      ? patterns.reduce((max, p) => {
-          const order = { critical: 0, high: 1, moderate: 2, low: 3 };
-          return (order[p.severity as keyof typeof order] ?? 3) < (order[max as keyof typeof order] ?? 3) ? p.severity : max;
-        }, patterns[0].severity)
+    // Noticed — render highest confidence tier (not severity) to match
+    // the language used on the "What we've noticed" page itself.
+    const TIER_RANK: Record<string, number> = {
+      robust: 5,
+      supported: 4,
+      developing: 3,
+      tentative: 2,
+      emerging: 1,
+    };
+    const highestTier = patterns.length > 0
+      ? patterns.reduce<string | null>((best, p) => {
+          const t = (p as any).tier ?? (p as any).confidence_tier ?? null;
+          if (!t || !(t in TIER_RANK)) return best;
+          if (!best) return t;
+          return TIER_RANK[t] > TIER_RANK[best] ? t : best;
+        }, null)
       : null;
     cards.push({
       sectionId: "noticed",
       title: "What we've noticed",
       preview: patterns.length > 0
-        ? `${patterns.length} pattern${patterns.length !== 1 ? "s" : ""} detected, highest severity: ${highSeverity}`
+        ? (highestTier
+            ? `${patterns.length} pattern${patterns.length !== 1 ? "s" : ""} noticed; highest tier: ${highestTier}`
+            : `${patterns.length} pattern${patterns.length !== 1 ? "s" : ""} noticed`)
         : "Pattern detection from your data layers",
     });
 

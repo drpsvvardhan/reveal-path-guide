@@ -33,7 +33,7 @@ const CareMapSection: React.FC = () => {
             />
           }
           items={[
-            { label: "Active supplements", value: medCount.toString() },
+            { label: "Active protocol items", value: medCount.toString() },
             { label: "Next checkpoint", value: "Week 2", tone: "accent" },
             { label: "Next bloodwork", value: "Week 8" },
           ]}

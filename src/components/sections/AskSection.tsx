@@ -163,6 +163,7 @@ const AskSection: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [askContext, setAskContext] = useState<AskAnythingContext | null>(null);
+  const [askContextLoading, setAskContextLoading] = useState<boolean>(true);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>(FALLBACK_QUESTIONS);
 
   const [reasoningContext, setReasoningContext] = useState<ReasoningContext>({
@@ -179,7 +180,11 @@ const AskSection: React.FC = () => {
 
   // Fetch dynamic context from edge function
   useEffect(() => {
-    if (!effectiveUserId) return;
+    if (!effectiveUserId) {
+      setAskContextLoading(false);
+      return;
+    }
+    setAskContextLoading(true);
 
     const fetchContext = async () => {
       try {
@@ -211,6 +216,8 @@ const AskSection: React.FC = () => {
         }
       } catch (e) {
         console.error("Failed to fetch ask-anything context:", e);
+      } finally {
+        setAskContextLoading(false);
       }
     };
 
@@ -234,6 +241,7 @@ const AskSection: React.FC = () => {
     setReasoningContext((prev) => ({
       ...prev,
       askContext,
+      askContextLoading,
       dataWindow:
         recent.length > 0
           ? {
@@ -244,7 +252,7 @@ const AskSection: React.FC = () => {
           : undefined,
       messageCount: messages.length,
     }));
-  }, [manifest, messages.length, askContext]);
+  }, [manifest, messages.length, askContext, askContextLoading]);
 
   // Build cluster tier map for validation
   const clusterTierMap = React.useMemo(() => {
