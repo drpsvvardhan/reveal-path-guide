@@ -95,7 +95,14 @@ const ThesisSection: React.FC = () => {
       RED: "accent",
     };
 
-    return RADAR_GATES.slice(0, 5).map((rg) => {
+    // Defensive dedupe by label so the sidebar can never render the same
+    // axis twice even if upstream data carries an accidental duplicate.
+    const seen = new Set<string>();
+    return RADAR_GATES.slice(0, 5).filter((rg) => {
+      if (seen.has(rg.label)) return false;
+      seen.add(rg.label);
+      return true;
+    }).map((rg) => {
       const gs = gateScores[rg.gateId];
       const score = gs ? Math.round(gs.score) : 50;
       const tl = gs?.traffic_light || "YELLOW";
