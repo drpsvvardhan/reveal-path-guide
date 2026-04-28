@@ -14,6 +14,7 @@ import GateChips from "@/components/sections/journey/GateChips";
 import DrillDownGrid from "@/components/sections/journey/DrillDownGrid";
 import BaselineCards from "@/components/sections/journey/BaselineCards";
 import TappableProse from "@/components/terrain/TappableProse";
+import { usePrefetchDefinitions } from "@/hooks/usePrefetchDefinitions";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 const toDateKey = (d: string) => d.slice(0, 10);
@@ -29,6 +30,7 @@ interface ActionPlanAction {
 }
 
 const JourneySection: React.FC = () => {
+  usePrefetchDefinitions(["terrain", "axis", "coherence", "contradiction"]);
   const { activeRender, isLoading: renderLoading, hasFailed, regenerate } = useTerrainRender();
   const [isRegeneratingTerrain, setIsRegeneratingTerrain] = useState(false);
   const { currentAssessment, gateScores, domainScores } = useCIEAssessment();

@@ -6,6 +6,7 @@ import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
 import AsideDistributionBar from "@/components/layout/AsideDistributionBar";
 import ClusterPatternCard from "@/components/clusters/ClusterPatternCard";
 import { ClusterTier } from "@/types/clusters";
+import { usePrefetchDefinitions } from "@/hooks/usePrefetchDefinitions";
 import {
   averageCoherence,
   totalTensions,

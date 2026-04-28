@@ -425,3 +425,60 @@ composition.
 
 **Phase A ends here. Awaiting founder approval before any Phase B
 code changes.**
+
+---
+
+## Phase B v2: resolver replaces curated registry
+
+The curated runtime registry that shipped with the first cut of Phase B
+(`KNOWN_PHRASES`, `matchPhrase`, per-concept template functions) has
+been removed. Patient Reveal does not scale by writing definition
+strings for every word.
+
+What remains:
+- `TappableRegion` continues to be the section-level surface that turns
+  bare prose into a tappable definition target. Interaction behavior
+  and visual styling are unchanged.
+- `useDefinitionContext()` continues to be the substrate selector that
+  composes the seven-coordinate, cluster, gate, coherence,
+  contradiction, reversibility, and confidence reads into one stable
+  shape.
+
+What changed:
+- Hover now calls a witness-bound resolver: the `define-term` edge
+  function. The resolver receives the hovered term, the containing
+  sentence, the surrounding section context, the patient id, and the
+  full DefinitionContext. It returns a strict JSON envelope:
+  `{ definition, grounding, citations, vizzhy_concept_mapped, cache_key, trace }`.
+- Vizzhy framing is gated by `ALLOWED_VIZZHY_CONCEPTS`
+  (`src/lib/allowedVizzhyConcepts.ts`, mirrored in
+  `supabase/functions/define-term/system_prompt.ts`). Terms outside the
+  list still get plain biological explanations, but the resolver may
+  not invent new Vizzhy-named compound constructs.
+- A non-blocking ontology leakage guard scans the model output for
+  invented branded constructs and records them in `trace.ontology_leakage_*`.
+- Caching is correctness-first: the cache key includes a hash of the
+  patient's DefinitionContext, so cache entries naturally invalidate
+  when the patient's state changes. Two layers exist client-side: a
+  hot in-memory cache and a sessionStorage cache. The edge function
+  also keeps a 24h server-side memo keyed by the same shape.
+- Each Patient Reveal section issues a small background prefetch on
+  mount via `usePrefetchDefinitions` so the most-likely-hovered terms
+  are warm by the time the patient reaches them. Ask Anything does
+  not prefetch.
+- The 23 founder-authored definitions are preserved as **eval gold
+  only** in `docs/UCDE_DEFINITION_RESOLVER_EVAL_v1.md`. They are not
+  loaded as runtime few-shot context. `scripts/eval-define-term.ts`
+  reads that file, calls the deployed resolver against a synthetic
+  DefinitionContext, and writes
+  `docs/UCDE_DEFINITION_RESOLVER_EVAL_REPORT_latest.md`. If voice
+  drift or ontology leakage fails on more than 4 of 23 terms the
+  harness exits non-zero.
+
+### Binding sentence
+
+The hover is a view of the resolver, not a parallel system. Concepts
+are primary; surface forms — the words a patient hovers on — are
+resolved against Vizzhy's existing ontology with patient state composed
+in at runtime. The platform scales by exposing more of the ontology to
+the resolver, not by writing more definition strings.

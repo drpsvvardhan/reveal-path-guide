@@ -1,21 +1,16 @@
 import React, { useCallback, useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useDefinitionContext } from "@/hooks/useDefinitionContext";
-import {
-  composeDefinition,
-  resolveConceptId,
-  KNOWN_PHRASES,
-  getDefinitionTemplate,
-} from "@/lib/definitionTemplates";
+import { useAuth } from "@/context/AuthContext";
+import { resolveDefineTerm } from "@/lib/defineTermClient";
 
 /**
  * Section-level tap interceptor. Wraps any subtree and listens for clicks
  * on bare text. On click it reads the caret position, expands to the
  * tapped word + neighboring words, and:
- *   1. Greedily checks for a multi-word phrase match (4 → 3 → 2 grams).
- *   2. Falls back to single-word concept resolution.
- *   3. Falls back to the `define-term` edge call.
+ *   1. Expands the click to a small word window for sentence context.
+ *   2. Calls the witness-bound `define-term` resolver (Phase B v2).
+ *   3. Renders definition + grounding (when present) in a tooltip.
  *
  * Skips clicks on interactive elements (button, a, input, textarea,
  * select, label[for], [role="button"]) and elements opted out via
@@ -128,46 +123,13 @@ function collectWordsAround(
   };
 }
 
-/** Try to find a known phrase that *contains* the clicked word.
- *  Looks at windows starting up to 3 words before the click. Returns
- *  the matched span info, or null. */
-function findPhraseContainingClick(
-  words: string[],
-  clickedIdx: number
-): {
-  startIdx: number;
-  length: number;
-  conceptId?: string;
-  phraseOnlyDefinition?: string;
-} | null {
-  const lower = words.map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ""));
-  // Try window starts that could include the clicked index
-  for (let start = Math.max(0, clickedIdx - 3); start <= clickedIdx; start++) {
-    for (const len of [4, 3, 2]) {
-      const end = start + len;
-      if (clickedIdx < start || clickedIdx >= end) continue;
-      if (end > lower.length) continue;
-      const candidate = lower.slice(start, end).filter(Boolean).join(" ");
-      const hit = KNOWN_PHRASES.find((p) => p.phrase === candidate);
-      if (hit) {
-        return {
-          startIdx: start,
-          length: len,
-          conceptId: hit.conceptId,
-          phraseOnlyDefinition: hit.phraseOnlyDefinition,
-        };
-      }
-    }
-  }
-  return null;
-}
-
 interface TooltipState {
   x: number;
   y: number;
   loading: boolean;
   definition: string | null;
   grounding: string | null;
+  groundedInData: boolean;
 }
 
 const TappableRegion: React.FC<{
@@ -178,6 +140,7 @@ const TappableRegion: React.FC<{
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const definitionCtx = useDefinitionContext();
+  const { user } = useAuth();
 
   // Close on outside click / escape
   useEffect(() => {
@@ -221,91 +184,45 @@ const TappableRegion: React.FC<{
       // Position tooltip near click
       const x = e.clientX;
       const y = e.clientY;
-      setTooltip({ x, y, loading: true, definition: null, grounding: null });
+      setTooltip({ x, y, loading: true, definition: null, grounding: null, groundedInData: false });
 
-      // 1. Phrase-first
-      const phrase = findPhraseContainingClick(words, clickedWordIndex);
-      if (phrase) {
-        if (phrase.conceptId) {
-          const composed = composeDefinition(phrase.conceptId, definitionCtx);
-          if (composed) {
-            setTooltip({
-              x,
-              y,
-              loading: false,
-              definition: composed.vizzhy,
-              grounding: composed.grounding,
-            });
-            return;
-          }
-        }
-        if (phrase.phraseOnlyDefinition) {
-          setTooltip({
-            x,
-            y,
-            loading: false,
-            definition: phrase.phraseOnlyDefinition,
-            grounding: null,
-          });
-          return;
-        }
-      }
-
-      // 2. Single-word concept
-      const conceptId = resolveConceptId(cleanWord);
-      if (conceptId) {
-        const composed = composeDefinition(conceptId, definitionCtx);
-        if (composed) {
-          setTooltip({
-            x,
-            y,
-            loading: false,
-            definition: composed.vizzhy,
-            grounding: composed.grounding,
-          });
-          return;
-        }
-      }
-
-      // 3. Edge fallback
       try {
         const ctxStart = Math.max(0, clickedWordIndex - 8);
         const ctxEnd = Math.min(words.length, clickedWordIndex + 8);
         const sectionContext = words.slice(ctxStart, ctxEnd).join(" ");
-        const { data, error } = await supabase.functions.invoke("define-term", {
-          body: { term: cleanWord, sentence, section_context: sectionContext },
+        const data = await resolveDefineTerm({
+          term: cleanWord,
+          sentence,
+          sectionContext,
+          definitionContext: definitionCtx,
+          patientId: user?.id ?? null,
+          signal: controller.signal,
         });
         if (controller.signal.aborted) return;
-        if (error) {
-          setTooltip({
-            x,
-            y,
-            loading: false,
-            definition: "Could not load definition.",
-            grounding: null,
-          });
-        } else {
-          setTooltip({
-            x,
-            y,
-            loading: false,
-            definition: data?.definition || "No definition available.",
-            grounding: null,
-          });
-        }
-      } catch {
-        if (!controller.signal.aborted) {
-          setTooltip({
-            x,
-            y,
-            loading: false,
-            definition: "Could not load definition.",
-            grounding: null,
-          });
-        }
+        const groundedInData =
+          data.vizzhy_concept_mapped === true && data.grounding !== null && data.grounding.length > 0;
+        setTooltip({
+          x,
+          y,
+          loading: false,
+          definition: data.definition || "No definition available.",
+          grounding: data.grounding ?? null,
+          groundedInData,
+        });
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        if ((err as DOMException)?.name === "AbortError") return;
+        setTooltip({
+          x,
+          y,
+          loading: false,
+          definition: "Could not load definition.",
+          grounding: null,
+          groundedInData: false,
+        });
       }
     },
-    [definitionCtx]
+    [definitionCtx, user?.id]
   );
 
   return (
@@ -345,7 +262,7 @@ const TappableRegion: React.FC<{
                   </p>
                 )}
                 <p className="text-[9px] text-muted-foreground/40 mt-2 font-sans tracking-wider uppercase">
-                  Vizzhy
+                  {tooltip.groundedInData ? "Vizzhy · grounded in your data" : "Vizzhy"}
                 </p>
               </div>
             )}

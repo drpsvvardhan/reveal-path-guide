@@ -1,8 +1,8 @@
 import React, { useCallback, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDefinitionContext } from "@/hooks/useDefinitionContext";
-import { composeDefinition, resolveConceptId } from "@/lib/definitionTemplates";
+import { useAuth } from "@/context/AuthContext";
+import { resolveDefineTerm } from "@/lib/defineTermClient";
 
 interface TappableProseProps {
   text: string;
@@ -15,10 +15,12 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
   const [activeWord, setActiveWord] = useState<string | null>(null);
   const [definition, setDefinition] = useState<string | null>(null);
   const [grounding, setGrounding] = useState<string | null>(null);
+  const [groundedInData, setGroundedInData] = useState(false);
   const [loading, setLoading] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const definitionCtx = useDefinitionContext();
+  const { user } = useAuth();
 
   // Split text into words preserving whitespace/punctuation
   const tokens = React.useMemo(() => {
@@ -61,21 +63,8 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
       setActiveWord(cleanWord);
       setDefinition(null);
       setGrounding(null);
+      setGroundedInData(false);
       setLoading(true);
-
-      // Concept-word interception: bypass the edge call when the tapped
-      // word maps to a known concept, and compose patient-grounded text
-      // client-side from the selector.
-      const conceptId = resolveConceptId(cleanWord);
-      if (conceptId) {
-        const composed = composeDefinition(conceptId, definitionCtx);
-        if (composed) {
-          setDefinition(composed.vizzhy);
-          setGrounding(composed.grounding);
-          setLoading(false);
-          return;
-        }
-      }
 
       const sentence = extractSentence(charOffset);
       // Section context: up to 500 chars centered around the word
@@ -84,19 +73,24 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
       const sectionContext = text.slice(ctxStart, ctxEnd);
 
       try {
-        const { data, error } = await supabase.functions.invoke("define-term", {
-          body: { term: cleanWord, sentence, section_context: sectionContext },
+        const data = await resolveDefineTerm({
+          term: cleanWord,
+          sentence,
+          sectionContext,
+          definitionContext: definitionCtx,
+          patientId: user?.id ?? null,
+          signal: controller.signal,
         });
-
         if (controller.signal.aborted) return;
-
-        if (error) {
-          setDefinition("Could not load definition.");
-        } else {
-          setDefinition(data?.definition || "No definition available.");
-        }
-      } catch {
-        if (!controller.signal.aborted) {
+        setDefinition(data.definition || "No definition available.");
+        setGrounding(data.grounding ?? null);
+        setGroundedInData(
+          data.vizzhy_concept_mapped === true &&
+            data.grounding !== null &&
+            data.grounding.length > 0
+        );
+      } catch (err) {
+        if (!controller.signal.aborted && (err as DOMException)?.name !== "AbortError") {
           setDefinition("Could not load definition.");
         }
       } finally {
@@ -105,7 +99,7 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
         }
       }
     },
-    [extractSentence, text, definitionCtx]
+    [extractSentence, text, definitionCtx, user?.id]
   );
 
   // Track character offset for each token
@@ -134,6 +128,7 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
                 setActiveWord(null);
                 setDefinition(null);
                 setGrounding(null);
+                setGroundedInData(false);
               }
             }}
           >
@@ -180,7 +175,7 @@ const TappableProse: React.FC<TappableProseProps> = ({ text, className }) => {
                       </p>
                     )}
                     <p className="text-[9px] text-muted-foreground/40 mt-2 font-sans tracking-wider uppercase">
-                      Vizzhy
+                      {groundedInData ? "Vizzhy · grounded in your data" : "Vizzhy"}
                     </p>
                   </div>
                 )}
