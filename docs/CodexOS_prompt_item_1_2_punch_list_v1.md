@@ -222,6 +222,8 @@ scope. Surface as a finding for founder review.
 - Match existing string conventions and language register where
   possible. The platform speaks adult patient register; do not
   introduce different voice.
+- If a fix requires adding new data fields, stop and escalate — do
+  not fabricate or infer values.
 
 ## Binding sentence
 
