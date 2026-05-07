@@ -3,6 +3,10 @@ import ChatLayout from "@/components/layout/ChatLayout";
 import ChatReasoningTrace, { ReasoningContext, AskAnythingContext } from "@/components/chat/ChatReasoningTrace";
 import ChatMessage, { ChatMessageData } from "@/components/chat/ChatMessage";
 import ChatInputBar from "@/components/chat/ChatInputBar";
+import ChatHistoryMenu from "@/components/chat/ChatHistoryMenu";
+import { useChatHistory } from "@/hooks/useChatHistory";
+import { conversationToMarkdown, conversationToPlainText, copyToClipboard, downloadFile, safeFilename } from "@/lib/exportChat";
+import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useActiveManifest } from "@/hooks/useActiveManifest";
@@ -161,7 +165,18 @@ const AskSection: React.FC = () => {
   const { clusters: activeClusters } = useClusters();
   const resolvedUserId = effectiveUserId || user?.id || null;
 
-  const [messages, setMessages] = useState<ChatMessageData[]>([]);
+  const {
+    conversations,
+    activeId,
+    messages,
+    setMessages,
+    newChat,
+    switchTo,
+    deleteConversation,
+    clearCurrent,
+    ensureConversation,
+    persistMessage,
+  } = useChatHistory(resolvedUserId);
   const [isLoading, setIsLoading] = useState(false);
   const [askContext, setAskContext] = useState<AskAnythingContext | null>(null);
   const [askContextLoading, setAskContextLoading] = useState<boolean>(true);
@@ -269,12 +284,17 @@ const AskSection: React.FC = () => {
       id: `user-${Date.now()}`,
       role: "user",
       content: text,
+      timestamp: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
     const assistantId = `assistant-${Date.now()}`;
-    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "" }]);
+    setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", timestamp: new Date().toISOString() }]);
+
+    // Ensure a conversation exists & persist the user turn
+    const convId = await ensureConversation(text);
+    if (convId) await persistMessage(convId, userMessage);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -393,6 +413,17 @@ const AskSection: React.FC = () => {
         )
       );
 
+      if (convId) {
+        await persistMessage(convId, {
+          id: assistantId,
+          role: "assistant",
+          content: cleanText,
+          sections,
+          voiceValidationStatus: allWarnings.length === 0 ? 'passed' : 'failed_with_warnings',
+          voiceValidationWarnings: allWarnings,
+        });
+      }
+
       const citedPatterns = extractCitedPatterns(cleanText);
       const firstMode = sections?.find((s) => s.mode)?.mode || "from_data";
       setReasoningContext((prev) => ({
@@ -415,15 +446,61 @@ const AskSection: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, manifest, documents, resolvedUserId, refreshQueue, clusterTierMap]);
+  }, [messages, manifest, documents, resolvedUserId, refreshQueue, clusterTierMap, ensureConversation, persistMessage, setMessages]);
 
   const handleChipTap = useCallback((question: string) => {
     sendMessage(question);
   }, [sendMessage]);
 
+  const handleRegenerate = useCallback(() => {
+    // Find last user message, drop everything after it, re-send
+    const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+    if (lastUserIdx === -1) return;
+    const realIdx = messages.length - 1 - lastUserIdx;
+    const lastUser = messages[realIdx];
+    setMessages(messages.slice(0, realIdx));
+    sendMessage(lastUser.content || "");
+  }, [messages, setMessages, sendMessage]);
+
+  const conversationTitle = React.useMemo(() => {
+    const conv = conversations.find((c) => c.id === activeId);
+    if (conv) return conv.title;
+    const firstUser = messages.find((m) => m.role === "user");
+    return firstUser?.content?.slice(0, 60) || "Conversation";
+  }, [conversations, activeId, messages]);
+
+  const handleCopyAll = useCallback(async () => {
+    await copyToClipboard(conversationToPlainText(conversationTitle, messages));
+    toast.success("Conversation copied to clipboard");
+  }, [conversationTitle, messages]);
+
+  const handleDownloadMd = useCallback(() => {
+    const md = conversationToMarkdown(conversationTitle, messages);
+    downloadFile(`${safeFilename(conversationTitle)}.md`, "text/markdown", md);
+  }, [conversationTitle, messages]);
+
+  const handleDownloadTxt = useCallback(() => {
+    const txt = conversationToPlainText(conversationTitle, messages);
+    downloadFile(`${safeFilename(conversationTitle)}.txt`, "text/plain", txt);
+  }, [conversationTitle, messages]);
+
   return (
     <ChatLayout
       isThinking={isLoading}
+      headerActions={
+        <ChatHistoryMenu
+          conversations={conversations}
+          activeId={activeId}
+          onNew={newChat}
+          onSwitch={switchTo}
+          onDelete={deleteConversation}
+          onCopyAll={handleCopyAll}
+          onDownloadMd={handleDownloadMd}
+          onDownloadTxt={handleDownloadTxt}
+          onClear={clearCurrent}
+          hasMessages={messages.length > 0}
+        />
+      }
       conversation={
         <div ref={scrollRef} className="h-full">
           {messages.length === 0 ? (
@@ -462,6 +539,11 @@ const AskSection: React.FC = () => {
                 message={msg}
                 isStreaming={isLoading && idx === messages.length - 1 && msg.role === "assistant"}
                 onSuggestionTap={!isLoading ? sendMessage : undefined}
+                onRegenerate={
+                  !isLoading && msg.role === "assistant" && idx === messages.length - 1
+                    ? handleRegenerate
+                    : undefined
+                }
               />
             ))
           )}
