@@ -39,6 +39,16 @@ import {
   FORBIDDEN_VOCABULARY_GLOBAL,
 } from "../_shared/framework_v2.ts";
 import {
+  parseProseAndCitations,
+  validateProseAgainstClustersWithAudience,
+  stripClusterMarkers,
+  type ClusterTier,
+} from "../_shared/framework_v2.ts";
+import {
+  detectDosePatterns,
+  SAFE_FALLBACK_MESSAGE,
+} from "../_shared/dosePattern.ts";
+import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
