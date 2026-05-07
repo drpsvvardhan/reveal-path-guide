@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY")!;
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -308,27 +308,28 @@ Deno.serve(async (req) => {
 
     const terrainContext = contextParts.join("\n\n");
 
-    // Generate suggested questions via Claude Haiku
+    // Generate suggested questions via Lovable AI gateway
     let suggestedQuestions: string[] = [];
-    try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+    if (lovableKey) {
+      try {
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
           "Content-Type": "application/json",
+          Authorization: `Bearer ${lovableKey}`,
         },
         body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 400,
-          system: QUESTION_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: terrainContext }],
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "system", content: QUESTION_SYSTEM_PROMPT },
+            { role: "user", content: terrainContext },
+          ],
         }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        const text = result.content?.[0]?.text || "";
+        const text = result.choices?.[0]?.message?.content || "";
         try {
           const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
           const parsed = JSON.parse(cleaned);
@@ -339,10 +340,11 @@ Deno.serve(async (req) => {
           console.error("Failed to parse question JSON:", text);
         }
       } else {
-        console.error("Anthropic question gen failed:", response.status);
+        console.error("Gateway question gen failed:", response.status);
       }
-    } catch (e) {
-      console.error("Question generation error:", e);
+      } catch (e) {
+        console.error("Question generation error:", e);
+      }
     }
 
     // Fallback
