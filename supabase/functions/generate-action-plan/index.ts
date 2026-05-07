@@ -10,6 +10,7 @@ import {
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
+import { detectDosePatternsInActions } from "../_shared/dosePattern.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -390,6 +391,35 @@ Actions:\n${actionSummary}${clusterContext}`
     }
 
     // 8. Persist
+    // Structural backstop: log any deterministic dose strings present in
+    // today_actions. 6c will introduce the policy flag that prevents these
+    // from reaching consumer mode in the first place. For now this is the
+    // structural trace that proves the gap.
+    const dosesInActions = detectDosePatternsInActions(todayActions);
+    if (dosesInActions.length > 0) {
+      console.warn(
+        "[generate-action-plan] dose patterns present in today_actions:",
+        JSON.stringify(dosesInActions),
+      );
+      try {
+        await supabase.from("patient_chat_validation_log").insert({
+          user_id,
+          message_role: "action_plan",
+          status: "failed_with_warnings",
+          dose_patterns_matched: dosesInActions.map(
+            (h) => `${h.id}:${h.field}:${h.pattern}`,
+          ),
+          original_output: JSON.stringify(
+            todayActions.map((a) => ({ id: a.id, what: a.what, how: a.how })),
+          ),
+          cluster_count: clusters.length,
+          last_user_message: "action_plan_generation",
+        });
+      } catch (e) {
+        console.error("[generate-action-plan] dose audit insert failed:", e);
+      }
+    }
+
     const { data: versionData } = await supabase.rpc("next_action_plan_version", { p_user_id: user_id });
     const version = versionData || 1;
 

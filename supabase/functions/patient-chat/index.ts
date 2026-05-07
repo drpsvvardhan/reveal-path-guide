@@ -39,6 +39,16 @@ import {
   FORBIDDEN_VOCABULARY_GLOBAL,
 } from "../_shared/framework_v2.ts";
 import {
+  parseProseAndCitations,
+  validateProseAgainstClustersWithAudience,
+  stripClusterMarkers,
+  type ClusterTier,
+} from "../_shared/framework_v2.ts";
+import {
+  detectDosePatterns,
+  SAFE_FALLBACK_MESSAGE,
+} from "../_shared/dosePattern.ts";
+import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
@@ -883,6 +893,44 @@ async function handleLovableStream(
 // LLM commonly emits curly quotes in streamed output.
 // ============================================================================
 
+// ============================================================================
+// POST-STREAM VALIDATION LOG
+// ----------------------------------------------------------------------------
+// Writes one row per assistant message to patient_chat_validation_log after
+// the stream completes. The log is the audit surface that turns silent drift
+// into visible drift. Failures here must never break the chat response.
+// ============================================================================
+async function logValidation(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  status: "passed" | "failed_with_warnings" | "replaced_with_fallback",
+  payload: {
+    violations?: unknown[];
+    dose_patterns_matched?: string[];
+    original_output?: string;
+    replaced_with?: string;
+    cluster_count?: number;
+    sentences_checked?: number;
+    last_user_message?: string;
+  },
+) {
+  try {
+    await supabase.from("patient_chat_validation_log").insert({
+      user_id: userId,
+      status,
+      violations: payload.violations ?? [],
+      dose_patterns_matched: payload.dose_patterns_matched ?? [],
+      original_output: payload.original_output ?? null,
+      replaced_with: payload.replaced_with ?? null,
+      cluster_count: payload.cluster_count ?? null,
+      sentences_checked: payload.sentences_checked ?? null,
+      last_user_message: payload.last_user_message ?? null,
+    });
+  } catch (e) {
+    console.error("[patient-chat] validation log insert failed:", e);
+  }
+}
+
 function extractQueuedQuestions(
   responseText: string
 ): { question: string; rationale: string }[] {
@@ -1255,15 +1303,68 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
       },
       async flush() {
-        if (capturedResponse) {
-          const questions = extractQueuedQuestions(capturedResponse);
-          if (questions.length > 0) {
-            try {
-              await queueExtractedQuestions(userId, questions, lastUserMessage);
-            } catch (e) {
-              console.error("Question queue insert failed:", e);
-            }
+        if (!capturedResponse) return;
+
+        // EXISTING — preserve doctor-question extraction.
+        const questions = extractQueuedQuestions(capturedResponse);
+        if (questions.length > 0) {
+          try {
+            await queueExtractedQuestions(userId, questions, lastUserMessage);
+          } catch (e) {
+            console.error("Question queue insert failed:", e);
           }
+        }
+
+        // NEW — post-stream validation.
+        // 1. Deterministic dose-pattern check — fires regardless of cluster context.
+        const dosePatterns = detectDosePatterns(capturedResponse);
+        if (dosePatterns.length > 0) {
+          await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
+            dose_patterns_matched: dosePatterns,
+            original_output: capturedResponse,
+            replaced_with: SAFE_FALLBACK_MESSAGE,
+            last_user_message: lastUserMessage,
+          });
+          return;
+        }
+
+        // 2. Vocabulary-license validation against active clusters.
+        const clusterTierMap = new Map<string, ClusterTier>();
+        for (const c of activeClusters ?? []) {
+          if (c.id && c.confidence_tier) {
+            clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
+          }
+        }
+
+        if (clusterTierMap.size > 0) {
+          const { sentenceToClusterMap } = parseProseAndCitations(capturedResponse);
+          const validation = validateProseAgainstClustersWithAudience(
+            capturedResponse,
+            clusterTierMap,
+            sentenceToClusterMap,
+            "patient",
+          );
+
+          if (validation.valid) {
+            await logValidation(supabaseAdmin, userId, "passed", {
+              cluster_count: clusterTierMap.size,
+              sentences_checked: validation.sentences_checked,
+              last_user_message: lastUserMessage,
+            });
+          } else {
+            await logValidation(supabaseAdmin, userId, "failed_with_warnings", {
+              violations: validation.violations,
+              original_output: capturedResponse,
+              cluster_count: clusterTierMap.size,
+              sentences_checked: validation.sentences_checked,
+              last_user_message: lastUserMessage,
+            });
+          }
+        } else {
+          await logValidation(supabaseAdmin, userId, "passed", {
+            cluster_count: 0,
+            last_user_message: lastUserMessage,
+          });
         }
       },
     });
