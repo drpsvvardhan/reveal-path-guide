@@ -971,6 +971,51 @@ export type Database = {
           },
         ]
       }
+      patient_chat_validation_log: {
+        Row: {
+          cluster_count: number | null
+          created_at: string
+          dose_patterns_matched: string[]
+          id: string
+          last_user_message: string | null
+          message_role: string
+          original_output: string | null
+          replaced_with: string | null
+          sentences_checked: number | null
+          status: string
+          user_id: string
+          violations: Json
+        }
+        Insert: {
+          cluster_count?: number | null
+          created_at?: string
+          dose_patterns_matched?: string[]
+          id?: string
+          last_user_message?: string | null
+          message_role?: string
+          original_output?: string | null
+          replaced_with?: string | null
+          sentences_checked?: number | null
+          status: string
+          user_id: string
+          violations?: Json
+        }
+        Update: {
+          cluster_count?: number | null
+          created_at?: string
+          dose_patterns_matched?: string[]
+          id?: string
+          last_user_message?: string | null
+          message_role?: string
+          original_output?: string | null
+          replaced_with?: string | null
+          sentences_checked?: number | null
+          status?: string
+          user_id?: string
+          violations?: Json
+        }
+        Relationships: []
+      }
       patient_lab_observations: {
         Row: {
           biomarker_class: string | null
