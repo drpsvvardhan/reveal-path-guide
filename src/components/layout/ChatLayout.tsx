@@ -7,6 +7,7 @@ interface ChatLayoutProps {
   inputBar: React.ReactNode;
   reasoningTrace: React.ReactNode;
   isThinking?: boolean;
+  headerActions?: React.ReactNode;
 }
 
 const ChatLayout: React.FC<ChatLayoutProps> = ({
@@ -14,6 +15,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
   inputBar,
   reasoningTrace,
   isThinking,
+  headerActions,
 }) => {
   const [traceOpen, setTraceOpen] = useState(false);
 
@@ -53,14 +55,17 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
           </div>
         </div>
 
-        {/* Toggle reasoning trace on smaller screens */}
-        <button
+        <div className="flex items-center gap-2">
+          {headerActions}
+          {/* Toggle reasoning trace on smaller screens */}
+          <button
           onClick={() => setTraceOpen(!traceOpen)}
           className="xl:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
           title={traceOpen ? "Hide reasoning trace" : "Show reasoning trace"}
         >
           {traceOpen ? <PanelRightClose className="h-5 w-5" /> : <PanelRightOpen className="h-5 w-5" />}
-        </button>
+          </button>
+        </div>
       </header>
 
       {/* Main grid — chat takes majority of space */}
