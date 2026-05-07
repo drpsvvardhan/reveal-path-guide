@@ -3,75 +3,19 @@
 // Validates the reconciler output and produces cluster-write payloads.
 // Pure function. No LLM. No database writes.
 //
-// IMPORTANT: This file imports clusterConfidence from a relative path
-// that works in the Deno edge function runtime because Supabase bundles
-// the full repo. The import resolves to src/lib/clusterConfidence.ts.
+// Confidence computation is now imported from the canonical substrate at
+// supabase/functions/_shared/clusterConfidence.ts (mirrored to clients via
+// the @shared path alias / src/lib/clusterConfidence.ts shim).
 
-// Types replicated here to avoid cross-boundary import issues in Deno.
-// These MUST stay in sync with src/lib/clusterConfidence.ts.
+import {
+  deriveClusterConfidence,
+  type ClusterEvidenceInput,
+  type ClusterEvidenceLayer,
+  type ClusterEvidenceDirection,
+  type ClusterConfidenceResult,
+} from "../_shared/clusterConfidence.ts";
 
-type ClusterEvidenceLayer =
-  | 'cie' | 'lab' | 'inbody' | 'emr' | 'medication'
-  | 'sensor' | 'food_log' | 'imaging' | 'omics' | 'narrative';
-
-type ClusterEvidenceDirection = 'convergent' | 'divergent' | 'neutral';
-
-type ClusterConfidenceTier = 'emerging' | 'tentative' | 'developing' | 'supported' | 'robust';
-
-interface ClusterEvidenceInput {
-  evidence_kind: string;
-  evidence_id: string;
-  layer_type: ClusterEvidenceLayer;
-  direction: ClusterEvidenceDirection;
-  weight?: number;
-  time_point?: string | Date | null;
-  text_for_matching?: string;
-}
-
-const matchText = (e: ClusterEvidenceInput): string =>
-  (e.text_for_matching ?? e.evidence_id ?? "").toLowerCase();
-
-interface ClusterConfidenceDimensions {
-  breadth: number;
-  depth: number;
-  time: number;
-  coherence_strength: number;
-  missing_data_penalty: number;
-}
-
-interface ClusterConfidenceAudit {
-  n_nodes: number;
-  n_distinct_layers: number;
-  layer_types: ClusterEvidenceLayer[];
-  has_imaging_or_omics: boolean;
-  n_time_points: number;
-  time_window_months: number;
-  n_convergent: number;
-  n_divergent: number;
-  n_neutral: number;
-  platonic_set_known: boolean;
-  platonic_set_size: number;
-  platonic_items_present: number;
-  trajectory_dependent: boolean;
-  structural_floor_tier: ClusterConfidenceTier;
-  score_based_tier: ClusterConfidenceTier;
-}
-
-interface ClusterConfidenceResult {
-  confidence_score: number;
-  confidence_tier: ClusterConfidenceTier;
-  confidence_dimensions: ClusterConfidenceDimensions;
-  audit: ClusterConfidenceAudit;
-}
-
-// ============================================================================
-// Inline the confidence computation functions from src/lib/clusterConfidence.ts
-// because Deno edge functions cannot import from src/ at runtime.
-// These are exact copies — any change to clusterConfidence.ts must be mirrored.
-// ============================================================================
-
-const PLATONIC_EVIDENCE_SETS: Record<string, Array<{ id: string; description: string; match: (e: ClusterEvidenceInput) => boolean }>> = {
-  cardiovascular_particle: [
+const _DELETED_PLATONIC_INLINE: Record<string, never> = {
     { id: 'apob', description: 'ApoB measurement', match: (e) => /apob/i.test(matchText(e)) },
     { id: 'ldl_p', description: 'LDL particle count (LDL-P)', match: (e) => /ldl[\s_-]*p(?:[_\s-]|$)|ldl[\s_-]*particle/i.test(matchText(e)) },
     { id: 'ldl_small', description: 'LDL small dense fraction', match: (e) => /ldl.*small|small.*ldl/i.test(matchText(e)) },
