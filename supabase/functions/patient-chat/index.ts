@@ -1207,15 +1207,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       documents
     );
 
-    // Determine provider and route.
-    const useAnthropic = !!model && model.startsWith("claude");
-    const providerResponse = useAnthropic
-      ? await handleAnthropicStream(messages, systemPrompt)
-      : await handleLovableStream(
-          messages,
-          systemPrompt,
-          model ?? "google/gemini-3-flash-preview"
-        );
+    // Route all chat traffic through the Lovable AI gateway.
+    // This preserves compatibility with older published clients that still
+    // send legacy Claude model names while avoiding direct-provider failures.
+    const requestedModel = typeof model === "string" ? model.trim() : "";
+    const normalizedModel =
+      !requestedModel || requestedModel.startsWith("claude")
+        ? "google/gemini-3-flash-preview"
+        : requestedModel;
+
+    const providerResponse = await handleLovableStream(
+      messages,
+      systemPrompt,
+      normalizedModel
+    );
 
     if (!providerResponse.ok) {
       return providerResponse; // already carries error JSON
