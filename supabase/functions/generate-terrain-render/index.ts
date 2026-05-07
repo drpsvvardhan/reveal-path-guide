@@ -13,6 +13,11 @@ import {
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
+import {
+  INBODY_TERRAIN_MAP,
+  INBODY_NAME_LOOKUP,
+  resolveInBodyMapping,
+} from "../_shared/inbodyToTerrainMap.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,66 +50,9 @@ const PRIMARY_AXIS_NAMES = new Set(
 // ============================================================================
 // INBODY TERRAIN MAP
 // ============================================================================
-
-const INBODY_TERRAIN_MAP: Record<string, {
-  coordinates: string[];
-  gates: string[];
-  interpretation: string;
-  healthy_range?: { low: number; high: number };
-  direction: string;
-  units?: string;
-  note?: string;
-}> = {
-  phase_angle_whole_body: { coordinates: ["I", "Σ"], gates: ["TIS", "CLI"], interpretation: "Cellular membrane integrity and accumulated cellular stress", healthy_range: { low: 5.5, high: 7.5 }, direction: "higher_is_better", units: "°" },
-  visceral_fat_area: { coordinates: ["E"], gates: ["OFFI", "FPIS"], interpretation: "Central adiposity and metabolic load", healthy_range: { low: 0, high: 100 }, direction: "lower_is_better", units: "cm²" },
-  skeletal_muscle_mass: { coordinates: ["R", "Σ"], gates: ["CLI", "HPI"], interpretation: "Muscle mass and sarcopenia reserve", direction: "higher_is_better", units: "lb" },
-  ecw_tbw_ratio: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Fluid balance and inflammation tone", healthy_range: { low: 0.360, high: 0.390 }, direction: "lower_is_better_within_range" },
-  basal_metabolic_rate: { coordinates: ["E"], gates: ["FPIS", "HPI"], interpretation: "Metabolic baseline capacity", direction: "higher_is_better_within_range", units: "kcal" },
-  body_fat_percent: { coordinates: ["E", "I"], gates: ["OFFI", "FPIS"], interpretation: "Proportion of total weight stored as fat", healthy_range: { low: 18, high: 28 }, direction: "lower_is_better_within_range", units: "%", note: "Range varies by sex" },
-  fat_free_mass: { coordinates: ["E", "R"], gates: ["CLI", "HPI"], interpretation: "Total non-fat mass — structural and metabolic scaffold", direction: "higher_is_better", units: "lb" },
-  dry_lean_mass: { coordinates: ["Σ", "R"], gates: ["CLI", "HPI"], interpretation: "Protein and mineral matrix independent of hydration", direction: "higher_is_better", units: "lb" },
-  body_fat_mass: { coordinates: ["E"], gates: ["OFFI", "FPIS"], interpretation: "Absolute fat mass driving metabolic trajectory", direction: "lower_is_better", units: "lb" },
-  segmental_lean_right_arm: { coordinates: ["R", "Σ"], gates: ["CLI", "GRIP"], interpretation: "Right arm lean mass", direction: "higher_is_better", units: "lb" },
-  segmental_lean_left_arm: { coordinates: ["R", "Σ"], gates: ["CLI", "GRIP"], interpretation: "Left arm lean mass", direction: "higher_is_better", units: "lb" },
-  segmental_lean_trunk: { coordinates: ["E", "R"], gates: ["CLI", "HPI"], interpretation: "Trunk lean mass — core structural support", direction: "higher_is_better", units: "lb" },
-  segmental_lean_right_leg: { coordinates: ["R", "Σ"], gates: ["CLI", "HPI"], interpretation: "Right leg lean mass — ambulatory capacity", direction: "higher_is_better", units: "lb" },
-  segmental_lean_left_leg: { coordinates: ["R", "Σ"], gates: ["CLI", "HPI"], interpretation: "Left leg lean mass — ambulatory capacity", direction: "higher_is_better", units: "lb" },
-  segmental_ecw_tbw_right_arm: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Right arm fluid balance", healthy_range: { low: 0.36, high: 0.39 }, direction: "lower_is_better_within_range" },
-  segmental_ecw_tbw_left_arm: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Left arm fluid balance", healthy_range: { low: 0.36, high: 0.39 }, direction: "lower_is_better_within_range" },
-  segmental_ecw_tbw_trunk: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Trunk fluid balance — systemic inflammation marker", healthy_range: { low: 0.36, high: 0.39 }, direction: "lower_is_better_within_range" },
-  segmental_ecw_tbw_right_leg: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Right leg fluid balance", healthy_range: { low: 0.36, high: 0.39 }, direction: "lower_is_better_within_range" },
-  segmental_ecw_tbw_left_leg: { coordinates: ["I", "V"], gates: ["TIS", "BCS"], interpretation: "Left leg fluid balance", healthy_range: { low: 0.36, high: 0.39 }, direction: "lower_is_better_within_range" },
-  segmental_phase_angle_asymmetry: { coordinates: ["V", "Σ"], gates: ["GRIP", "CLI"], interpretation: "Localized cellular compromise and autonomic asymmetry", direction: "lower_is_better" },
-};
-
-const INBODY_NAME_LOOKUP: Record<string, string> = {
-  "whole body phase angle": "phase_angle_whole_body",
-  "phase angle": "phase_angle_whole_body",
-  "visceral fat area": "visceral_fat_area",
-  "vfa": "visceral_fat_area",
-  "skeletal muscle mass": "skeletal_muscle_mass",
-  "smm": "skeletal_muscle_mass",
-  "ecw/tbw": "ecw_tbw_ratio",
-  "basal metabolic rate": "basal_metabolic_rate",
-  "bmr": "basal_metabolic_rate",
-  "pbf": "body_fat_percent",
-  "percent body fat": "body_fat_percent",
-  "fat free mass": "fat_free_mass",
-  "dry lean mass": "dry_lean_mass",
-  "body fat mass": "body_fat_mass",
-  "right arm lean mass": "segmental_lean_right_arm",
-  "left arm lean mass": "segmental_lean_left_arm",
-  "trunk lean mass": "segmental_lean_trunk",
-  "right leg lean mass": "segmental_lean_right_leg",
-  "left leg lean mass": "segmental_lean_left_leg",
-};
-
-function resolveInBodyMapping(canonicalName: string): typeof INBODY_TERRAIN_MAP[string] | null {
-  if (INBODY_TERRAIN_MAP[canonicalName]) return INBODY_TERRAIN_MAP[canonicalName];
-  const key = INBODY_NAME_LOOKUP[canonicalName.toLowerCase()];
-  if (key && INBODY_TERRAIN_MAP[key]) return INBODY_TERRAIN_MAP[key];
-  return null;
-}
+// Canonical InBody substrate now lives in supabase/functions/_shared/
+// inbodyToTerrainMap.ts (mirrored to the client through the @shared path
+// alias / src/lib/inbodyToTerrainMap.ts shim).
 
 // ============================================================================
 // SYSTEM PROMPT — Framework v2 with cluster sourcing + dual audience
