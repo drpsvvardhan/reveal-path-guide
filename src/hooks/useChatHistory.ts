@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+const sb: any = supabase;
 import type { ChatMessageData } from "@/components/chat/ChatMessage";
 
 export interface ChatConversationMeta {
@@ -66,7 +67,7 @@ export function useChatHistory(userId: string | null) {
 
     // 2. Sync from Cloud
     (async () => {
-      const { data: convs, error } = await supabase
+      const { data: convs, error } = await sb
         .from("chat_conversations")
         .select("id,title,last_message_at")
         .eq("user_id", userId)
@@ -84,7 +85,7 @@ export function useChatHistory(userId: string | null) {
         if (targetId) {
           setActiveId(targetId);
           localStorage.setItem(lsActiveKey(userId), targetId);
-          const { data: rows } = await supabase
+          const { data: rows } = await sb
             .from("chat_messages")
             .select("*")
             .eq("conversation_id", targetId)
@@ -122,7 +123,7 @@ export function useChatHistory(userId: string | null) {
       const tempId = `tmp-${Date.now()}`;
       setActiveId(tempId);
       localStorage.setItem(lsActiveKey(userId), tempId);
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("chat_conversations")
         .insert({ user_id: userId, title })
         .select("id,title,last_message_at")
@@ -145,7 +146,7 @@ export function useChatHistory(userId: string | null) {
   const persistMessage = useCallback(
     async (convId: string, msg: ChatMessageData) => {
       if (!userId || convId.startsWith("tmp-")) return;
-      await supabase.from("chat_messages").insert({
+      await sb.from("chat_messages").insert({
         conversation_id: convId,
         user_id: userId,
         role: msg.role,
@@ -154,7 +155,7 @@ export function useChatHistory(userId: string | null) {
         voice_validation_status: msg.voiceValidationStatus ?? null,
         voice_validation_warnings: msg.voiceValidationWarnings ?? null,
       });
-      await supabase
+      await sb
         .from("chat_conversations")
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", convId);
@@ -175,7 +176,7 @@ export function useChatHistory(userId: string | null) {
       localStorage.setItem(lsActiveKey(userId), convId);
       const cached = safeParse<ChatMessageData[]>(localStorage.getItem(lsKey(userId, convId)), []);
       setMessages(cached);
-      const { data: rows } = await supabase
+      const { data: rows } = await sb
         .from("chat_messages")
         .select("*")
         .eq("conversation_id", convId)
@@ -211,7 +212,7 @@ export function useChatHistory(userId: string | null) {
         .filter((c) => c.id !== convId);
       localStorage.setItem(lsListKey(userId), JSON.stringify(updated));
       if (!convId.startsWith("tmp-")) {
-        await supabase.from("chat_conversations").delete().eq("id", convId);
+        await sb.from("chat_conversations").delete().eq("id", convId);
       }
     },
     [userId, activeId],
