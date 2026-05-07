@@ -1303,15 +1303,68 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
       },
       async flush() {
-        if (capturedResponse) {
-          const questions = extractQueuedQuestions(capturedResponse);
-          if (questions.length > 0) {
-            try {
-              await queueExtractedQuestions(userId, questions, lastUserMessage);
-            } catch (e) {
-              console.error("Question queue insert failed:", e);
-            }
+        if (!capturedResponse) return;
+
+        // EXISTING — preserve doctor-question extraction.
+        const questions = extractQueuedQuestions(capturedResponse);
+        if (questions.length > 0) {
+          try {
+            await queueExtractedQuestions(userId, questions, lastUserMessage);
+          } catch (e) {
+            console.error("Question queue insert failed:", e);
           }
+        }
+
+        // NEW — post-stream validation.
+        // 1. Deterministic dose-pattern check — fires regardless of cluster context.
+        const dosePatterns = detectDosePatterns(capturedResponse);
+        if (dosePatterns.length > 0) {
+          await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
+            dose_patterns_matched: dosePatterns,
+            original_output: capturedResponse,
+            replaced_with: SAFE_FALLBACK_MESSAGE,
+            last_user_message: lastUserMessage,
+          });
+          return;
+        }
+
+        // 2. Vocabulary-license validation against active clusters.
+        const clusterTierMap = new Map<string, ClusterTier>();
+        for (const c of activeClusters ?? []) {
+          if (c.id && c.confidence_tier) {
+            clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
+          }
+        }
+
+        if (clusterTierMap.size > 0) {
+          const { sentenceToClusterMap } = parseProseAndCitations(capturedResponse);
+          const validation = validateProseAgainstClustersWithAudience(
+            capturedResponse,
+            clusterTierMap,
+            sentenceToClusterMap,
+            "patient",
+          );
+
+          if (validation.valid) {
+            await logValidation(supabaseAdmin, userId, "passed", {
+              cluster_count: clusterTierMap.size,
+              sentences_checked: validation.sentences_checked,
+              last_user_message: lastUserMessage,
+            });
+          } else {
+            await logValidation(supabaseAdmin, userId, "failed_with_warnings", {
+              violations: validation.violations,
+              original_output: capturedResponse,
+              cluster_count: clusterTierMap.size,
+              sentences_checked: validation.sentences_checked,
+              last_user_message: lastUserMessage,
+            });
+          }
+        } else {
+          await logValidation(supabaseAdmin, userId, "passed", {
+            cluster_count: 0,
+            last_user_message: lastUserMessage,
+          });
         }
       },
     });
