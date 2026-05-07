@@ -159,6 +159,7 @@ const AskSection: React.FC = () => {
   const { documents } = useDocuments();
   const { refresh: refreshQueue } = useQueue();
   const { clusters: activeClusters } = useClusters();
+  const resolvedUserId = effectiveUserId || user?.id || null;
 
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -180,7 +181,7 @@ const AskSection: React.FC = () => {
 
   // Fetch dynamic context from edge function
   useEffect(() => {
-    if (!effectiveUserId) {
+    if (!resolvedUserId) {
       setAskContextLoading(false);
       return;
     }
@@ -202,7 +203,7 @@ const AskSection: React.FC = () => {
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
-            user_id: effectiveUserId,
+            user_id: resolvedUserId,
             assessment_id: null,
           }),
         });
@@ -222,7 +223,7 @@ const AskSection: React.FC = () => {
     };
 
     fetchContext();
-  }, [effectiveUserId]);
+  }, [resolvedUserId]);
 
   // Update reasoning context with biomarker data window from manifest
   useEffect(() => {
@@ -281,6 +282,9 @@ const AskSection: React.FC = () => {
       if (!accessToken) {
         throw new Error("Not signed in. Please log in to use Ask Anything.");
       }
+      if (!resolvedUserId) {
+        throw new Error("Your session is still loading. Please try again in a moment.");
+      }
       // Strip cluster markers from prior assistant messages before re-sending
       const allMsgs = [...messages, userMessage].map((m) =>
         m.role === "assistant"
@@ -308,7 +312,7 @@ const AskSection: React.FC = () => {
           manifest,
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: "claude-sonnet-4-20250514",
-          userId: effectiveUserId,
+          userId: resolvedUserId,
         }),
       });
 
@@ -411,7 +415,7 @@ const AskSection: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages, manifest, documents, effectiveUserId, refreshQueue, clusterTierMap]);
+  }, [messages, manifest, documents, resolvedUserId, refreshQueue, clusterTierMap]);
 
   const handleChipTap = useCallback((question: string) => {
     sendMessage(question);
