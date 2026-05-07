@@ -893,6 +893,44 @@ async function handleLovableStream(
 // LLM commonly emits curly quotes in streamed output.
 // ============================================================================
 
+// ============================================================================
+// POST-STREAM VALIDATION LOG
+// ----------------------------------------------------------------------------
+// Writes one row per assistant message to patient_chat_validation_log after
+// the stream completes. The log is the audit surface that turns silent drift
+// into visible drift. Failures here must never break the chat response.
+// ============================================================================
+async function logValidation(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  status: "passed" | "failed_with_warnings" | "replaced_with_fallback",
+  payload: {
+    violations?: unknown[];
+    dose_patterns_matched?: string[];
+    original_output?: string;
+    replaced_with?: string;
+    cluster_count?: number;
+    sentences_checked?: number;
+    last_user_message?: string;
+  },
+) {
+  try {
+    await supabase.from("patient_chat_validation_log").insert({
+      user_id: userId,
+      status,
+      violations: payload.violations ?? [],
+      dose_patterns_matched: payload.dose_patterns_matched ?? [],
+      original_output: payload.original_output ?? null,
+      replaced_with: payload.replaced_with ?? null,
+      cluster_count: payload.cluster_count ?? null,
+      sentences_checked: payload.sentences_checked ?? null,
+      last_user_message: payload.last_user_message ?? null,
+    });
+  } catch (e) {
+    console.error("[patient-chat] validation log insert failed:", e);
+  }
+}
+
 function extractQueuedQuestions(
   responseText: string
 ): { question: string; rationale: string }[] {
