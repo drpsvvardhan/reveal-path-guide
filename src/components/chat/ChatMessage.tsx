@@ -1,5 +1,5 @@
-import React from "react";
-import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight } from "lucide-react";
+import React, { useState } from "react";
+import { Sparkles, AlertCircle, MessageCircle, User, Eye, ArrowRight, Copy, Code2, Check, RefreshCw } from "lucide-react";
 import PatientCognitiveText from "@/components/PatientCognitiveText";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 import TimeSeriesBlock from "@/components/chat/TimeSeriesBlock";
@@ -7,6 +7,7 @@ import { parseTimeSeriesBlocks, stripTimeSeriesBlocks } from "@/lib/timeSeriesPa
 import { parseCognitiveModeSubBlocks, type CognitiveModeSubBlock } from "@/components/sections/AskSection";
 import type { ParsedTimeSeries } from "@/lib/timeSeriesParser";
 import type { VocabularyViolation } from "@/lib/voiceValidation";
+import { copyToClipboard, stripMarkdown } from "@/lib/exportChat";
 
 interface ChatMessageSection {
   type: "what_this_means" | "what_you_can_do" | "watch_for" | "ask_doctor" | "important" | "acknowledgment";
@@ -28,6 +29,7 @@ interface ChatMessageProps {
   message: ChatMessageData;
   isStreaming?: boolean;
   onSuggestionTap?: (question: string) => void;
+  onRegenerate?: () => void;
 }
 
 const sectionMeta: Record<string, { label: string; icon: React.FC<any>; color: string }> = {
@@ -104,7 +106,22 @@ function renderContentWithQuotes(
   );
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSuggestionTap }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSuggestionTap, onRegenerate }) => {
+  const [copied, setCopied] = useState<"plain" | "md" | null>(null);
+
+  const fullText = (): string => {
+    if (message.content && message.content.trim()) return message.content;
+    if (message.sections) return message.sections.map((s) => s.content).join("\n\n");
+    return "";
+  };
+
+  const handleCopy = async (mode: "plain" | "md") => {
+    const raw = fullText();
+    await copyToClipboard(mode === "md" ? raw : stripMarkdown(raw));
+    setCopied(mode);
+    setTimeout(() => setCopied(null), 1500);
+  };
+
   // Parse time series blocks from assistant messages
   const timeSeries: ParsedTimeSeries[] = React.useMemo(() => {
     if (message.role !== "assistant" || isStreaming) return [];
@@ -118,6 +135,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
         <div className="max-w-[75%]">
           <div className="rounded-2xl rounded-tr-sm bg-secondary text-secondary-foreground px-5 py-3">
             <p className="font-sans text-[16px] leading-[1.5] font-[450] text-secondary-foreground">{message.content}</p>
+          </div>
+          <div className="flex justify-end mt-1">
+            <button
+              onClick={() => handleCopy("plain")}
+              className="text-[10px] text-muted-foreground/60 hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors"
+              title="Copy"
+            >
+              {copied === "plain" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            </button>
           </div>
         </div>
       </div>
@@ -233,6 +259,36 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               status={message.voiceValidationStatus}
               warnings={message.voiceValidationWarnings ?? null}
             />
+          </div>
+        )}
+        {!isStreaming && (
+          <div className="mt-2 flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => handleCopy("plain")}
+              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+              title="Copy as plain text"
+            >
+              {copied === "plain" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              <span>Copy</span>
+            </button>
+            <button
+              onClick={() => handleCopy("md")}
+              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+              title="Copy as Markdown"
+            >
+              {copied === "md" ? <Check className="h-3 w-3" /> : <Code2 className="h-3 w-3" />}
+              <span>Markdown</span>
+            </button>
+            {onRegenerate && (
+              <button
+                onClick={onRegenerate}
+                className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+                title="Regenerate response"
+              >
+                <RefreshCw className="h-3 w-3" />
+                <span>Regenerate</span>
+              </button>
+            )}
           </div>
         )}
       </div>
