@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
-import { Check, ChevronDown, ChevronUp, Clock, FlaskConical } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock, FlaskConical, Upload, ClipboardList, Activity } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 import TappableProse from "@/components/terrain/TappableProse";
@@ -238,6 +238,9 @@ const ActionSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [actionPlanMode, setActionPlanMode] = useState<"core" | "biotwin_plus">("core");
+  const [surfaceKind, setSurfaceKind] = useState<
+    "populated" | "no_substrate" | "no_matches" | "generation_pending" | "generation_failed" | null
+  >(null);
   const hasTriedGenRef = React.useRef(false);
 
   const userId = effectiveUserId || user?.id;
@@ -290,41 +293,83 @@ const ActionSection: React.FC = () => {
           .limit(1)
           .maybeSingle();
         setPlanStartedAt((earliest as any)?.created_at ?? (data as any)?.created_at ?? null);
+        setSurfaceKind("populated");
         setLoading(false);
         return;
       }
 
-      // No plan exists — try generating on-demand if user has data
-      if (!hasTriedGenRef.current) {
-        hasTriedGenRef.current = true;
-        // Check if user has CIE data or labs
-        const [{ count: gateCount }, { count: obsCount }] = await Promise.all([
-          supabase.from("cie_gate_scores").select("id", { count: "exact", head: true }).eq("user_id", userId),
-          supabase.from("patient_lab_observations").select("id", { count: "exact", head: true }).eq("user_id", userId),
-        ]);
+      // No active plan with actions — detect which constitutional branch applies.
+      // Substrate presence is determined by the union of: lab uploads, lab
+      // observations, CIE intake responses, and witness objects. Absence of
+      // ALL signals is the only state that counts as "no substrate".
+      const [labUploads, labObs, intake, witnesses] = await Promise.all([
+        supabase.from("patient_lab_uploads").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("patient_lab_observations").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("cie_responses").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("witness_objects").select("id", { count: "exact", head: true }).eq("user_id", userId),
+      ]);
+      const hasSubstrate =
+        (labUploads.count ?? 0) > 0 ||
+        (labObs.count ?? 0) > 0 ||
+        (intake.count ?? 0) > 0 ||
+        (witnesses.count ?? 0) > 0;
 
-        if ((gateCount && gateCount > 0) || (obsCount && obsCount > 0)) {
+      if (!hasSubstrate) {
+        setSurfaceKind("no_substrate");
+        setLoading(false);
+        return;
+      }
+
+      // Substrate exists. Check for any plan row to distinguish pending vs.
+      // generated-with-zero-matches vs. failed.
+      const { data: anyPlan } = await supabase
+        .from("action_plans")
+        .select("id, status, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!anyPlan) {
+        // Substrate exists but generation has never been attempted — kick it off
+        // once, then re-evaluate.
+        if (!hasTriedGenRef.current) {
+          hasTriedGenRef.current = true;
           setGenerating(true);
           setLoading(false);
           try {
             const { data: genResult } = await supabase.functions.invoke("generate-action-plan", {
               body: { user_id: userId },
             });
-            if (genResult?.today_actions) {
+            if (genResult?.today_actions && genResult.today_actions.length > 0) {
               setPlan({
                 today_actions: genResult.today_actions,
                 sequence_explanation: genResult.sequence_explanation || "",
                 retest_schedule: genResult.retest_schedule || [],
               });
+              setSurfaceKind("populated");
+            } else {
+              setSurfaceKind("no_matches");
             }
           } catch (e) {
             console.warn("On-demand action plan generation failed:", e);
+            setSurfaceKind("generation_failed");
           }
           setGenerating(false);
           return;
         }
+        setSurfaceKind("generation_pending");
+        setLoading(false);
+        return;
       }
 
+      if (anyPlan.status === "failed" || anyPlan.status === "error") {
+        setSurfaceKind("generation_failed");
+      } else {
+        // A plan exists but produced zero actions — substrate matched no
+        // library entries.
+        setSurfaceKind("no_matches");
+      }
       setLoading(false);
     };
     fetchPlan();
@@ -346,7 +391,10 @@ const ActionSection: React.FC = () => {
 
   if (loading || generating) {
     return (
-      <PatientSectionLayout eyebrow="WHAT TO DO" title={generating ? "Matching interventions to your data…" : "Loading your action plan…"}>
+      <PatientSectionLayout
+        eyebrow="WHAT TO DO"
+        title={generating ? "Reading your data for patterns…" : "Loading…"}
+      >
         <div className="h-48 flex items-center justify-center flex-col gap-3">
           <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           {generating && <p className="text-sm text-muted-foreground">This takes a few seconds</p>}
@@ -355,33 +403,109 @@ const ActionSection: React.FC = () => {
     );
   }
 
-  if (!plan || actions.length === 0) {
-    // Check if user has data — if they do, their profile is well-optimized
-    const hasData = plan !== null; // plan exists but 0 actions = no interventions triggered
+  if (surfaceKind === "no_substrate") {
     return (
       <PatientSectionLayout
         eyebrow="WHAT TO DO"
-        title={hasData ? "Your terrain is well-managed" : "Your action plan is being prepared"}
-        intro={hasData
-          ? "Based on your current labs and intake data, your biomarkers and domain scores are within healthy ranges. No urgent interventions are needed right now — keep doing what you're doing."
-          : "Once your terrain is rendered, we match your specific findings to concrete interventions. Each one comes with what to do, why it matters for your biology, and how to do it."
-        }
+        title="We don't have enough data to read your terrain yet"
+        intro="This page surfaces signals from your labs, intake, and over time your wearables and other observations. Until that data is here, there is nothing for the system to interpret."
       >
-        <div className="rounded-xl border border-border bg-card p-6 text-center space-y-3">
-          {hasData ? (
-            <>
-              <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-emerald-500/10 mx-auto">
-                <Check className="h-6 w-6 text-emerald-600" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                All gates are tracking green. Your next lab upload or intake update may surface new optimization actions.
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground italic leading-relaxed">
+            This is not a statement about your health. It is a statement about what we have not yet seen.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <a
+              href="/?section=records"
+              className="rounded-xl border border-border bg-card p-5 hover:border-primary/40 transition-colors flex flex-col gap-2"
+            >
+              <Upload className="h-5 w-5 text-primary" />
+              <p className="font-serif text-base text-foreground">Upload labs</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Add a recent panel so the substrate has biomarkers to read.
               </p>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Complete your intake and upload labs to generate your personalized action plan.
-            </p>
-          )}
+            </a>
+            <a
+              href="/?section=intake"
+              className="rounded-xl border border-border bg-card p-5 hover:border-primary/40 transition-colors flex flex-col gap-2"
+            >
+              <ClipboardList className="h-5 w-5 text-primary" />
+              <p className="font-serif text-base text-foreground">Complete your intake</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                A short questionnaire that grounds the surface in lived experience.
+              </p>
+            </a>
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-5 flex flex-col gap-2">
+              <Activity className="h-5 w-5 text-muted-foreground" />
+              <p className="font-serif text-base text-foreground">Connect a wearable or CGM</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Coming soon — continuous signals will feed this surface as they arrive.
+              </p>
+            </div>
+          </div>
+        </div>
+      </PatientSectionLayout>
+    );
+  }
+
+  if (surfaceKind === "no_matches") {
+    return (
+      <PatientSectionLayout
+        eyebrow="WHAT TO DO"
+        title="Nothing is asking for action right now"
+        intro="Your current data has not surfaced patterns matching the signals this surface tracks."
+      >
+        <div className="rounded-xl border border-border bg-card p-6 space-y-3">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This is information about what we have seen, not a clinical judgment that everything is normal. New labs, new intake, or changes over time may bring patterns into focus.
+          </p>
+          <p className="text-xs text-muted-foreground/80 leading-relaxed italic">
+            The page accumulates meaning across many readings. If you have observations or questions about your data, the chat surface is available.
+          </p>
+        </div>
+      </PatientSectionLayout>
+    );
+  }
+
+  if (surfaceKind === "generation_pending") {
+    return (
+      <PatientSectionLayout
+        eyebrow="WHAT TO DO"
+        title="Preparing your action surface"
+        intro="Your data is in the substrate. The system is reading it for patterns."
+      >
+        <div className="rounded-xl border border-border bg-card p-6 flex items-center gap-4">
+          <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This usually completes within a few minutes of upload. If it has been longer, refresh this page or contact support.
+          </p>
+        </div>
+      </PatientSectionLayout>
+    );
+  }
+
+  if (surfaceKind === "generation_failed") {
+    return (
+      <PatientSectionLayout
+        eyebrow="WHAT TO DO"
+        title="Something prevented this plan from generating"
+        intro="This is an operational state, not a health state. Your data is intact."
+      >
+        <div className="rounded-xl border border-border bg-card p-6">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Please refresh this page. If the issue persists, contact support and we'll look into it.
+          </p>
+        </div>
+      </PatientSectionLayout>
+    );
+  }
+
+  if (!plan || actions.length === 0) {
+    // Defensive fallback — should not be reachable once surfaceKind is set.
+    return (
+      <PatientSectionLayout eyebrow="WHAT TO DO" title="Loading…">
+        <div className="h-32 flex items-center justify-center">
+          <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </PatientSectionLayout>
     );
