@@ -49,6 +49,19 @@ import {
   SAFE_FALLBACK_MESSAGE,
 } from "../_shared/dosePattern.ts";
 import {
+  validateInterpreterRole,
+  replacementTemplateForViolation,
+  buildCorrectiveRegenFeedback,
+  type AuthorityViolation,
+} from "../_shared/clinicalAuthorityPolicy.ts";
+import {
+  computeDosePolicyContext,
+  validateDoseTokens,
+  buildEmergencyRoutingMessage,
+  NO_DOSE_FALLBACK,
+  type DosePolicyContext,
+} from "../_shared/dosePolicy.ts";
+import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
