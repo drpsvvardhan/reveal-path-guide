@@ -75,6 +75,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "supplementation",
     sequence_priority: 2,
     policy_class: "supplement_with_dose",
+    core_title: "Vitamin D as a regulatory signal in your terrain",
+    core_rationale: "Vitamin D appears to be sitting below the range where regulatory and immune signaling tend to operate comfortably. The pattern is worth a closer look in conversation with your clinician.",
+    core_observation: "Levels respond gradually. A repeat reading after a season of consistent sunlight, food, and any clinician-guided support tends to be more informative than a single number.",
+    core_clinician_question: "What approach to vitamin D would make sense given my current level and the rest of my picture?",
   },
   {
     id: "magnesium_repletion",
@@ -93,6 +97,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "supplementation",
     sequence_priority: 3,
     policy_class: "supplement_with_dose",
+    core_title: "Magnesium as a sleep and regulation signal",
+    core_rationale: "Magnesium reads on the lower side, and your sleep-and-circadian patterns are also under some load. The two often move together, which makes this a useful signal to bring into a clinical conversation.",
+    core_observation: "Notice whether sleep onset, depth, and morning energy seem to shift over several weeks of any approach you and your clinician decide on.",
+    core_clinician_question: "Given my magnesium and sleep patterns, what approach would make sense for me?",
   },
   {
     id: "b12_repletion",
@@ -110,6 +118,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "supplementation",
     sequence_priority: 4,
     policy_class: "supplement_with_dose",
+    core_title: "B12 as an energy and methylation signal",
+    core_rationale: "B12 sits below the range where methylation and energy pathways tend to feel resourced. Whether the level itself or absorption is the limiting factor is a clinical question worth asking.",
+    core_observation: "B12 status often changes more slowly than people expect. A retest a couple of months into any approach gives the clearest picture.",
+    core_clinician_question: "Given my B12 reading, what investigation or approach would you recommend?",
   },
   {
     id: "omega3_inflammation",
@@ -128,6 +140,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "supplementation",
     sequence_priority: 3,
     policy_class: "supplement_with_dose",
+    core_title: "Inflammatory tone as an emerging signal",
+    core_rationale: "Your hs-CRP is running above the range where tissue-integrity signals tend to feel quiet. Background inflammation has many possible sources, and untangling which ones matter for you is worth a clinical conversation.",
+    core_observation: "Inflammation markers move with sleep, food, infection, and recovery. A pattern across several readings tends to be more meaningful than any single number.",
+    core_clinician_question: "Given my inflammatory pattern, which possible drivers would be worth exploring first?",
   },
 
   // ── NUTRITION ──
@@ -148,6 +164,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "nutrition",
     sequence_priority: 2,
     policy_class: "food_pattern",
+    core_title: "Protein as a structural-reserve signal",
+    core_rationale: "Your structural reserves and the substrate that supports them appear under-resourced. Spreading protein across the day, rather than loading it into one meal, is one of the patterns that tends to support muscle synthesis over time.",
+    core_observation: "Notice whether strength, recovery, and how you feel after meals seem to shift across several weeks of more even protein distribution.",
+    core_clinician_question: "Are there reasons in my picture to be cautious about a higher-protein pattern?",
   },
   {
     id: "ldl_particle_nutrition_shift",
@@ -166,6 +186,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "nutrition",
     sequence_priority: 3,
     policy_class: "food_pattern",
+    core_title: "Dietary pattern as a vascular signal",
+    core_rationale: "Your lipid pattern suggests more particle traffic than the vascular system tends to clear comfortably. Whole-food eating patterns, with attention to fats and refined carbohydrates, are usually the first lever before a deeper clinical conversation.",
+    core_observation: "Lipid patterns respond gradually. A retest after a season of consistent eating tends to show direction more clearly than week-to-week change.",
+    core_clinician_question: "What pattern would tell us whether dietary change alone is enough for me?",
   },
   {
     id: "glucose_stability_meal_timing",
@@ -184,6 +208,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "nutrition",
     sequence_priority: 2,
     policy_class: "food_pattern",
+    core_title: "Glucose stability as a daily-rhythm signal",
+    core_rationale: "Your glucose pattern suggests insulin is working harder than the rhythm of the day calls for, especially later in the day. Front-loading carbohydrates and pairing them with protein or fat are patterns that tend to ease that load.",
+    core_observation: "Energy steadiness, post-meal alertness, and sleep quality often shift before lab markers do. They are useful early signals.",
+    core_clinician_question: "What glucose pattern would suggest we should look more closely?",
   },
   {
     id: "fiber_gut_ecology",
@@ -202,6 +230,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "nutrition",
     sequence_priority: 4,
     policy_class: "food_pattern",
+    core_title: "Fiber and microbial diversity as a gut-ecology signal",
+    core_rationale: "Your gut-ecology signal reads under-resourced. Microbial diversity tends to track with the diversity of plant inputs, and slowly building variety is usually a gentler path than a single dramatic change.",
+    core_observation: "Increase variety gradually over weeks. Notice digestion, regularity, and how you feel after meals as the early signals.",
+    core_clinician_question: "Are there reasons in my picture to be cautious about a higher-fiber pattern?",
   },
   {
     id: "hydration_baseline",
@@ -220,6 +252,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "nutrition",
     sequence_priority: 5,
     policy_class: "food_pattern",
+    core_title: "Hydration as a baseline signal",
+    core_rationale: "Your hydration signals suggest fluid compartments are not quite balanced. Steady, evenly-distributed water across the day tends to support clearance, blood viscosity, and cellular function.",
+    core_observation: "Notice morning energy, urine color, and how you feel between meals across a few weeks of a steadier pattern.",
+    core_clinician_question: "Given my picture, are there reasons to think carefully about how much fluid is right for me?",
   },
 
   // ── MOVEMENT ──
@@ -240,6 +276,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "movement",
     sequence_priority: 3,
     policy_class: "movement",
+    core_title: "Resistance practice as a structural signal",
+    core_rationale: "Your structural-reserve signals suggest the tissue that supports metabolism and resilience is under-built. Loading the body against resistance is the pattern most consistently associated with rebuilding it.",
+    core_observation: "Strength and recovery shift slowly. Several weeks of consistent practice usually shows up before any scan does.",
+    core_clinician_question: "Are there constraints in my picture that should shape how I begin?",
   },
   {
     id: "daily_walking_baseline",
@@ -257,6 +297,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "movement",
     sequence_priority: 1,
     policy_class: "movement",
+    core_title: "Daily walking as a low-friction signal-builder",
+    core_rationale: "Steady aerobic movement may reinforce the metabolic, vascular, and circadian patterns already emerging in your terrain. The pace matters less than the consistency.",
+    core_observation: "Notice whether sleep, daytime energy, and resting heart rate seem to shift across several weeks of a steadier rhythm.",
+    core_clinician_question: "Which signals would tell us this is supporting my terrain meaningfully?",
   },
 
   // ── SLEEP ──
@@ -276,6 +320,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "sleep",
     sequence_priority: 1,
     policy_class: "sleep_circadian",
+    core_title: "Sleep window as a regulatory signal",
+    core_rationale: "Your sleep-and-circadian signals suggest the body is uncertain about when sleep is coming. A steadier window tends to let the underlying hormonal cascade prepare the night more reliably.",
+    core_observation: "The first week of holding a window often feels harder; the second week is usually where the change shows up.",
+    core_clinician_question: "If sleep stays uneven despite a steadier window, what would be worth exploring next?",
   },
   {
     id: "evening_light_hygiene",
@@ -294,6 +342,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "sleep",
     sequence_priority: 2,
     policy_class: "sleep_circadian",
+    core_title: "Evening light as a circadian signal",
+    core_rationale: "Your circadian signals read under load. Bright and blue-spectrum light in the late evening tends to delay melatonin onset and compress the window where deeper sleep tends to occur.",
+    core_observation: "Notice sleep onset and morning clarity across several weeks of dimmer evenings.",
+    core_clinician_question: "If evening environment changes don't seem to help, what would be worth looking at next?",
   },
   {
     id: "morning_light_exposure",
@@ -311,6 +363,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "sleep",
     sequence_priority: 1,
     policy_class: "sleep_circadian",
+    core_title: "Morning light as a circadian anchor",
+    core_rationale: "Sleep, mood, and circadian signals tend to organize around morning light exposure. Outdoor light within the first hour of waking is one of the strongest patterns the body uses to set the day.",
+    core_observation: "Notice mood, daytime energy, and the ease of evening wind-down across several weeks of a steadier morning pattern.",
+    core_clinician_question: "Are there reasons in my picture to be careful about morning light exposure?",
   },
 
   // ── STRESS ──
@@ -331,6 +387,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "stress",
     sequence_priority: 2,
     policy_class: "stress_practice",
+    core_title: "Breath practice as an autonomic signal",
+    core_rationale: "Your stress and brain-resilience signals suggest the autonomic system is leaning toward the 'on' state. Structured breathing is one of the few patterns that can shift autonomic balance within minutes.",
+    core_observation: "Notice the moments after the practice — they often carry more information than the practice itself. Patterns become clearer across weeks.",
+    core_clinician_question: "Given my stress picture, would there be value in tracking HRV or other autonomic signals more formally?",
   },
 
   // ── MONITORING ──
@@ -351,6 +411,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "monitoring",
     sequence_priority: 5,
     policy_class: "retest",
+    core_title: "Visceral fat as a metabolic-load signal",
+    core_rationale: "Visceral fat appears to be carrying meaningful metabolic and inflammatory signal in your terrain. The trajectory across scans tends to matter more than any single reading.",
+    core_observation: "Worth following over time, under consistent conditions. Direction is more informative than the number on any one day.",
+    core_clinician_question: "What change in visceral fat would meaningfully shift our thinking?",
   },
   {
     id: "apob_monitoring",
@@ -368,6 +432,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "monitoring",
     sequence_priority: 5,
     policy_class: "retest",
+    core_title: "ApoB as a cardiovascular signal in your terrain",
+    core_rationale: "ApoB appears to be one of the stronger cardiovascular signals in your current picture. Particle count tends to carry more information than cholesterol mass alone.",
+    core_observation: "Worth following over time. Patterns become more meaningful as they repeat.",
+    core_clinician_question: "What ApoB pattern would shift our thinking, and what timing makes sense for the next reading?",
   },
   {
     id: "phase_angle_tracking",
@@ -386,6 +454,10 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     category: "monitoring",
     sequence_priority: 5,
     policy_class: "retest",
+    core_title: "Phase angle as a cellular-resilience signal",
+    core_rationale: "Your phase angle may be useful to follow over time as a reflection of cellular resilience and recovery capacity.",
+    core_observation: "Single measurements carry less meaning than the trajectory across several scans.",
+    core_clinician_question: "What phase-angle change would be worth discussing in our next conversation?",
   },
 ];
 
