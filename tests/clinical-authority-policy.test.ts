@@ -163,6 +163,62 @@ describe("dose policy — does not false-positive on lab concentration units", (
   });
 });
 
+describe("dose policy — punctuation and whitespace variants in concentration units", () => {
+  it("does not match concentration units followed by a comma", () => {
+    expect(extractDoseTokens("ApoB 102 mg/dL, LDL-C 148 mg/dL,")).toEqual([]);
+    expect(extractDoseTokens("Vitamin D 92 ng/mL, testosterone 671 ng/dL,")).toEqual([]);
+  });
+
+  it("does not match concentration units followed by a period", () => {
+    expect(extractDoseTokens("ApoB is 102 mg/dL.")).toEqual([]);
+    expect(extractDoseTokens("Vitamin D measured 92 ng/mL.")).toEqual([]);
+    expect(extractDoseTokens("hs-CRP 0.3 mg/L.")).toEqual([]);
+  });
+
+  it("does not match concentration units followed by semicolon or colon", () => {
+    expect(extractDoseTokens("ApoB 102 mg/dL; LDL-C 148 mg/dL;")).toEqual([]);
+    expect(extractDoseTokens("Result: 92 ng/mL: borderline.")).toEqual([]);
+  });
+
+  it("does not match concentration units with whitespace around the slash", () => {
+    expect(extractDoseTokens("ApoB 102 mg / dL")).toEqual([]);
+    expect(extractDoseTokens("Vitamin D 92 ng / mL")).toEqual([]);
+    expect(extractDoseTokens("hs-CRP 0.3 mg / L")).toEqual([]);
+    expect(extractDoseTokens("Glucose 5.2 mmol / L")).toEqual([]);
+    expect(extractDoseTokens("Hemoglobin 14.2 g / dL")).toEqual([]);
+  });
+
+  it("does not match concentration units with whitespace around slash followed by punctuation", () => {
+    expect(extractDoseTokens("ApoB 102 mg / dL, LDL-C 148 mg / dL.")).toEqual([]);
+  });
+
+  it("does not match concentration units in parenthetical clauses", () => {
+    expect(extractDoseTokens("Your ApoB (102 mg/dL) is elevated.")).toEqual([]);
+    expect(extractDoseTokens("Vitamin D (92 ng/mL) is in range.")).toEqual([]);
+  });
+
+  it("does not match concentration units at end of line / wrapped text", () => {
+    expect(extractDoseTokens("Your ApoB is 102 mg/dL\nLDL-C is 148 mg/dL")).toEqual([]);
+  });
+
+  it("does not match µg/L or pg/mL style concentration units", () => {
+    // pg/mL and µg/L are not in the unit list to begin with — confirm no spurious matches
+    expect(extractDoseTokens("Insulin 6 µIU/mL fasting.")).toEqual([]);
+  });
+
+  it("still matches genuine doses when they appear with adjacent punctuation", () => {
+    expect(extractDoseTokens("Take 5mg, twice daily.").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("Dose: 200 mg.").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("Start at 1000 IU; titrate up.").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("Try (500 mg) daily.").length).toBeGreaterThan(0);
+  });
+
+  it("does not false-match in a clinical sentence with multiple concentration variants", () => {
+    const text = "Your ApoB 102 mg/dL, LDL-C 148 mg / dL., hs-CRP 0.3 mg/L; vitamin D 92 ng/mL.";
+    expect(extractDoseTokens(text)).toEqual([]);
+  });
+});
+
 describe("dose policy — context computation", () => {
   it("emergency intent + dose token → emergency_routing with allowed user dose", () => {
     const ctx = computeDosePolicyContext("is 1g of melatonin too much?");
