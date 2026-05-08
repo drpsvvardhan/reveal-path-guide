@@ -132,6 +132,14 @@ const InterventionCard: React.FC<{
 
           {/* Coordinate + gate badges */}
           <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            {action.policy_class && (
+              <span
+                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-sans font-semibold tracking-wide ${POLICY_CLASS_STYLES[action.policy_class] || "bg-muted text-muted-foreground border-border"}`}
+                title={`Policy class: ${action.policy_class}`}
+              >
+                {POLICY_CLASS_LABELS[action.policy_class] || action.policy_class}
+              </span>
+            )}
             {action.coordinates.map((c) => (
               <span
                 key={c}
@@ -162,6 +170,21 @@ const InterventionCard: React.FC<{
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 border-t border-border pt-2">
               <p className="text-xs text-muted-foreground leading-relaxed"><TappableProse text={action.how} /></p>
+              {action.rationale && (
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={action.rationale} />
+                </p>
+              )}
+              {action.doctor_question && (
+                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
+                  <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
+                    Bring to your clinician
+                  </p>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    <TappableProse text={action.doctor_question} />
+                  </p>
+                </div>
+              )}
             </CollapsibleContent>
           </Collapsible>
         </div>
