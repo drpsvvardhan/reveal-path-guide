@@ -336,41 +336,21 @@ const AskSection: React.FC = () => {
         }),
       });
 
-      if (!resp.ok || !resp.body) {
-        throw new Error(`Chat request failed (${resp.status})`);
+      if (!resp.ok) {
+        let errMsg = `Chat request failed (${resp.status})`;
+        try {
+          const errBody = await resp.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch { /* noop */ }
+        throw new Error(errMsg);
       }
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              fullText += delta;
-              // During streaming, show stripped content for clean display
-              const displayText = stripClusterMarkers(fullText);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: displayText } : m
-                )
-              );
-            }
-          } catch {
-            // ignore partial chunk parse errors
-          }
-        }
-      }
+      // Phase 6b.2: patient-chat now returns a single validated JSON
+      // response (admission gate). The model's raw output never reaches
+      // the client. The "thinking" indicator stays visible until this
+      // resolves — that is intentional.
+      const data = await resp.json();
+      const fullText: string = data?.content ?? "";
 
       // Post-stream: run voice validation on the raw response
       const { sentenceToClusterMap } = parseProseAndCitations(fullText);
