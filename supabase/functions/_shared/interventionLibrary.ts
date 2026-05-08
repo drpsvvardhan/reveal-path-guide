@@ -45,6 +45,15 @@ export interface Intervention {
   category: InterventionCategory;
   sequence_priority: number;
   policy_class: InterventionPolicyClass;
+
+  // ── Core-mode fields (interpreter voice) ──
+  // Optional, terrain-oriented authoring of the same intervention.
+  // Used by ActionSection when consumer_action_plan_mode === 'core'.
+  // BioTwin+ rendering continues to use what/how unchanged.
+  core_title?: string;
+  core_rationale?: string;
+  core_observation?: string;
+  core_clinician_question?: string;
 }
 
 export const INTERVENTION_LIBRARY: Intervention[] = [
