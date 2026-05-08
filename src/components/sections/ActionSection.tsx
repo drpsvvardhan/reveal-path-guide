@@ -25,6 +25,10 @@ interface ActionPlanAction {
   retest_markers: string[];
   category: string;
   sequence_priority: number;
+  policy_class?: string;
+  rationale?: string;
+  doctor_question?: string;
+  source_intervention_id?: string;
 }
 
 interface RetestEntry {
@@ -50,6 +54,35 @@ const COORD_COLORS: Record<string, string> = {
 
 const COORD_LABELS: Record<string, string> = {
   E: "Energy", I: "Inflammation", V: "Vascular", R: "Regulation", Σ: "Scar memory",
+};
+
+// ── Policy-class badge styling ──
+const POLICY_CLASS_LABELS: Record<string, string> = {
+  lifestyle: "Lifestyle",
+  food_pattern: "Food pattern",
+  movement: "Movement",
+  sleep_circadian: "Sleep & circadian",
+  stress_practice: "Stress practice",
+  tracking: "Tracking",
+  retest: "Retest",
+  doctor_question: "Doctor question",
+  mechanism_education: "Education",
+  supplement_with_dose: "Supplement",
+  medication_change: "Medication",
+  titration: "Titration",
+  individualized_protocol: "Protocol",
+};
+
+const POLICY_CLASS_STYLES: Record<string, string> = {
+  doctor_question: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  food_pattern: "bg-amber-500/10 text-amber-700 border-amber-500/25",
+  movement: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
+  sleep_circadian: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
+  stress_practice: "bg-purple-500/10 text-purple-700 border-purple-500/25",
+  retest: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  tracking: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  lifestyle: "bg-teal-500/10 text-teal-700 border-teal-500/25",
+  mechanism_education: "bg-slate-500/10 text-slate-700 border-slate-500/25",
 };
 
 // ── Components ──
@@ -99,6 +132,14 @@ const InterventionCard: React.FC<{
 
           {/* Coordinate + gate badges */}
           <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            {action.policy_class && (
+              <span
+                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-sans font-semibold tracking-wide ${POLICY_CLASS_STYLES[action.policy_class] || "bg-muted text-muted-foreground border-border"}`}
+                title={`Policy class: ${action.policy_class}`}
+              >
+                {POLICY_CLASS_LABELS[action.policy_class] || action.policy_class}
+              </span>
+            )}
             {action.coordinates.map((c) => (
               <span
                 key={c}
@@ -129,6 +170,21 @@ const InterventionCard: React.FC<{
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 border-t border-border pt-2">
               <p className="text-xs text-muted-foreground leading-relaxed"><TappableProse text={action.how} /></p>
+              {action.rationale && (
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={action.rationale} />
+                </p>
+              )}
+              {action.doctor_question && (
+                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
+                  <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
+                    Bring to your clinician
+                  </p>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    <TappableProse text={action.doctor_question} />
+                  </p>
+                </div>
+              )}
             </CollapsibleContent>
           </Collapsible>
         </div>
@@ -149,9 +205,23 @@ const ActionSection: React.FC = () => {
   const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [actionPlanMode, setActionPlanMode] = useState<"core" | "biotwin_plus">("core");
   const hasTriedGenRef = React.useRef(false);
 
   const userId = effectiveUserId || user?.id;
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("consumer_action_plan_mode")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const mode = (data as any)?.consumer_action_plan_mode;
+      setActionPlanMode(mode === "biotwin_plus" ? "biotwin_plus" : "core");
+    })();
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -403,6 +473,21 @@ const ActionSection: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Block 4: Mode-conditional copy ── */}
+      <div className="pt-6">
+        <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          {actionPlanMode === "core" ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              This action plan is in <span className="font-semibold text-foreground">Core mode</span> — it focuses on lifestyle, tracking, and questions to bring to your clinician. Specific dosing and medication decisions are not covered here. Your clinician is the right partner for those choices.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Your action plan is in <span className="font-semibold text-foreground">BioTwin+ mode</span> — it includes clinician-supervised protocols. Each item is reviewed by your care team.
+            </p>
+          )}
+        </div>
+      </div>
     </PatientSectionLayout>
   );
 };

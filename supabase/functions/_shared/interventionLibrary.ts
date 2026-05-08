@@ -5,6 +5,27 @@
 export type StateCoordinate = "E" | "I" | "V" | "R" | "Σ";
 export type InterventionCategory = "nutrition" | "supplementation" | "movement" | "sleep" | "stress" | "monitoring";
 
+// ── Policy classification ──
+// Tags every intervention with the clinical-authority class it occupies.
+// Constitutional Anchor 1 forbids Core mode from carrying entries whose
+// class transfers clinical authority to the action plan itself.
+export type InterventionPolicyClass =
+  // Permitted in both Core and BioTwin+
+  | "lifestyle"
+  | "food_pattern"
+  | "movement"
+  | "sleep_circadian"
+  | "stress_practice"
+  | "tracking"
+  | "retest"
+  | "doctor_question"
+  | "mechanism_education"
+  // Forbidden in Core mode, permitted in BioTwin+
+  | "supplement_with_dose"
+  | "medication_change"
+  | "titration"
+  | "individualized_protocol";
+
 export interface Intervention {
   id: string;
   trigger: {
@@ -23,6 +44,7 @@ export interface Intervention {
   contraindications: string[];
   category: InterventionCategory;
   sequence_priority: number;
+  policy_class: InterventionPolicyClass;
 }
 
 export const INTERVENTION_LIBRARY: Intervention[] = [
@@ -43,6 +65,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["hypercalcemia", "sarcoidosis", "granulomatous disease"],
     category: "supplementation",
     sequence_priority: 2,
+    policy_class: "supplement_with_dose",
   },
   {
     id: "magnesium_repletion",
@@ -60,6 +83,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["severe renal impairment", "myasthenia gravis"],
     category: "supplementation",
     sequence_priority: 3,
+    policy_class: "supplement_with_dose",
   },
   {
     id: "b12_repletion",
@@ -76,6 +100,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "supplementation",
     sequence_priority: 4,
+    policy_class: "supplement_with_dose",
   },
   {
     id: "omega3_inflammation",
@@ -93,6 +118,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["fish allergy", "bleeding disorder", "anticoagulant therapy"],
     category: "supplementation",
     sequence_priority: 3,
+    policy_class: "supplement_with_dose",
   },
 
   // ── NUTRITION ──
@@ -112,6 +138,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["advanced chronic kidney disease"],
     category: "nutrition",
     sequence_priority: 2,
+    policy_class: "food_pattern",
   },
   {
     id: "ldl_particle_nutrition_shift",
@@ -129,6 +156,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["nut allergy"],
     category: "nutrition",
     sequence_priority: 3,
+    policy_class: "food_pattern",
   },
   {
     id: "glucose_stability_meal_timing",
@@ -146,6 +174,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "nutrition",
     sequence_priority: 2,
+    policy_class: "food_pattern",
   },
   {
     id: "fiber_gut_ecology",
@@ -163,6 +192,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["active IBD flare", "SIBO (discuss with physician first)"],
     category: "nutrition",
     sequence_priority: 4,
+    policy_class: "food_pattern",
   },
   {
     id: "hydration_baseline",
@@ -180,6 +210,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["heart failure with fluid restriction", "severe renal impairment"],
     category: "nutrition",
     sequence_priority: 5,
+    policy_class: "food_pattern",
   },
 
   // ── MOVEMENT ──
@@ -199,6 +230,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["acute injury", "uncontrolled hypertension", "unstable angina"],
     category: "movement",
     sequence_priority: 3,
+    policy_class: "movement",
   },
   {
     id: "daily_walking_baseline",
@@ -215,6 +247,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "movement",
     sequence_priority: 1,
+    policy_class: "movement",
   },
 
   // ── SLEEP ──
@@ -233,6 +266,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "sleep",
     sequence_priority: 1,
+    policy_class: "sleep_circadian",
   },
   {
     id: "evening_light_hygiene",
@@ -250,6 +284,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "sleep",
     sequence_priority: 2,
+    policy_class: "sleep_circadian",
   },
   {
     id: "morning_light_exposure",
@@ -266,6 +301,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: ["photosensitivity conditions", "certain medications causing photosensitivity"],
     category: "sleep",
     sequence_priority: 1,
+    policy_class: "sleep_circadian",
   },
 
   // ── STRESS ──
@@ -285,6 +321,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "stress",
     sequence_priority: 2,
+    policy_class: "stress_practice",
   },
 
   // ── MONITORING ──
@@ -304,6 +341,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "monitoring",
     sequence_priority: 5,
+    policy_class: "retest",
   },
   {
     id: "apob_monitoring",
@@ -320,6 +358,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "monitoring",
     sequence_priority: 5,
+    policy_class: "retest",
   },
   {
     id: "phase_angle_tracking",
@@ -337,6 +376,7 @@ export const INTERVENTION_LIBRARY: Intervention[] = [
     contraindications: [],
     category: "monitoring",
     sequence_priority: 5,
+    policy_class: "retest",
   },
 ];
 
@@ -363,4 +403,20 @@ export function normalizeBiomarkerName(raw: string): string {
     }
   }
   return lower;
+}
+
+// ── Core-mode policy gate ──
+const CORE_FORBIDDEN_CLASSES: Set<InterventionPolicyClass> = new Set([
+  "supplement_with_dose",
+  "medication_change",
+  "titration",
+  "individualized_protocol",
+]);
+
+export function isPermittedInCoreMode(intervention: Intervention): boolean {
+  return !CORE_FORBIDDEN_CLASSES.has(intervention.policy_class);
+}
+
+export function isForbiddenInCoreMode(intervention: Intervention): boolean {
+  return CORE_FORBIDDEN_CLASSES.has(intervention.policy_class);
 }

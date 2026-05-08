@@ -1392,6 +1392,7 @@ export type Database = {
       profiles: {
         Row: {
           age: number | null
+          consumer_action_plan_mode: string
           created_at: string
           display_name: string | null
           first_name: string | null
@@ -1411,6 +1412,7 @@ export type Database = {
         }
         Insert: {
           age?: number | null
+          consumer_action_plan_mode?: string
           created_at?: string
           display_name?: string | null
           first_name?: string | null
@@ -1430,6 +1432,7 @@ export type Database = {
         }
         Update: {
           age?: number | null
+          consumer_action_plan_mode?: string
           created_at?: string
           display_name?: string | null
           first_name?: string | null

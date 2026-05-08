@@ -11,6 +11,7 @@ import {
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
 import { detectDosePatternsInActions } from "../_shared/dosePattern.ts";
+import { extractDoseTokens } from "../_shared/dosePolicy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +22,15 @@ const corsHeaders = {
 // Canonical substrate now lives in supabase/functions/_shared/
 // interventionLibrary.ts (mirrored to the client through the @shared
 // path alias / src/lib/interventionLibrary.ts shim).
-import { INTERVENTION_LIBRARY, type Intervention } from "../_shared/interventionLibrary.ts";
+import {
+  INTERVENTION_LIBRARY,
+  isForbiddenInCoreMode,
+  type Intervention,
+} from "../_shared/interventionLibrary.ts";
+import {
+  convertToCoreMode,
+  type CoreSafeAction,
+} from "../_shared/actionPlanCoreMode.ts";
 
 
 // ── Biomarker name normalization ──
@@ -181,6 +190,17 @@ Deno.serve(async (req) => {
     //    cie_domain_scores, or derived_patterns directly.
     const witnessContext = await loadPatientContext(supabaseUrl, serviceKey, user_id);
 
+    // Read consumer_action_plan_mode for this user. Defaults to 'core'.
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("consumer_action_plan_mode")
+      .eq("user_id", user_id)
+      .maybeSingle();
+    const actionPlanMode: "core" | "biotwin_plus" =
+      (profileRow as any)?.consumer_action_plan_mode === "biotwin_plus"
+        ? "biotwin_plus"
+        : "core";
+
     // Clusters remain a governed-derived-object read, scoped by the
     // loader-returned canonical patient_id (= profiles.id).
     const { data: clusterRows } = await supabase
@@ -272,7 +292,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. Template the why
-    const todayActions = selected.map((iv) => ({
+    const baseTodayActions = selected.map((iv) => ({
       id: iv.id,
       what: iv.what,
       why: templateWhy(iv.why_template, patientData),
@@ -283,7 +303,92 @@ Deno.serve(async (req) => {
       retest_markers: iv.retest_markers,
       category: iv.category,
       sequence_priority: iv.sequence_priority,
+      policy_class: iv.policy_class,
+      source_intervention: iv,
     }));
+
+    // Apply Core-mode policy filter. Forbidden classes are converted into
+    // interpreter-safe doctor-question actions; permitted classes pass
+    // through unchanged.
+    let todayActions: any[] = baseTodayActions.map((a) => {
+      if (actionPlanMode === "core" && isForbiddenInCoreMode(a.source_intervention)) {
+        const converted: CoreSafeAction = convertToCoreMode(a.source_intervention);
+        return {
+          id: converted.id,
+          what: converted.what,
+          why: a.why,
+          how: converted.how,
+          rationale: converted.rationale,
+          doctor_question: converted.doctor_question,
+          coordinates: converted.coordinates,
+          gates: a.gates,
+          retest_weeks: a.retest_weeks,
+          retest_markers: a.retest_markers,
+          category: a.category,
+          sequence_priority: converted.sequence_priority,
+          policy_class: converted.policy_class,
+          source_intervention_id: converted.source_intervention_id,
+        };
+      }
+      const { source_intervention, ...rest } = a;
+      return rest;
+    });
+
+    // Structural backstop: in Core mode, today_actions[] must contain zero
+    // dose tokens across what/how/rationale/doctor_question. Drops any
+    // action that fails and writes an audit row.
+    if (actionPlanMode === "core") {
+      const cleanActions: any[] = [];
+      const droppedActions: Array<{ id: string; field: string; tokens: string[] }> = [];
+      for (const action of todayActions) {
+        const whatTokens = extractDoseTokens(action.what ?? "");
+        const howTokens = extractDoseTokens(action.how ?? "");
+        const rationaleTokens = extractDoseTokens(action.rationale ?? "");
+        const doctorQuestionTokens = extractDoseTokens(action.doctor_question ?? "");
+        const allTokens = [
+          ...whatTokens,
+          ...howTokens,
+          ...rationaleTokens,
+          ...doctorQuestionTokens,
+        ];
+        if (allTokens.length === 0) {
+          cleanActions.push(action);
+        } else {
+          droppedActions.push({
+            id: action.id,
+            field: whatTokens.length
+              ? "what"
+              : howTokens.length
+              ? "how"
+              : rationaleTokens.length
+              ? "rationale"
+              : "doctor_question",
+            tokens: allTokens,
+          });
+        }
+      }
+      if (droppedActions.length > 0) {
+        console.warn(
+          "[generate-action-plan] Core mode backstop dropped actions:",
+          droppedActions,
+        );
+        try {
+          await supabase.from("patient_chat_validation_log").insert({
+            user_id,
+            message_role: "action_plan",
+            status: "replaced_with_fallback",
+            dose_patterns_matched: droppedActions.flatMap((d) => d.tokens),
+            original_output: JSON.stringify(droppedActions),
+            replaced_with: `Dropped ${droppedActions.length} actions from Core mode action plan`,
+            replacement_template_used: "core_mode_backstop",
+            last_user_message: "action_plan_generation",
+          });
+        } catch (e) {
+          console.error("[generate-action-plan] backstop audit insert failed:", e);
+        }
+      }
+      todayActions = cleanActions;
+    }
 
     // 6. Build retest schedule
     const retestMap: Record<number, Set<string>> = {};
