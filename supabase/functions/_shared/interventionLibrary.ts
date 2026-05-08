@@ -5,6 +5,27 @@
 export type StateCoordinate = "E" | "I" | "V" | "R" | "Σ";
 export type InterventionCategory = "nutrition" | "supplementation" | "movement" | "sleep" | "stress" | "monitoring";
 
+// ── Policy classification ──
+// Tags every intervention with the clinical-authority class it occupies.
+// Constitutional Anchor 1 forbids Core mode from carrying entries whose
+// class transfers clinical authority to the action plan itself.
+export type InterventionPolicyClass =
+  // Permitted in both Core and BioTwin+
+  | "lifestyle"
+  | "food_pattern"
+  | "movement"
+  | "sleep_circadian"
+  | "stress_practice"
+  | "tracking"
+  | "retest"
+  | "doctor_question"
+  | "mechanism_education"
+  // Forbidden in Core mode, permitted in BioTwin+
+  | "supplement_with_dose"
+  | "medication_change"
+  | "titration"
+  | "individualized_protocol";
+
 export interface Intervention {
   id: string;
   trigger: {
@@ -23,6 +44,7 @@ export interface Intervention {
   contraindications: string[];
   category: InterventionCategory;
   sequence_priority: number;
+  policy_class: InterventionPolicyClass;
 }
 
 export const INTERVENTION_LIBRARY: Intervention[] = [
