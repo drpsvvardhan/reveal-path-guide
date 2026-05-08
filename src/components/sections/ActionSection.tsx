@@ -2,14 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
-import { Check, ChevronDown, ChevronUp, Clock, FlaskConical, Info } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock, FlaskConical } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 import TappableProse from "@/components/terrain/TappableProse";
 import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
-import AsideProgressRing from "@/components/layout/AsideProgressRing";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 // ── Types ──
@@ -29,6 +28,10 @@ interface ActionPlanAction {
   rationale?: string;
   doctor_question?: string;
   source_intervention_id?: string;
+  core_title?: string;
+  core_rationale?: string;
+  core_observation?: string;
+  core_clinician_question?: string;
 }
 
 interface RetestEntry {
@@ -105,8 +108,25 @@ const InterventionCard: React.FC<{
   index: number;
   done: boolean;
   onToggle: () => void;
-}> = ({ action, index, done, onToggle }) => {
+  preferCore: boolean;
+}> = ({ action, index, done, onToggle, preferCore }) => {
   const [howOpen, setHowOpen] = useState(false);
+
+  // Prefer interpreter-voice Core fields when available; otherwise fall back
+  // to the legacy what/how authored for clinician-supervised contexts.
+  const hasCore = Boolean(action.core_title || action.core_rationale);
+  if (preferCore && !hasCore) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[ActionSection] Core-mode fields missing for intervention "${action.id}" — falling back to directive what/how. Author core_title/core_rationale/core_observation/core_clinician_question on this entry in interventionLibrary.ts.`,
+    );
+  }
+  const title = (preferCore && action.core_title) || action.what;
+  const body = (preferCore && action.core_rationale) || action.why;
+  const observation = preferCore ? action.core_observation : null;
+  const howText = (preferCore && action.core_observation) ? null : action.how;
+  const clinicianQuestion =
+    (preferCore && action.core_clinician_question) || action.doctor_question;
 
   return (
     <motion.div
@@ -120,17 +140,17 @@ const InterventionCard: React.FC<{
       <div className="flex items-start gap-4">
         <ActionCheck done={done} onToggle={onToggle} />
         <div className="flex-1 min-w-0">
-          {/* What */}
+          {/* Title — interpreter voice when available */}
           <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            <TappableProse text={action.what} />
+            <TappableProse text={title} />
           </h4>
 
-          {/* Why */}
+          {/* Body — terrain-language rationale */}
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            <TappableProse text={action.why} />
+            <TappableProse text={body} />
           </p>
 
-          {/* Coordinate + gate badges */}
+          {/* Coordinate + class chips */}
           <div className="flex items-center gap-1.5 flex-wrap mb-3">
             {action.policy_class && (
               <span
@@ -158,35 +178,46 @@ const InterventionCard: React.FC<{
               </span>
             ))}
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-sans ml-1">
-              <Clock className="h-2.5 w-2.5" /> retest {action.retest_weeks}w
+              <Clock className="h-2.5 w-2.5" /> next useful check-in ~{action.retest_weeks}w
             </span>
           </div>
 
-          {/* How — expandable */}
+          {/* Observation / how — expandable */}
+          {(observation || howText || clinicianQuestion) && (
           <Collapsible open={howOpen} onOpenChange={setHowOpen}>
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
               {howOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              How to do it
+              {preferCore ? "What to notice" : "How to do it"}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 border-t border-border pt-2">
-              <p className="text-xs text-muted-foreground leading-relaxed"><TappableProse text={action.how} /></p>
-              {action.rationale && (
+              {observation && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={observation} />
+                </p>
+              )}
+              {howText && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={howText} />
+                </p>
+              )}
+              {!preferCore && action.rationale && (
                 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                   <TappableProse text={action.rationale} />
                 </p>
               )}
-              {action.doctor_question && (
+              {clinicianQuestion && (
                 <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
                   <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
-                    Bring to your clinician
+                    Worth bringing into a clinical conversation
                   </p>
                   <p className="text-xs text-foreground leading-relaxed">
-                    <TappableProse text={action.doctor_question} />
+                    <TappableProse text={clinicianQuestion} />
                   </p>
                 </div>
               )}
             </CollapsibleContent>
           </Collapsible>
+          )}
         </div>
       </div>
     </motion.div>
