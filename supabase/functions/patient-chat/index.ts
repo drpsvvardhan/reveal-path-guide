@@ -1369,6 +1369,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
+    // Computed once from the user's message; the routing decision depends
+    // only on the user's query, not on the model output.
+    const dosePolicyContext: DosePolicyContext =
+      computeDosePolicyContext(lastUserMessage);
+
     const captureTransform = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -1390,8 +1395,79 @@ Deno.serve(async (req: Request): Promise<Response> => {
       async flush() {
         if (!capturedResponse) return;
 
-        // EXISTING — preserve doctor-question extraction.
-        const questions = extractQueuedQuestions(capturedResponse);
+        // ----- Step 1: clinical authority check (constitutional) -----
+        const roleResult = validateInterpreterRole(capturedResponse);
+
+        let finalOutput = capturedResponse;
+        let status:
+          | "passed"
+          | "failed_with_warnings"
+          | "replaced_with_fallback"
+          | "replaced_with_emergency_routing"
+          | "regenerated_successfully"
+          | "regenerated_then_replaced" = "passed";
+        let replacementTemplateUsed: string | null = null;
+        let regenerationAttempted = false;
+        let regenerationSucceeded: boolean | null = null;
+
+        const eligibleForRegen =
+          !roleResult.valid &&
+          !dosePolicyContext.emergencyIntentPresent &&
+          activeClusters &&
+          activeClusters.length > 0;
+
+        if (eligibleForRegen) {
+          regenerationAttempted = true;
+          const regenerated = await attemptCorrectiveRegeneration(
+            capturedResponse,
+            roleResult.violations,
+            lastUserMessage,
+            systemPrompt,
+            normalizedModel,
+          );
+
+          if (regenerated) {
+            const reValidate = validateInterpreterRole(regenerated);
+            if (reValidate.valid) {
+              finalOutput = regenerated;
+              status = "regenerated_successfully";
+              regenerationSucceeded = true;
+            } else {
+              regenerationSucceeded = false;
+              finalOutput = replacementTemplateForViolation(reValidate.violations);
+              status = "regenerated_then_replaced";
+              replacementTemplateUsed = "role_violation_after_regen";
+            }
+          } else {
+            regenerationSucceeded = false;
+            finalOutput = replacementTemplateForViolation(roleResult.violations);
+            status = "replaced_with_fallback";
+            replacementTemplateUsed = "role_violation";
+          }
+        } else if (!roleResult.valid) {
+          finalOutput = replacementTemplateForViolation(roleResult.violations);
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "role_violation";
+        }
+
+        // ----- Step 2: dose policy check (special case) -----
+        if (status === "passed" || status === "regenerated_successfully") {
+          const doseResult = validateDoseTokens(finalOutput, dosePolicyContext);
+          if (!doseResult.valid) {
+            if (dosePolicyContext.emergencyIntentPresent) {
+              finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
+              status = "replaced_with_emergency_routing";
+              replacementTemplateUsed = "emergency_routing";
+            } else {
+              finalOutput = NO_DOSE_FALLBACK;
+              status = "replaced_with_fallback";
+              replacementTemplateUsed = "no_dose_fallback";
+            }
+          }
+        }
+
+        // ----- Step 3: doctor-question extraction (against validated output) -----
+        const questions = extractQueuedQuestions(finalOutput);
         if (questions.length > 0) {
           try {
             await queueExtractedQuestions(userId, questions, lastUserMessage);
@@ -1400,57 +1476,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
           }
         }
 
-        // NEW — post-stream validation.
-        // 1. Deterministic dose-pattern check — fires regardless of cluster context.
-        const dosePatterns = detectDosePatterns(capturedResponse);
-        if (dosePatterns.length > 0) {
-          await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
-            dose_patterns_matched: dosePatterns,
-            original_output: capturedResponse,
-            replaced_with: SAFE_FALLBACK_MESSAGE,
-            last_user_message: lastUserMessage,
-          });
-          return;
-        }
-
-        // 2. Vocabulary-license validation against active clusters.
-        const clusterTierMap = new Map<string, ClusterTier>();
-        for (const c of activeClusters ?? []) {
-          if (c.id && c.confidence_tier) {
-            clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
-          }
-        }
-
-        if (clusterTierMap.size > 0) {
-          const { sentenceToClusterMap } = parseProseAndCitations(capturedResponse);
-          const validation = validateProseAgainstClustersWithAudience(
-            capturedResponse,
-            clusterTierMap,
-            sentenceToClusterMap,
-            "patient",
-          );
-
-          if (validation.valid) {
-            await logValidation(supabaseAdmin, userId, "passed", {
-              cluster_count: clusterTierMap.size,
-              sentences_checked: validation.sentences_checked,
-              last_user_message: lastUserMessage,
-            });
-          } else {
-            await logValidation(supabaseAdmin, userId, "failed_with_warnings", {
-              violations: validation.violations,
-              original_output: capturedResponse,
-              cluster_count: clusterTierMap.size,
-              sentences_checked: validation.sentences_checked,
-              last_user_message: lastUserMessage,
-            });
-          }
-        } else {
-          await logValidation(supabaseAdmin, userId, "passed", {
-            cluster_count: 0,
-            last_user_message: lastUserMessage,
-          });
-        }
+        // ----- Step 4: audit log -----
+        await logValidation(supabaseAdmin, userId, status, {
+          role_violation: roleResult.valid
+            ? null
+            : {
+                violations: roleResult.violations,
+                violation_count: roleResult.violations.length,
+              },
+          dose_policy_context: dosePolicyContext,
+          routing_mode: dosePolicyContext.routingMode,
+          violations: [],
+          dose_patterns_matched: dosePolicyContext.userDoseTokens,
+          original_output: status !== "passed" ? capturedResponse : null,
+          replaced_with: status !== "passed" ? finalOutput : null,
+          replacement_template_used: replacementTemplateUsed,
+          regeneration_attempted: regenerationAttempted,
+          regeneration_succeeded: regenerationSucceeded,
+          cluster_count: activeClusters?.length ?? 0,
+          sentences_checked: capturedResponse.split(/[.!?]+/).length,
+          last_user_message: lastUserMessage,
+        });
       },
     });
 
