@@ -1047,6 +1047,60 @@ async function queueExtractedQuestions(
 // REQUEST HANDLER
 // ============================================================================
 
+// Single-pass corrective regeneration. Reuses the Lovable AI gateway with
+// the same model used for the primary stream. Returns the regenerated text
+// or null on any failure / timeout. Doctrine: regeneration is a courtesy,
+// not a guarantee — the validator remains law.
+async function attemptCorrectiveRegeneration(
+  originalOutput: string,
+  violations: AuthorityViolation[],
+  userMessage: string,
+  systemPrompt: string,
+  model: string,
+  timeoutMs = 8000,
+): Promise<string | null> {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableKey) return null;
+
+  const feedback = buildCorrectiveRegenFeedback(violations);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${lovableKey}`,
+        },
+        body: JSON.stringify({
+          model: model || "google/gemini-3-flash-preview",
+          stream: false,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+            { role: "assistant", content: originalOutput },
+            { role: "user", content: feedback },
+          ],
+        }),
+      },
+    );
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const text = json?.choices?.[0]?.message?.content;
+    return typeof text === "string" && text.trim().length > 0 ? text : null;
+  } catch (e) {
+    console.error("[patient-chat] corrective regeneration failed:", e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
