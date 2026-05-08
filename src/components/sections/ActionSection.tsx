@@ -25,6 +25,10 @@ interface ActionPlanAction {
   retest_markers: string[];
   category: string;
   sequence_priority: number;
+  policy_class?: string;
+  rationale?: string;
+  doctor_question?: string;
+  source_intervention_id?: string;
 }
 
 interface RetestEntry {
@@ -50,6 +54,35 @@ const COORD_COLORS: Record<string, string> = {
 
 const COORD_LABELS: Record<string, string> = {
   E: "Energy", I: "Inflammation", V: "Vascular", R: "Regulation", Σ: "Scar memory",
+};
+
+// ── Policy-class badge styling ──
+const POLICY_CLASS_LABELS: Record<string, string> = {
+  lifestyle: "Lifestyle",
+  food_pattern: "Food pattern",
+  movement: "Movement",
+  sleep_circadian: "Sleep & circadian",
+  stress_practice: "Stress practice",
+  tracking: "Tracking",
+  retest: "Retest",
+  doctor_question: "Doctor question",
+  mechanism_education: "Education",
+  supplement_with_dose: "Supplement",
+  medication_change: "Medication",
+  titration: "Titration",
+  individualized_protocol: "Protocol",
+};
+
+const POLICY_CLASS_STYLES: Record<string, string> = {
+  doctor_question: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  food_pattern: "bg-amber-500/10 text-amber-700 border-amber-500/25",
+  movement: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
+  sleep_circadian: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
+  stress_practice: "bg-purple-500/10 text-purple-700 border-purple-500/25",
+  retest: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  tracking: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  lifestyle: "bg-teal-500/10 text-teal-700 border-teal-500/25",
+  mechanism_education: "bg-slate-500/10 text-slate-700 border-slate-500/25",
 };
 
 // ── Components ──
