@@ -219,6 +219,82 @@ describe("dose policy — punctuation and whitespace variants in concentration u
   });
 });
 
+describe("dose policy — extended lab unit coverage (negative matches)", () => {
+  it("does not match g/L (total protein, fibrinogen)", () => {
+    expect(extractDoseTokens("Total protein 72 g/L")).toEqual([]);
+    expect(extractDoseTokens("Fibrinogen 3.2 g/L.")).toEqual([]);
+    expect(extractDoseTokens("Albumin 45 g / L,")).toEqual([]);
+  });
+
+  it("does not match mmol/L variants (electrolytes, lipids, glucose)", () => {
+    expect(extractDoseTokens("Sodium 140 mmol/L")).toEqual([]);
+    expect(extractDoseTokens("Potassium 4.2 mmol/L,")).toEqual([]);
+    expect(extractDoseTokens("LDL-C 3.8 mmol/L.")).toEqual([]);
+    expect(extractDoseTokens("Glucose 5.6 mmol / L")).toEqual([]);
+  });
+
+  it("does not match µmol/L / umol/L (creatinine, bilirubin, uric acid)", () => {
+    expect(extractDoseTokens("Creatinine 88 µmol/L")).toEqual([]);
+    expect(extractDoseTokens("Bilirubin 12 umol/L.")).toEqual([]);
+    expect(extractDoseTokens("Uric acid 320 µmol / L")).toEqual([]);
+  });
+
+  it("does not match nmol/L (hormones, vitamin D in SI units)", () => {
+    expect(extractDoseTokens("Vitamin D 75 nmol/L")).toEqual([]);
+    expect(extractDoseTokens("Cortisol 450 nmol/L,")).toEqual([]);
+    expect(extractDoseTokens("Testosterone 18 nmol / L")).toEqual([]);
+  });
+
+  it("does not match pmol/L or pg/mL (low-concentration hormones)", () => {
+    expect(extractDoseTokens("Free T4 14 pmol/L")).toEqual([]);
+    expect(extractDoseTokens("Insulin 60 pmol/L.")).toEqual([]);
+    expect(extractDoseTokens("Estradiol 32 pg/mL")).toEqual([]);
+  });
+
+  it("does not match IU/L or U/L (enzymes: ALT, AST, ALP, GGT)", () => {
+    expect(extractDoseTokens("ALT 28 IU/L")).toEqual([]);
+    expect(extractDoseTokens("AST 22 U/L,")).toEqual([]);
+    expect(extractDoseTokens("ALP 78 IU/L.")).toEqual([]);
+    expect(extractDoseTokens("GGT 45 U / L")).toEqual([]);
+  });
+
+  it("does not match mIU/mL or µIU/mL (TSH, insulin)", () => {
+    expect(extractDoseTokens("TSH 1.8 mIU/mL")).toEqual([]);
+    expect(extractDoseTokens("Insulin 6 µIU/mL")).toEqual([]);
+    expect(extractDoseTokens("FSH 5 mIU / mL")).toEqual([]);
+  });
+
+  it("does not match mEq/L (electrolyte alt notation)", () => {
+    expect(extractDoseTokens("Sodium 140 mEq/L")).toEqual([]);
+    expect(extractDoseTokens("Bicarbonate 24 mEq / L.")).toEqual([]);
+  });
+
+  it("does not match cells/µL or cells/mcL (CBC counts)", () => {
+    expect(extractDoseTokens("WBC 6500 cells/µL")).toEqual([]);
+    expect(extractDoseTokens("Lymphocytes 2100 cells/mcL,")).toEqual([]);
+  });
+
+  it("does not match cells/hpf (urinalysis)", () => {
+    expect(extractDoseTokens("RBC 2 cells/hpf")).toEqual([]);
+    expect(extractDoseTokens("WBC 4 cells/HPF.")).toEqual([]);
+  });
+
+  it("does not match in a long clinical sentence with mixed SI lab units", () => {
+    const text =
+      "Sodium 140 mmol/L, potassium 4.2 mmol/L, creatinine 88 µmol/L, ALT 28 IU/L, " +
+      "TSH 1.8 mIU/mL, vitamin D 75 nmol/L, total protein 72 g/L, WBC 6500 cells/µL.";
+    expect(extractDoseTokens(text)).toEqual([]);
+  });
+
+  it("still matches genuine doses adjacent to extended SI lab units", () => {
+    const text =
+      "Sodium 140 mmol/L is normal. Clinician may suggest 1000 IU vitamin D daily.";
+    const tokens = extractDoseTokens(text);
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]).toContain("1000 iu");
+  });
+});
+
 describe("dose policy — context computation", () => {
   it("emergency intent + dose token → emergency_routing with allowed user dose", () => {
     const ctx = computeDosePolicyContext("is 1g of melatonin too much?");
