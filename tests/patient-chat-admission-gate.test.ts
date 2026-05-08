@@ -134,9 +134,9 @@ describe("patient-chat admission gate (6b.2)", () => {
 
   it("clean interpretation question → client receives original output", () => {
     const cleanModelOutput =
-      "Your ApoB at 102 mg/dL alongside an LDL-C of 148 mg/dL points to elevated " +
-      "particle burden {cluster:test-cluster}. The pattern is worth bringing to your " +
-      "physician {cluster:test-cluster}.";
+      "Your ApoB and LDL-C readings together point to elevated particle burden " +
+      "{cluster:test-cluster}. The pattern is worth bringing to your physician " +
+      "{cluster:test-cluster}.";
 
     // Note: cleanModelOutput contains dose-shaped tokens (mg/dL) — these
     // are concentration units, not dose units, and DOSE_TOKEN_PATTERN
