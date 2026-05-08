@@ -916,7 +916,13 @@ async function handleLovableStream(
 async function logValidation(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  status: "passed" | "failed_with_warnings" | "replaced_with_fallback",
+  status:
+    | "passed"
+    | "failed_with_warnings"
+    | "replaced_with_fallback"
+    | "replaced_with_emergency_routing"
+    | "regenerated_successfully"
+    | "regenerated_then_replaced",
   payload: {
     violations?: unknown[];
     dose_patterns_matched?: string[];
@@ -925,6 +931,12 @@ async function logValidation(
     cluster_count?: number;
     sentences_checked?: number;
     last_user_message?: string;
+    role_violation?: unknown;
+    dose_policy_context?: unknown;
+    routing_mode?: string | null;
+    replacement_template_used?: string | null;
+    regeneration_attempted?: boolean;
+    regeneration_succeeded?: boolean | null;
   },
 ) {
   try {
@@ -938,6 +950,12 @@ async function logValidation(
       cluster_count: payload.cluster_count ?? null,
       sentences_checked: payload.sentences_checked ?? null,
       last_user_message: payload.last_user_message ?? null,
+      role_violation: payload.role_violation ?? null,
+      dose_policy_context: payload.dose_policy_context ?? null,
+      routing_mode: payload.routing_mode ?? null,
+      replacement_template_used: payload.replacement_template_used ?? null,
+      regeneration_attempted: payload.regeneration_attempted ?? false,
+      regeneration_succeeded: payload.regeneration_succeeded ?? null,
     });
   } catch (e) {
     console.error("[patient-chat] validation log insert failed:", e);
