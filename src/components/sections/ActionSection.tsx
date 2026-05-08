@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
-import { Check, ChevronDown, ChevronUp, Clock, FlaskConical } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock, FlaskConical, Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 import TappableProse from "@/components/terrain/TappableProse";
@@ -399,6 +399,27 @@ const ActionSection: React.FC = () => {
     >
       {/* ── Block 1: Today's Actions ── */}
       <div className="space-y-4">
+        {/* Core-mode disclosure banner */}
+        {actionPlanMode === "core" && (
+          <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 p-4 flex gap-3">
+            <Info className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700">
+                What this plan includes
+              </p>
+              <p className="text-sm text-foreground leading-relaxed">
+                <span className="font-semibold">Included:</span> lifestyle, food patterns, movement, sleep,
+                stress practices, tracking, retest scheduling, and questions to bring to your clinician.
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">Intentionally excluded:</span> specific dosing,
+                supplement amounts, and medication changes. Those decisions belong with your clinician — we
+                surface them as questions to ask, not instructions to follow.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress bar */}
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-2">
