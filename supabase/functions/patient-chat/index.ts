@@ -397,9 +397,10 @@ Your job: explain what was found, what it means for how they feel and how they l
 
 ### Biological interpreter — constitutional role
 
-You are a biological interpreter for this specific patient. Your job is to help them understand the shape of their biology — patterns, trends, contradictions, what their data is showing, what is uncertain, what they should pay attention to, and what to ask their clinician.
-
-You are NOT a clinical authority. You do not prescribe, titrate, optimize, or substitute medications. You do not generate treatment protocols. You do not tell the patient what to start, stop, switch, increase, or reduce.
+You are a biological interpreter for this specific patient. Your job
+is to help them understand the shape of their biology — patterns,
+trends, contradictions, what their data is showing, what is uncertain,
+what they should pay attention to, and what to ask their clinician.
 
 What you do:
 - explain the biology
@@ -410,17 +411,22 @@ What you do:
 - generate doctor-ready questions
 - explain mechanisms (educational, not directive)
 - track change over time
+- use patient data only when it is present and witnessed
+- label uncertainty when evidence is incomplete
+- prepare the patient for a productive conversation with their clinician
 
 What you do NOT do:
-- recommend doses or dosing schedules
+- recommend doses, dosing schedules, or supplement protocols
 - tell the patient to start, stop, switch, increase, reduce, or titrate
-- generate a treatment protocol
-- claim a specific intervention is "right for you"
+- generate a treatment plan
+- claim a specific intervention is the right choice for this patient
 - substitute one medication for another
+- act as a clinician
 
-If the patient asks about an emergency or overdose situation, route them to Poison Control (1-800-222-1222) or 911. Do not determine a safe dose in chat.
-
-The boundary is visible. When the conversation pulls toward clinical authority, name the line: "I want to keep this in the right lane. I can help explain what your data may be showing and help you prepare the right question, but I should not tell you to start, stop, switch, increase, reduce, or dose a medication or supplement."
+When the patient asks an emergency-shaped question (overdose, accidental
+ingestion, severe symptoms, child or pet ingestion), give a brief
+biological framing and direct them to emergency care. Do not estimate
+safe doses.
 
 ---
 
@@ -1378,23 +1384,78 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ? "google/gemini-3-flash-preview"
         : requestedModel;
 
-    const providerResponse = await handleLovableStream(
-      messages,
-      systemPrompt,
-      normalizedModel
-    );
-
-    if (!providerResponse.ok) {
-      return providerResponse; // already carries error JSON
+    // ------------------------------------------------------------------------
+    // Phase 6b.2: Server-buffered admission gate.
+    //
+    // The validator is not a correction layer. It is an admission gate.
+    // Invalid output does not get corrected after exposure — it does not
+    // cross. Therefore: collect the full LLM response server-side, run the
+    // full validation pipeline, and only then emit a single JSON response
+    // to the client. No SSE. No streaming bytes ahead of the gate.
+    // ------------------------------------------------------------------------
+    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!lovableKey) {
+      return new Response(
+        JSON.stringify({ error: "Lovable API key not configured" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
-    // ------------------------------------------------------------------------
-    // Capture-and-queue transform — preserved verbatim.
-    // Pipes upstream SSE through to client while accumulating the full
-    // response text; on flush(), extracts doctor-questions and awaits the
-    // queue insert so Deno Deploy does not terminate the worker early.
-    // ------------------------------------------------------------------------
-    let capturedResponse = "";
+    const llmResponse = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: normalizedModel,
+          stream: false,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages,
+          ],
+        }),
+      }
+    );
+
+    if (!llmResponse.ok) {
+      if (llmResponse.status === 429) {
+        return new Response(
+          JSON.stringify({
+            error: "Rate limit exceeded. Please wait a moment and try again.",
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      if (llmResponse.status === 402) {
+        return new Response(
+          JSON.stringify({
+            error: "AI credits exhausted. Please add funds in Settings → Workspace → Usage.",
+          }),
+          { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const errText = await llmResponse.text();
+      console.error("[patient-chat] LLM gateway error:", llmResponse.status, errText);
+      return new Response(
+        JSON.stringify({ error: "LLM gateway error" }),
+        { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    const llmJson = await llmResponse.json();
+    const capturedResponse: string = llmJson?.choices?.[0]?.message?.content ?? "";
+
+    if (!capturedResponse) {
+      console.error("[patient-chat] LLM returned empty content");
+      return new Response(
+        JSON.stringify({ error: "Empty response from LLM" }),
+        { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
@@ -1403,140 +1464,138 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const dosePolicyContext: DosePolicyContext =
       computeDosePolicyContext(lastUserMessage);
 
-    const captureTransform = new TransformStream({
-      transform(chunk, controller) {
-        const text = new TextDecoder().decode(chunk);
-        controller.enqueue(chunk);
-        const lines = text.split("\n");
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) capturedResponse += content;
-          } catch {
-            /* ignore non-JSON keepalives */
-          }
+    // ----- Step 1: clinical authority check (constitutional) -----
+    const roleResult = validateInterpreterRole(capturedResponse);
+
+    let finalOutput = capturedResponse;
+    let status:
+      | "passed"
+      | "failed_with_warnings"
+      | "replaced_with_fallback"
+      | "replaced_with_emergency_routing"
+      | "regenerated_successfully"
+      | "regenerated_then_replaced" = "passed";
+    let replacementTemplateUsed: string | null = null;
+    let regenerationAttempted = false;
+    let regenerationSucceeded: boolean | null = null;
+
+    const eligibleForRegen =
+      !roleResult.valid &&
+      !dosePolicyContext.emergencyIntentPresent &&
+      activeClusters &&
+      activeClusters.length > 0;
+
+    if (eligibleForRegen) {
+      regenerationAttempted = true;
+      const regenerated = await attemptCorrectiveRegeneration(
+        capturedResponse,
+        roleResult.violations,
+        lastUserMessage,
+        systemPrompt,
+        normalizedModel,
+      );
+
+      if (regenerated) {
+        const reValidate = validateInterpreterRole(regenerated);
+        if (reValidate.valid) {
+          finalOutput = regenerated;
+          status = "regenerated_successfully";
+          regenerationSucceeded = true;
+        } else {
+          regenerationSucceeded = false;
+          finalOutput = replacementTemplateForViolation(reValidate.violations);
+          status = "regenerated_then_replaced";
+          replacementTemplateUsed = "role_violation_after_regen";
         }
-      },
-      async flush() {
-        if (!capturedResponse) return;
+      } else {
+        regenerationSucceeded = false;
+        finalOutput = replacementTemplateForViolation(roleResult.violations);
+        status = "replaced_with_fallback";
+        replacementTemplateUsed = "role_violation";
+      }
+    } else if (!roleResult.valid) {
+      finalOutput = replacementTemplateForViolation(roleResult.violations);
+      status = "replaced_with_fallback";
+      replacementTemplateUsed = "role_violation";
+    }
 
-        // ----- Step 1: clinical authority check (constitutional) -----
-        const roleResult = validateInterpreterRole(capturedResponse);
-
-        let finalOutput = capturedResponse;
-        let status:
-          | "passed"
-          | "failed_with_warnings"
-          | "replaced_with_fallback"
-          | "replaced_with_emergency_routing"
-          | "regenerated_successfully"
-          | "regenerated_then_replaced" = "passed";
-        let replacementTemplateUsed: string | null = null;
-        let regenerationAttempted = false;
-        let regenerationSucceeded: boolean | null = null;
-
-        const eligibleForRegen =
-          !roleResult.valid &&
-          !dosePolicyContext.emergencyIntentPresent &&
-          activeClusters &&
-          activeClusters.length > 0;
-
-        if (eligibleForRegen) {
-          regenerationAttempted = true;
-          const regenerated = await attemptCorrectiveRegeneration(
-            capturedResponse,
-            roleResult.violations,
-            lastUserMessage,
-            systemPrompt,
-            normalizedModel,
-          );
-
-          if (regenerated) {
-            const reValidate = validateInterpreterRole(regenerated);
-            if (reValidate.valid) {
-              finalOutput = regenerated;
-              status = "regenerated_successfully";
-              regenerationSucceeded = true;
-            } else {
-              regenerationSucceeded = false;
-              finalOutput = replacementTemplateForViolation(reValidate.violations);
-              status = "regenerated_then_replaced";
-              replacementTemplateUsed = "role_violation_after_regen";
-            }
-          } else {
-            regenerationSucceeded = false;
-            finalOutput = replacementTemplateForViolation(roleResult.violations);
-            status = "replaced_with_fallback";
-            replacementTemplateUsed = "role_violation";
-          }
-        } else if (!roleResult.valid) {
-          finalOutput = replacementTemplateForViolation(roleResult.violations);
+    // ----- Step 2: dose policy check (special case) -----
+    if (status === "passed" || status === "regenerated_successfully") {
+      const doseResult = validateDoseTokens(finalOutput, dosePolicyContext);
+      if (!doseResult.valid) {
+        if (dosePolicyContext.emergencyIntentPresent) {
+          finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
+          status = "replaced_with_emergency_routing";
+          replacementTemplateUsed = "emergency_routing";
+        } else {
+          finalOutput = NO_DOSE_FALLBACK;
           status = "replaced_with_fallback";
-          replacementTemplateUsed = "role_violation";
+          replacementTemplateUsed = "no_dose_fallback";
         }
+      }
+    }
 
-        // ----- Step 2: dose policy check (special case) -----
-        if (status === "passed" || status === "regenerated_successfully") {
-          const doseResult = validateDoseTokens(finalOutput, dosePolicyContext);
-          if (!doseResult.valid) {
-            if (dosePolicyContext.emergencyIntentPresent) {
-              finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
-              status = "replaced_with_emergency_routing";
-              replacementTemplateUsed = "emergency_routing";
-            } else {
-              finalOutput = NO_DOSE_FALLBACK;
-              status = "replaced_with_fallback";
-              replacementTemplateUsed = "no_dose_fallback";
-            }
-          }
-        }
+    // ----- Step 3: emergency intent without dose token (independent path) -----
+    if (
+      status === "passed" &&
+      dosePolicyContext.emergencyIntentPresent &&
+      !dosePolicyContext.userMentionedDose
+    ) {
+      finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
+      status = "replaced_with_emergency_routing";
+      replacementTemplateUsed = "emergency_routing";
+    }
 
-        // ----- Step 3: doctor-question extraction (against validated output) -----
-        const questions = extractQueuedQuestions(finalOutput);
-        if (questions.length > 0) {
-          try {
-            await queueExtractedQuestions(userId, questions, lastUserMessage);
-          } catch (e) {
-            console.error("Question queue insert failed:", e);
-          }
-        }
+    // ----- Step 4: doctor-question extraction (against final output only) -----
+    const questions = extractQueuedQuestions(finalOutput);
+    if (questions.length > 0) {
+      try {
+        await queueExtractedQuestions(userId, questions, lastUserMessage);
+      } catch (e) {
+        console.error("Question queue insert failed:", e);
+      }
+    }
 
-        // ----- Step 4: audit log -----
-        await logValidation(supabaseAdmin, userId, status, {
-          role_violation: roleResult.valid
-            ? null
-            : {
-                violations: roleResult.violations,
-                violation_count: roleResult.violations.length,
-              },
-          dose_policy_context: dosePolicyContext,
+    // ----- Step 5: audit log (always log original + final for diagnostics) -----
+    await logValidation(supabaseAdmin, userId, status, {
+      role_violation: roleResult.valid
+        ? null
+        : {
+            violations: roleResult.violations,
+            violation_count: roleResult.violations.length,
+          },
+      dose_policy_context: dosePolicyContext,
+      routing_mode: dosePolicyContext.routingMode,
+      violations: [],
+      dose_patterns_matched: dosePolicyContext.userDoseTokens,
+      original_output: capturedResponse,
+      replaced_with: finalOutput,
+      replacement_template_used: replacementTemplateUsed,
+      regeneration_attempted: regenerationAttempted,
+      regeneration_succeeded: regenerationSucceeded,
+      cluster_count: activeClusters?.length ?? 0,
+      sentences_checked: capturedResponse.split(/[.!?]+/).length,
+      last_user_message: lastUserMessage,
+    });
+
+    return new Response(
+      JSON.stringify({
+        role: "assistant",
+        content: finalOutput,
+        validation: {
+          status,
           routing_mode: dosePolicyContext.routingMode,
-          violations: [],
-          dose_patterns_matched: dosePolicyContext.userDoseTokens,
-          original_output: status !== "passed" ? capturedResponse : null,
-          replaced_with: status !== "passed" ? finalOutput : null,
           replacement_template_used: replacementTemplateUsed,
-          regeneration_attempted: regenerationAttempted,
-          regeneration_succeeded: regenerationSucceeded,
-          cluster_count: activeClusters?.length ?? 0,
-          sentences_checked: capturedResponse.split(/[.!?]+/).length,
-          last_user_message: lastUserMessage,
-        });
-      },
-    });
-
-    return new Response(providerResponse.body!.pipeThrough(captureTransform), {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        ...corsHeaders,
-      },
-    });
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (err) {
     console.error("patient-chat fatal error", err);
     return new Response(
