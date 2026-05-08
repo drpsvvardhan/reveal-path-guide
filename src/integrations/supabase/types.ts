@@ -1050,11 +1050,17 @@ export type Database = {
           cluster_count: number | null
           created_at: string
           dose_patterns_matched: string[]
+          dose_policy_context: Json | null
           id: string
           last_user_message: string | null
           message_role: string
           original_output: string | null
+          regeneration_attempted: boolean
+          regeneration_succeeded: boolean | null
           replaced_with: string | null
+          replacement_template_used: string | null
+          role_violation: Json | null
+          routing_mode: string | null
           sentences_checked: number | null
           status: string
           user_id: string
@@ -1064,11 +1070,17 @@ export type Database = {
           cluster_count?: number | null
           created_at?: string
           dose_patterns_matched?: string[]
+          dose_policy_context?: Json | null
           id?: string
           last_user_message?: string | null
           message_role?: string
           original_output?: string | null
+          regeneration_attempted?: boolean
+          regeneration_succeeded?: boolean | null
           replaced_with?: string | null
+          replacement_template_used?: string | null
+          role_violation?: Json | null
+          routing_mode?: string | null
           sentences_checked?: number | null
           status: string
           user_id: string
@@ -1078,11 +1090,17 @@ export type Database = {
           cluster_count?: number | null
           created_at?: string
           dose_patterns_matched?: string[]
+          dose_policy_context?: Json | null
           id?: string
           last_user_message?: string | null
           message_role?: string
           original_output?: string | null
+          regeneration_attempted?: boolean
+          regeneration_succeeded?: boolean | null
           replaced_with?: string | null
+          replacement_template_used?: string | null
+          role_violation?: Json | null
+          routing_mode?: string | null
           sentences_checked?: number | null
           status?: string
           user_id?: string
