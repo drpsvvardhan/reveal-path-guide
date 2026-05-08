@@ -49,6 +49,19 @@ import {
   SAFE_FALLBACK_MESSAGE,
 } from "../_shared/dosePattern.ts";
 import {
+  validateInterpreterRole,
+  replacementTemplateForViolation,
+  buildCorrectiveRegenFeedback,
+  type AuthorityViolation,
+} from "../_shared/clinicalAuthorityPolicy.ts";
+import {
+  computeDosePolicyContext,
+  validateDoseTokens,
+  buildEmergencyRoutingMessage,
+  NO_DOSE_FALLBACK,
+  type DosePolicyContext,
+} from "../_shared/dosePolicy.ts";
+import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
@@ -379,6 +392,35 @@ ${documents.map((d: any) => `- ${d.name} (${d.type})`).join("\n")}
 This person invested significant effort to generate this BioTwin: samples, sensors, food logs, questionnaires, medical records. They deserve substantive engagement with their own data — not condescension, not vague reassurance, not jargon walls.
 
 Your job: explain what was found, what it means for how they feel and how they live, and what to do about it. Always in plain language. Always with respect for their intelligence. Always with the physician in the loop.
+
+---
+
+### Biological interpreter — constitutional role
+
+You are a biological interpreter for this specific patient. Your job is to help them understand the shape of their biology — patterns, trends, contradictions, what their data is showing, what is uncertain, what they should pay attention to, and what to ask their clinician.
+
+You are NOT a clinical authority. You do not prescribe, titrate, optimize, or substitute medications. You do not generate treatment protocols. You do not tell the patient what to start, stop, switch, increase, or reduce.
+
+What you do:
+- explain the biology
+- connect biomarkers and trends across the patient's data
+- surface contradictions and uncertainty honestly
+- contextualize risk in the patient's specific terrain
+- frame readiness — what is the patient ready to act on, what is not yet ready
+- generate doctor-ready questions
+- explain mechanisms (educational, not directive)
+- track change over time
+
+What you do NOT do:
+- recommend doses or dosing schedules
+- tell the patient to start, stop, switch, increase, reduce, or titrate
+- generate a treatment protocol
+- claim a specific intervention is "right for you"
+- substitute one medication for another
+
+If the patient asks about an emergency or overdose situation, route them to Poison Control (1-800-222-1222) or 911. Do not determine a safe dose in chat.
+
+The boundary is visible. When the conversation pulls toward clinical authority, name the line: "I want to keep this in the right lane. I can help explain what your data may be showing and help you prepare the right question, but I should not tell you to start, stop, switch, increase, reduce, or dose a medication or supplement."
 
 ---
 
@@ -903,7 +945,13 @@ async function handleLovableStream(
 async function logValidation(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  status: "passed" | "failed_with_warnings" | "replaced_with_fallback",
+  status:
+    | "passed"
+    | "failed_with_warnings"
+    | "replaced_with_fallback"
+    | "replaced_with_emergency_routing"
+    | "regenerated_successfully"
+    | "regenerated_then_replaced",
   payload: {
     violations?: unknown[];
     dose_patterns_matched?: string[];
@@ -912,6 +960,12 @@ async function logValidation(
     cluster_count?: number;
     sentences_checked?: number;
     last_user_message?: string;
+    role_violation?: unknown;
+    dose_policy_context?: unknown;
+    routing_mode?: string | null;
+    replacement_template_used?: string | null;
+    regeneration_attempted?: boolean;
+    regeneration_succeeded?: boolean | null;
   },
 ) {
   try {
@@ -925,6 +979,12 @@ async function logValidation(
       cluster_count: payload.cluster_count ?? null,
       sentences_checked: payload.sentences_checked ?? null,
       last_user_message: payload.last_user_message ?? null,
+      role_violation: payload.role_violation ?? null,
+      dose_policy_context: payload.dose_policy_context ?? null,
+      routing_mode: payload.routing_mode ?? null,
+      replacement_template_used: payload.replacement_template_used ?? null,
+      regeneration_attempted: payload.regeneration_attempted ?? false,
+      regeneration_succeeded: payload.regeneration_succeeded ?? null,
     });
   } catch (e) {
     console.error("[patient-chat] validation log insert failed:", e);
@@ -1015,6 +1075,60 @@ async function queueExtractedQuestions(
 // ============================================================================
 // REQUEST HANDLER
 // ============================================================================
+
+// Single-pass corrective regeneration. Reuses the Lovable AI gateway with
+// the same model used for the primary stream. Returns the regenerated text
+// or null on any failure / timeout. Doctrine: regeneration is a courtesy,
+// not a guarantee — the validator remains law.
+async function attemptCorrectiveRegeneration(
+  originalOutput: string,
+  violations: AuthorityViolation[],
+  userMessage: string,
+  systemPrompt: string,
+  model: string,
+  timeoutMs = 8000,
+): Promise<string | null> {
+  const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableKey) return null;
+
+  const feedback = buildCorrectiveRegenFeedback(violations);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch(
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${lovableKey}`,
+        },
+        body: JSON.stringify({
+          model: model || "google/gemini-3-flash-preview",
+          stream: false,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+            { role: "assistant", content: originalOutput },
+            { role: "user", content: feedback },
+          ],
+        }),
+      },
+    );
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const text = json?.choices?.[0]?.message?.content;
+    return typeof text === "string" && text.trim().length > 0 ? text : null;
+  } catch (e) {
+    console.error("[patient-chat] corrective regeneration failed:", e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -1284,6 +1398,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
+    // Computed once from the user's message; the routing decision depends
+    // only on the user's query, not on the model output.
+    const dosePolicyContext: DosePolicyContext =
+      computeDosePolicyContext(lastUserMessage);
+
     const captureTransform = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -1305,8 +1424,79 @@ Deno.serve(async (req: Request): Promise<Response> => {
       async flush() {
         if (!capturedResponse) return;
 
-        // EXISTING — preserve doctor-question extraction.
-        const questions = extractQueuedQuestions(capturedResponse);
+        // ----- Step 1: clinical authority check (constitutional) -----
+        const roleResult = validateInterpreterRole(capturedResponse);
+
+        let finalOutput = capturedResponse;
+        let status:
+          | "passed"
+          | "failed_with_warnings"
+          | "replaced_with_fallback"
+          | "replaced_with_emergency_routing"
+          | "regenerated_successfully"
+          | "regenerated_then_replaced" = "passed";
+        let replacementTemplateUsed: string | null = null;
+        let regenerationAttempted = false;
+        let regenerationSucceeded: boolean | null = null;
+
+        const eligibleForRegen =
+          !roleResult.valid &&
+          !dosePolicyContext.emergencyIntentPresent &&
+          activeClusters &&
+          activeClusters.length > 0;
+
+        if (eligibleForRegen) {
+          regenerationAttempted = true;
+          const regenerated = await attemptCorrectiveRegeneration(
+            capturedResponse,
+            roleResult.violations,
+            lastUserMessage,
+            systemPrompt,
+            normalizedModel,
+          );
+
+          if (regenerated) {
+            const reValidate = validateInterpreterRole(regenerated);
+            if (reValidate.valid) {
+              finalOutput = regenerated;
+              status = "regenerated_successfully";
+              regenerationSucceeded = true;
+            } else {
+              regenerationSucceeded = false;
+              finalOutput = replacementTemplateForViolation(reValidate.violations);
+              status = "regenerated_then_replaced";
+              replacementTemplateUsed = "role_violation_after_regen";
+            }
+          } else {
+            regenerationSucceeded = false;
+            finalOutput = replacementTemplateForViolation(roleResult.violations);
+            status = "replaced_with_fallback";
+            replacementTemplateUsed = "role_violation";
+          }
+        } else if (!roleResult.valid) {
+          finalOutput = replacementTemplateForViolation(roleResult.violations);
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "role_violation";
+        }
+
+        // ----- Step 2: dose policy check (special case) -----
+        if (status === "passed" || status === "regenerated_successfully") {
+          const doseResult = validateDoseTokens(finalOutput, dosePolicyContext);
+          if (!doseResult.valid) {
+            if (dosePolicyContext.emergencyIntentPresent) {
+              finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
+              status = "replaced_with_emergency_routing";
+              replacementTemplateUsed = "emergency_routing";
+            } else {
+              finalOutput = NO_DOSE_FALLBACK;
+              status = "replaced_with_fallback";
+              replacementTemplateUsed = "no_dose_fallback";
+            }
+          }
+        }
+
+        // ----- Step 3: doctor-question extraction (against validated output) -----
+        const questions = extractQueuedQuestions(finalOutput);
         if (questions.length > 0) {
           try {
             await queueExtractedQuestions(userId, questions, lastUserMessage);
@@ -1315,57 +1505,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
           }
         }
 
-        // NEW — post-stream validation.
-        // 1. Deterministic dose-pattern check — fires regardless of cluster context.
-        const dosePatterns = detectDosePatterns(capturedResponse);
-        if (dosePatterns.length > 0) {
-          await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
-            dose_patterns_matched: dosePatterns,
-            original_output: capturedResponse,
-            replaced_with: SAFE_FALLBACK_MESSAGE,
-            last_user_message: lastUserMessage,
-          });
-          return;
-        }
-
-        // 2. Vocabulary-license validation against active clusters.
-        const clusterTierMap = new Map<string, ClusterTier>();
-        for (const c of activeClusters ?? []) {
-          if (c.id && c.confidence_tier) {
-            clusterTierMap.set(c.id, c.confidence_tier as ClusterTier);
-          }
-        }
-
-        if (clusterTierMap.size > 0) {
-          const { sentenceToClusterMap } = parseProseAndCitations(capturedResponse);
-          const validation = validateProseAgainstClustersWithAudience(
-            capturedResponse,
-            clusterTierMap,
-            sentenceToClusterMap,
-            "patient",
-          );
-
-          if (validation.valid) {
-            await logValidation(supabaseAdmin, userId, "passed", {
-              cluster_count: clusterTierMap.size,
-              sentences_checked: validation.sentences_checked,
-              last_user_message: lastUserMessage,
-            });
-          } else {
-            await logValidation(supabaseAdmin, userId, "failed_with_warnings", {
-              violations: validation.violations,
-              original_output: capturedResponse,
-              cluster_count: clusterTierMap.size,
-              sentences_checked: validation.sentences_checked,
-              last_user_message: lastUserMessage,
-            });
-          }
-        } else {
-          await logValidation(supabaseAdmin, userId, "passed", {
-            cluster_count: 0,
-            last_user_message: lastUserMessage,
-          });
-        }
+        // ----- Step 4: audit log -----
+        await logValidation(supabaseAdmin, userId, status, {
+          role_violation: roleResult.valid
+            ? null
+            : {
+                violations: roleResult.violations,
+                violation_count: roleResult.violations.length,
+              },
+          dose_policy_context: dosePolicyContext,
+          routing_mode: dosePolicyContext.routingMode,
+          violations: [],
+          dose_patterns_matched: dosePolicyContext.userDoseTokens,
+          original_output: status !== "passed" ? capturedResponse : null,
+          replaced_with: status !== "passed" ? finalOutput : null,
+          replacement_template_used: replacementTemplateUsed,
+          regeneration_attempted: regenerationAttempted,
+          regeneration_succeeded: regenerationSucceeded,
+          cluster_count: activeClusters?.length ?? 0,
+          sentences_checked: capturedResponse.split(/[.!?]+/).length,
+          last_user_message: lastUserMessage,
+        });
       },
     });
 
