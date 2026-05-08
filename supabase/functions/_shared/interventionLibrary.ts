@@ -404,3 +404,19 @@ export function normalizeBiomarkerName(raw: string): string {
   }
   return lower;
 }
+
+// ── Core-mode policy gate ──
+const CORE_FORBIDDEN_CLASSES: Set<InterventionPolicyClass> = new Set([
+  "supplement_with_dose",
+  "medication_change",
+  "titration",
+  "individualized_protocol",
+]);
+
+export function isPermittedInCoreMode(intervention: Intervention): boolean {
+  return !CORE_FORBIDDEN_CLASSES.has(intervention.policy_class);
+}
+
+export function isForbiddenInCoreMode(intervention: Intervention): boolean {
+  return CORE_FORBIDDEN_CLASSES.has(intervention.policy_class);
+}
