@@ -60,12 +60,12 @@ export const FORBIDDEN_AUTHORITY_PATTERNS: Array<{
   },
   {
     kind: "protocol_directive",
-    pattern: /\b(your\s+protocol\s+(?:is|should\s+be)|the\s+protocol\s+for\s+you|i(?:'ll|\s+will)\s+create\s+(?:a|your)\s+protocol|here(?:'s|\s+is)\s+your\s+(?:treatment\s+)?plan)\b/i,
+    pattern: /\b(your\s+protocol\s+(?:is|should\s+be)|the\s+protocol\s+for\s+you|i(?:'ll|\s+will)\s+create\s+(?:a|your)\s+protocol|here(?:'s|\s+is)\s+your\s+(?:treatment\s+)?(?:plan|protocol))\b/i,
     description: "protocol or treatment plan directive",
   },
   {
     kind: "optimization_claim",
-    pattern: /\b((?:this|that)\s+(?:supplement|medication|protocol|intervention)\s+is\s+(?:safe|right|optimal|best)\s+for\s+you|the\s+(?:right|best|optimal)\s+(?:choice|option)\s+for\s+you\s+is)\b/i,
+    pattern: /\b((?:this|that)\s+(?:supplement|medication|protocol|intervention)\s+is\s+(?:safe|right|optimal|best)\s+for\s+you|the\s+(?:right|best|optimal)\s+(?:choice|option)\s+for\s+you\s+is|is\s+the\s+(?:right|best|optimal)\s+(?:choice|option)\s+for\s+you)\b/i,
     description: "claim that a specific intervention is right for the patient",
   },
 ];
