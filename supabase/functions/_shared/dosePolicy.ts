@@ -35,7 +35,7 @@ const DOSE_TOKEN_PATTERN = new RegExp(
     String.raw`IU|mg|mcg|µg|ug|g|ng|tsp|tbsp|ml|cc|kg|` +
     String.raw`grams?|milligrams?|micrograms?|nanograms?|` +
     String.raw`drops?|tablets?|capsules?|softgels?|units?|servings?|pills?|doses?` +
-    String.raw`)\b`,
+    String.raw`)(?![\/a-zA-Z])`,
   "gi",
 );
 
