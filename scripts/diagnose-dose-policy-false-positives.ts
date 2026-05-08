@@ -21,7 +21,7 @@ import {
 // dose detector returned no tokens, the row is structurally clean — meaning
 // any prior false-positive replacement (with NO_DOSE_FALLBACK) was a bug.
 const CONCENTRATION_UNIT_PATTERN =
-  /\b\d{1,5}(?:[.,]\d{1,3})?\s*(?:mg|ng|µg|ug|pg|mcg|g|mmol|µmol|umol|nmol|pmol|mIU|µIU|uIU|IU)\s*\/\s*(?:dL|mL|L|mm3|mm³)\b/gi;
+  /\b\d{1,5}(?:[.,]\d{1,3})?\s*(?:mg|ng|µg|ug|pg|mcg|g|kg|mmol|µmol|umol|nmol|pmol|mIU|µIU|uIU|IU|U|mEq|cells|mcL)\s*\/\s*(?:dL|mL|L|mm3|mm³|µL|uL|hpf|HPF)\b/gi;
 
 export interface AuditRow {
   id: string;
