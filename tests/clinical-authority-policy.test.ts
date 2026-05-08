@@ -93,9 +93,73 @@ describe("dose policy — token extraction", () => {
     expect(tokens.some((t) => t.includes("milligram"))).toBe(true);
   });
 
-  it("does not crash on unit-less numbers", () => {
+  it("does not match unit-less numbers", () => {
     const tokens = extractDoseTokens("your ApoB is 102 and your LDL-C is 148");
-    expect(tokens.length).toBeGreaterThanOrEqual(0);
+    expect(tokens).toEqual([]);
+  });
+
+  it("does not match numbers attached to lab concentration units", () => {
+    const tokens = extractDoseTokens("your ApoB is 102 mg/dL and your LDL-C is 148 mg/dL");
+    expect(tokens).toEqual([]);
+  });
+});
+
+describe("dose policy — does not false-positive on lab concentration units", () => {
+  it("does not match mg/dL", () => {
+    expect(extractDoseTokens("Your ApoB is 102 mg/dL.")).toEqual([]);
+    expect(extractDoseTokens("LDL-C of 148 mg/dL")).toEqual([]);
+    expect(extractDoseTokens("HbA1c with eAG of 95 mg/dL")).toEqual([]);
+  });
+
+  it("does not match ng/mL", () => {
+    expect(extractDoseTokens("Vitamin D at 92 ng/mL")).toEqual([]);
+    expect(extractDoseTokens("Testosterone 671 ng/dL")).toEqual([]);
+  });
+
+  it("does not match mg/L", () => {
+    expect(extractDoseTokens("hs-CRP at 0.3 mg/L")).toEqual([]);
+  });
+
+  it("does not match mmol/L or µmol/L", () => {
+    expect(extractDoseTokens("Glucose 5.2 mmol/L")).toEqual([]);
+    expect(extractDoseTokens("Bilirubin 12 µmol/L")).toEqual([]);
+  });
+
+  it("does not match g/dL", () => {
+    expect(extractDoseTokens("Hemoglobin 14.2 g/dL")).toEqual([]);
+    expect(extractDoseTokens("Albumin 4.5 g/dL")).toEqual([]);
+  });
+
+  it("does not match unit-prefix-of-something cases", () => {
+    expect(extractDoseTokens("the value 5mgA is malformed")).toEqual([]);
+  });
+
+  it("still matches genuine dose tokens", () => {
+    expect(extractDoseTokens("take 1g of melatonin").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("5000 IU vitamin D").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("200 mg magnesium").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("1 gram total").length).toBeGreaterThan(0);
+    expect(extractDoseTokens("1,000 milligrams").length).toBeGreaterThan(0);
+  });
+
+  it("matches dose tokens at end of sentence with period", () => {
+    expect(extractDoseTokens("She took 5mg.").length).toBeGreaterThan(0);
+  });
+
+  it("matches dose tokens followed by space then word", () => {
+    expect(extractDoseTokens("5mg twice daily").length).toBeGreaterThan(0);
+  });
+
+  it("does not falsely match a clinical sentence with mixed content", () => {
+    const text = "Your ApoB at 102 mg/dL alongside LDL-C of 148 mg/dL points to elevated particle burden. The pattern is worth bringing to your physician.";
+    expect(extractDoseTokens(text)).toEqual([]);
+  });
+
+  it("does match when a real dose appears alongside lab values", () => {
+    const text = "Your vitamin D at 22 ng/mL is below range. The clinician may suggest 1000 IU as starting supplementation.";
+    const tokens = extractDoseTokens(text);
+    expect(tokens.length).toBe(1);
+    expect(tokens[0]).toContain("1000 iu");
   });
 });
 
