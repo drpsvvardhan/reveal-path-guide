@@ -304,6 +304,10 @@ Deno.serve(async (req) => {
       category: iv.category,
       sequence_priority: iv.sequence_priority,
       policy_class: iv.policy_class,
+      core_title: iv.core_title,
+      core_rationale: iv.core_rationale,
+      core_observation: iv.core_observation,
+      core_clinician_question: iv.core_clinician_question,
       source_intervention: iv,
     }));
 
@@ -328,6 +332,10 @@ Deno.serve(async (req) => {
           sequence_priority: converted.sequence_priority,
           policy_class: converted.policy_class,
           source_intervention_id: converted.source_intervention_id,
+          core_title: a.source_intervention.core_title,
+          core_rationale: a.source_intervention.core_rationale,
+          core_observation: a.source_intervention.core_observation,
+          core_clinician_question: a.source_intervention.core_clinician_question,
         };
       }
       const { source_intervention, ...rest } = a;

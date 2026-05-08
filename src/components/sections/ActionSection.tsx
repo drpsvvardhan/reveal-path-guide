@@ -2,14 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
-import { Check, ChevronDown, ChevronUp, Clock, FlaskConical, Info } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clock, FlaskConical } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { motion } from "framer-motion";
 import TappableProse from "@/components/terrain/TappableProse";
 import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
-import AsideProgressRing from "@/components/layout/AsideProgressRing";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
 
 // ── Types ──
@@ -29,6 +28,10 @@ interface ActionPlanAction {
   rationale?: string;
   doctor_question?: string;
   source_intervention_id?: string;
+  core_title?: string;
+  core_rationale?: string;
+  core_observation?: string;
+  core_clinician_question?: string;
 }
 
 interface RetestEntry {
@@ -105,8 +108,25 @@ const InterventionCard: React.FC<{
   index: number;
   done: boolean;
   onToggle: () => void;
-}> = ({ action, index, done, onToggle }) => {
+  preferCore: boolean;
+}> = ({ action, index, done, onToggle, preferCore }) => {
   const [howOpen, setHowOpen] = useState(false);
+
+  // Prefer interpreter-voice Core fields when available; otherwise fall back
+  // to the legacy what/how authored for clinician-supervised contexts.
+  const hasCore = Boolean(action.core_title || action.core_rationale);
+  if (preferCore && !hasCore) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[ActionSection] Core-mode fields missing for intervention "${action.id}" — falling back to directive what/how. Author core_title/core_rationale/core_observation/core_clinician_question on this entry in interventionLibrary.ts.`,
+    );
+  }
+  const title = (preferCore && action.core_title) || action.what;
+  const body = (preferCore && action.core_rationale) || action.why;
+  const observation = preferCore ? action.core_observation : null;
+  const howText = (preferCore && action.core_observation) ? null : action.how;
+  const clinicianQuestion =
+    (preferCore && action.core_clinician_question) || action.doctor_question;
 
   return (
     <motion.div
@@ -120,17 +140,17 @@ const InterventionCard: React.FC<{
       <div className="flex items-start gap-4">
         <ActionCheck done={done} onToggle={onToggle} />
         <div className="flex-1 min-w-0">
-          {/* What */}
+          {/* Title — interpreter voice when available */}
           <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
-            <TappableProse text={action.what} />
+            <TappableProse text={title} />
           </h4>
 
-          {/* Why */}
+          {/* Body — terrain-language rationale */}
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            <TappableProse text={action.why} />
+            <TappableProse text={body} />
           </p>
 
-          {/* Coordinate + gate badges */}
+          {/* Coordinate + class chips */}
           <div className="flex items-center gap-1.5 flex-wrap mb-3">
             {action.policy_class && (
               <span
@@ -158,35 +178,46 @@ const InterventionCard: React.FC<{
               </span>
             ))}
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-sans ml-1">
-              <Clock className="h-2.5 w-2.5" /> retest {action.retest_weeks}w
+              <Clock className="h-2.5 w-2.5" /> next useful check-in ~{action.retest_weeks}w
             </span>
           </div>
 
-          {/* How — expandable */}
+          {/* Observation / how — expandable */}
+          {(observation || howText || clinicianQuestion) && (
           <Collapsible open={howOpen} onOpenChange={setHowOpen}>
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
               {howOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              How to do it
+              {preferCore ? "What to notice" : "How to do it"}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 border-t border-border pt-2">
-              <p className="text-xs text-muted-foreground leading-relaxed"><TappableProse text={action.how} /></p>
-              {action.rationale && (
+              {observation && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={observation} />
+                </p>
+              )}
+              {howText && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <TappableProse text={howText} />
+                </p>
+              )}
+              {!preferCore && action.rationale && (
                 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                   <TappableProse text={action.rationale} />
                 </p>
               )}
-              {action.doctor_question && (
+              {clinicianQuestion && (
                 <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
                   <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
-                    Bring to your clinician
+                    Worth bringing into a clinical conversation
                   </p>
                   <p className="text-xs text-foreground leading-relaxed">
-                    <TappableProse text={action.doctor_question} />
+                    <TappableProse text={clinicianQuestion} />
                   </p>
                 </div>
               )}
             </CollapsibleContent>
           </Collapsible>
+          )}
         </div>
       </div>
     </motion.div>
@@ -198,8 +229,9 @@ const InterventionCard: React.FC<{
 const ActionSection: React.FC = () => {
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
-  const { completedKeys, streak, toggleDone } = useActionCompletions();
+  const { completedKeys, toggleDone } = useActionCompletions();
   const [plan, setPlan] = useState<ActionPlan | null>(null);
+  const [planStartedAt, setPlanStartedAt] = useState<string | null>(null);
   const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const [voiceWarnings, setVoiceWarnings] = useState<any[] | null>(null);
   const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
@@ -231,7 +263,7 @@ const ActionSection: React.FC = () => {
       setLoading(true);
       const { data } = await supabase
         .from("action_plans")
-        .select("today_actions, sequence_explanation, retest_schedule, voice_validation_status, voice_validation_warnings")
+        .select("today_actions, sequence_explanation, retest_schedule, voice_validation_status, voice_validation_warnings, created_at")
         .eq("user_id", userId)
         .eq("status", "active")
         .order("created_at", { ascending: false })
@@ -247,6 +279,17 @@ const ActionSection: React.FC = () => {
         });
         setVoiceStatus((data as any).voice_validation_status ?? null);
         setVoiceWarnings((data as any).voice_validation_warnings ?? null);
+        // Anchor trajectory framing on the earliest plan ever generated
+        // for this user, so "Tracking week N" reflects continuity rather
+        // than the most recent regeneration.
+        const { data: earliest } = await supabase
+          .from("action_plans")
+          .select("created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        setPlanStartedAt((earliest as any)?.created_at ?? (data as any)?.created_at ?? null);
         setLoading(false);
         return;
       }
@@ -288,9 +331,18 @@ const ActionSection: React.FC = () => {
   }, [userId]);
 
   const actions = plan?.today_actions || [];
-  const completedCount = actions.filter((a) => completedKeys.has(a.id)).length;
   const totalCount = actions.length;
-  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const startedCount = actions.filter((a) => completedKeys.has(a.id)).length;
+
+  // ── Trajectory framing (replaces completion %) ──
+  const trajectoryLabel = useMemo(() => {
+    if (!planStartedAt) return "Day 1 of observation";
+    const startMs = new Date(planStartedAt).getTime();
+    const days = Math.max(0, Math.floor((Date.now() - startMs) / (1000 * 60 * 60 * 24)));
+    if (days < 7) return `Day ${days + 1} of observation`;
+    const weeks = Math.floor(days / 7) + 1;
+    return `Tracking week ${weeks}`;
+  }, [planStartedAt]);
 
   if (loading || generating) {
     return (
@@ -338,8 +390,8 @@ const ActionSection: React.FC = () => {
   return (
     <PatientSectionLayout
       eyebrow="WHAT TO DO"
-      title="Actions matched to your terrain"
-      intro="Each intervention below is triggered by your specific data — your scores, your labs, your measurements. Start with the first one. The sequence is deliberate."
+      title="Signals worth working with"
+      intro="Each entry below is matched to a pattern in your biology, lab trends, recovery signals, and daily rhythms. The sequence is deliberate. Move gradually."
       headerExtra={
         <VoiceValidationIndicator
           status={voiceStatus}
@@ -377,65 +429,44 @@ const ActionSection: React.FC = () => {
       }
       aside={
         <AsideVisualPanel
-          title="Today's progress"
-          subtitle="Your sequence is what matters"
+          title={trajectoryLabel}
+          subtitle="Patterns become more meaningful as they repeat over time."
           visual={
-            <AsideProgressRing
-              percent={pct}
-              label="completed"
-              sublabel={`${completedCount} of ${totalCount}`}
-              size={180}
-            />
+            <div className="py-2 text-center">
+              <p className="font-serif text-base text-foreground leading-relaxed">
+                Signals begin to matter when they repeat.
+              </p>
+              <p className="text-[11px] font-sans text-muted-foreground mt-2 italic">
+                Trajectory, not snapshot.
+              </p>
+            </div>
           }
           items={[
-            { label: "Streak", value: `${streak} day${streak !== 1 ? "s" : ""}`, tone: "accent" },
-            { label: "Today", value: `${completedCount} of ${totalCount}` },
-            { label: "Actions", value: `${totalCount} matched` },
+            { label: "Signals being followed", value: `${totalCount}` },
+            { label: "Entries started", value: `${startedCount} of ${totalCount}` },
+            { label: "Next useful check-in", value: "after repeated observations" },
           ]}
-          footnote="The sequence matters more than the pace. Start at the top and work down."
+          footnote="Continuity matters more than pace. The page accumulates meaning across many weeks."
         />
       }
       asideSticky
     >
       {/* ── Block 1: Today's Actions ── */}
       <div className="space-y-4">
-        {/* Core-mode disclosure banner */}
-        {actionPlanMode === "core" && (
-          <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 p-4 flex gap-3">
-            <Info className="h-4 w-4 text-blue-700 mt-0.5 shrink-0" />
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700">
-                What this plan includes
-              </p>
-              <p className="text-sm text-foreground leading-relaxed">
-                <span className="font-semibold">Included:</span> lifestyle, food patterns, movement, sleep,
-                stress practices, tracking, retest scheduling, and questions to bring to your clinician.
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                <span className="font-semibold text-foreground">Intentionally excluded:</span> specific dosing,
-                supplement amounts, and medication changes. Those decisions belong with your clinician — we
-                surface them as questions to ask, not instructions to follow.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Progress bar */}
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm text-muted-foreground font-sans">
-              {completedCount} of {totalCount} completed
-            </p>
-            <p className="text-sm font-sans font-semibold text-primary">{pct}%</p>
-          </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <motion.div
-              className="h-full rounded-full bg-emerald-500"
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-          </div>
+        {/* Orientation panel — how to use this page */}
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-5 space-y-2">
+          <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
+            How to use this page
+          </p>
+          <p className="text-sm text-foreground leading-relaxed">
+            These suggestions are matched to patterns in your biology, lab trends, recovery signals, and daily rhythms.
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            The goal is not to follow a rigid protocol. It is to understand which changes appear to support your terrain over time, which signals deserve attention, and which questions may be worth bringing into a deeper clinical discussion.
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed italic">
+            Move gradually. Notice patterns. The sequence matters more than intensity.
+          </p>
         </div>
 
         {/* Action cards */}
@@ -446,6 +477,7 @@ const ActionSection: React.FC = () => {
             index={i}
             done={completedKeys.has(action.id)}
             onToggle={() => toggleDone(action.id)}
+            preferCore={actionPlanMode === "core"}
           />
         ))}
       </div>
@@ -495,20 +527,16 @@ const ActionSection: React.FC = () => {
         </div>
       )}
 
-      {/* ── Block 4: Mode-conditional copy ── */}
-      <div className="pt-6">
-        <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
-          {actionPlanMode === "core" ? (
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              This action plan is in <span className="font-semibold text-foreground">Core mode</span> — it focuses on lifestyle, tracking, and questions to bring to your clinician. Specific dosing and medication decisions are not covered here. Your clinician is the right partner for those choices.
-            </p>
-          ) : (
+      {/* ── Block 4: BioTwin+ context (only) ── */}
+      {actionPlanMode === "biotwin_plus" && (
+        <div className="pt-6">
+          <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Your action plan is in <span className="font-semibold text-foreground">BioTwin+ mode</span> — it includes clinician-supervised protocols. Each item is reviewed by your care team.
             </p>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </PatientSectionLayout>
   );
 };
