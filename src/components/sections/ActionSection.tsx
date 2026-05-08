@@ -205,9 +205,23 @@ const ActionSection: React.FC = () => {
   const [isRegeneratingVoice, setIsRegeneratingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [actionPlanMode, setActionPlanMode] = useState<"core" | "biotwin_plus">("core");
   const hasTriedGenRef = React.useRef(false);
 
   const userId = effectiveUserId || user?.id;
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("consumer_action_plan_mode")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const mode = (data as any)?.consumer_action_plan_mode;
+      setActionPlanMode(mode === "biotwin_plus" ? "biotwin_plus" : "core");
+    })();
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) return;
