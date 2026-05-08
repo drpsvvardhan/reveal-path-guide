@@ -473,6 +473,21 @@ const ActionSection: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── Block 4: Mode-conditional copy ── */}
+      <div className="pt-6">
+        <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          {actionPlanMode === "core" ? (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              This action plan is in <span className="font-semibold text-foreground">Core mode</span> — it focuses on lifestyle, tracking, and questions to bring to your clinician. Specific dosing and medication decisions are not covered here. Your clinician is the right partner for those choices.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Your action plan is in <span className="font-semibold text-foreground">BioTwin+ mode</span> — it includes clinician-supervised protocols. Each item is reviewed by your care team.
+            </p>
+          )}
+        </div>
+      </div>
     </PatientSectionLayout>
   );
 };
