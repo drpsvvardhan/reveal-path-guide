@@ -30,7 +30,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
           <div>
             <p className="font-serif text-xl text-foreground leading-none">Vizzhy</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-0.5">
-              PatientOS
+              BioIntelligence
             </p>
           </div>
           <div className="flex items-center gap-3">

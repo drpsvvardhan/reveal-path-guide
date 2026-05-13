@@ -10,7 +10,7 @@ const DesktopNav: React.FC<Props> = ({ activeSection, onNavigate }) => (
   <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-border bg-sidebar h-screen sticky top-0 overflow-y-auto">
     <div className="px-5 pt-6 pb-5 border-b border-border">
       <h2 className="font-serif text-lg tracking-tight text-foreground">Vizzhy</h2>
-      <p className="text-[12px] text-muted-foreground mt-0.5 font-sans tracking-wide">PatientOS</p>
+      <p className="text-[12px] text-muted-foreground mt-0.5 font-sans tracking-wide">BioIntelligence</p>
     </div>
     <nav className="flex-1 py-4 px-3">
       {navItems.map((item) => {
