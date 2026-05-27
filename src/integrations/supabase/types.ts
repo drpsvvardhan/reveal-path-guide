@@ -2084,6 +2084,30 @@ export type Database = {
         Returns: number
       }
       fn_normalize_name: { Args: { p_name: string }; Returns: string }
+      get_shared_clinical_summary: {
+        Args: { p_token: string }
+        Returns: {
+          age: number
+          clinician_summary: Json
+          display_name: string
+          first_name: string
+          generated_at: string
+          preferred_name: string
+          sex: string
+        }[]
+      }
+      get_shared_question_queue: {
+        Args: { p_token: string }
+        Returns: {
+          created_at: string
+          display_name: string
+          priority: number
+          question: string
+          question_id: string
+          rationale: string
+          source: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
