@@ -31,41 +31,28 @@ const ClinicalShare: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        // Find user by terrain_share_token + grab demographics for the header
-        const { data: profile, error: pErr } = await supabase
-          .from("profiles")
-          .select("user_id, first_name, preferred_name, display_name, age, sex")
-          .eq("terrain_share_token", token)
-          .maybeSingle();
-
-        if (pErr) throw pErr;
-        if (!profile) { setError("Invalid or expired link."); return; }
+        // Token-scoped RPC: returns only the row matching this exact share token.
+        const { data, error: rpcErr } = await supabase.rpc(
+          "get_shared_clinical_summary",
+          { p_token: token },
+        );
+        if (rpcErr) throw rpcErr;
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row) { setError("Invalid or expired link."); return; }
 
         setPatient({
           name:
-            profile.preferred_name ||
-            profile.first_name ||
-            profile.display_name ||
+            row.preferred_name ||
+            row.first_name ||
+            row.display_name ||
             null,
-          age: profile.age ?? null,
-          sex: profile.sex ?? null,
+          age: row.age ?? null,
+          sex: row.sex ?? null,
         });
 
-        // Fetch active terrain render
-        const { data: render, error: rErr } = await supabase
-          .from("terrain_renders")
-          .select("clinician_summary, generated_at")
-          .eq("user_id", profile.user_id)
-          .eq("status", "active")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (rErr) throw rErr;
-        if (!render?.clinician_summary) { setError("No clinical summary available yet."); return; }
-
-        setCs(render.clinician_summary as any);
-        setGeneratedAt(render.generated_at);
+        if (!row.clinician_summary) { setError("No clinical summary available yet."); return; }
+        setCs(row.clinician_summary as any);
+        setGeneratedAt(row.generated_at);
       } catch (e: any) {
         setError(e.message || "Failed to load summary.");
       } finally {
