@@ -11,35 +11,49 @@ interface ConfidenceGradientProps {
 }
 
 const ConfidenceGradient: React.FC<ConfidenceGradientProps> = ({ items, className }) => {
-  const height = 320;
-  const bandHeight = 60;
-  const bandY = 90;
+  const bandHeight = 56;
+  const bandY = 140;
   const padding = 40;
   const width = 880;
+  const height = 380;
 
-  const categoryPositions: Record<string, number[]> = {
-    confident: [0.08, 0.16, 0.24, 0.32],
-    investigating: [0.44, 0.52, 0.60],
-    watching: [0.74, 0.82, 0.90],
+  // Each category occupies a fractional sub-range of the band.
+  const categoryRanges: Record<string, [number, number]> = {
+    confident: [0.03, 0.33],
+    investigating: [0.42, 0.62],
+    watching: [0.72, 0.92],
   };
 
-  const categoryCounts: Record<string, number> = {
-    confident: 0,
-    investigating: 0,
-    watching: 0,
+  const grouped: Record<string, ConfidenceItem[]> = {
+    confident: [],
+    investigating: [],
+    watching: [],
   };
+  items.forEach((it) => grouped[it.category]?.push(it));
 
-  const positionedItems = items.map((item) => {
-    const positions = categoryPositions[item.category];
-    const idx = categoryCounts[item.category];
-    categoryCounts[item.category]++;
-    const xFrac = positions[idx % positions.length];
-    return {
-      ...item,
-      x: padding + (width - 2 * padding) * xFrac,
-      above: idx % 2 === 0,
-    };
-  });
+  // Distribute items evenly inside their range and stagger labels across
+  // 2 rows above and 2 rows below to avoid collisions on long labels.
+  const positionedItems = (Object.keys(grouped) as Array<keyof typeof grouped>).flatMap(
+    (cat) => {
+      const list = grouped[cat];
+      const [lo, hi] = categoryRanges[cat];
+      return list.map((item, idx) => {
+        const frac =
+          list.length === 1 ? (lo + hi) / 2 : lo + ((hi - lo) * idx) / (list.length - 1);
+        const row = idx % 4; // 0,1,2,3 → above-far, below-far, above-near, below-near
+        const above = row % 2 === 0;
+        const tier = row < 2 ? 1 : 0;
+        return {
+          ...item,
+          x: padding + (width - 2 * padding) * frac,
+          above,
+          tier, // 0 = closer to band, 1 = farther
+        };
+      });
+    }
+  );
+
+  const truncate = (s: string) => (s.length > 22 ? s.slice(0, 20) + "…" : s);
 
   return (
     <div className={className}>
@@ -59,9 +73,9 @@ const ConfidenceGradient: React.FC<ConfidenceGradientProps> = ({ items, classNam
           </linearGradient>
         </defs>
 
-        <text x={padding + (width - 2 * padding) * 0.18} y={bandY - 20} textAnchor="middle" fill="hsl(174, 45%, 35%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>CONFIDENT</text>
-        <text x={padding + (width - 2 * padding) * 0.52} y={bandY - 20} textAnchor="middle" fill="hsl(40, 60%, 45%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>INVESTIGATING</text>
-        <text x={padding + (width - 2 * padding) * 0.84} y={bandY - 20} textAnchor="middle" fill="hsl(220, 20%, 45%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>WATCHING</text>
+        <text x={padding + (width - 2 * padding) * 0.18} y={bandY - 78} textAnchor="middle" fill="hsl(174, 45%, 35%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>CONFIDENT</text>
+        <text x={padding + (width - 2 * padding) * 0.52} y={bandY - 78} textAnchor="middle" fill="hsl(40, 60%, 45%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>INVESTIGATING</text>
+        <text x={padding + (width - 2 * padding) * 0.84} y={bandY - 78} textAnchor="middle" fill="hsl(220, 20%, 45%)" fontSize={11} fontWeight={600} style={{ letterSpacing: "0.15em", fontFamily: "var(--font-sans, Inter, sans-serif)", textTransform: "uppercase" as const }}>WATCHING</text>
 
         <rect x={padding} y={bandY} width={width - 2 * padding} height={bandHeight} fill="url(#confidenceGrad)" rx={bandHeight / 2} />
 
@@ -70,8 +84,11 @@ const ConfidenceGradient: React.FC<ConfidenceGradientProps> = ({ items, classNam
 
         {positionedItems.map((item, i) => {
           const markerY = bandY + bandHeight / 2;
-          const labelY = item.above ? bandY - 40 : bandY + bandHeight + 30;
-          const lineEndY = item.above ? bandY : bandY + bandHeight;
+          const tierOffset = item.tier === 0 ? 0 : 28;
+          const labelY = item.above
+            ? bandY - 18 - tierOffset
+            : bandY + bandHeight + 22 + tierOffset;
+          const lineEndY = item.above ? labelY + 6 : labelY - 12;
           const color =
             item.category === "confident"
               ? "hsl(174, 45%, 35%)"
@@ -81,10 +98,10 @@ const ConfidenceGradient: React.FC<ConfidenceGradientProps> = ({ items, classNam
 
           return (
             <g key={`marker-${i}`}>
-              <line x1={item.x} y1={item.above ? markerY - 6 : markerY + 6} x2={item.x} y2={lineEndY + (item.above ? -8 : 8)} stroke={color} strokeOpacity={0.4} strokeWidth={1} />
+              <line x1={item.x} y1={item.above ? markerY - 6 : markerY + 6} x2={item.x} y2={lineEndY} stroke={color} strokeOpacity={0.35} strokeWidth={1} />
               <circle cx={item.x} cy={markerY} r={6} fill="white" stroke={color} strokeWidth={2} />
               <text x={item.x} y={labelY} textAnchor="middle" fill="currentColor" fontSize={11} className="text-foreground font-sans" style={{ fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
-                {item.label.length > 35 ? item.label.slice(0, 33) + "…" : item.label}
+                {truncate(item.label)}
               </text>
             </g>
           );
