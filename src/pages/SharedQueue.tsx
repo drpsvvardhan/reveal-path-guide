@@ -32,31 +32,40 @@ const SharedQueue: React.FC = () => {
 
     (async () => {
       try {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("user_id, display_name")
-          .eq("share_token", token)
-          .maybeSingle();
+        const { data, error: rpcError } = await supabase.rpc(
+          "get_shared_question_queue",
+          { p_token: token },
+        );
+        if (rpcError) throw rpcError;
+        const rows = (data || []) as Array<{
+          display_name: string | null;
+          question_id: string | null;
+          question: string | null;
+          rationale: string | null;
+          source: "auto" | "manual" | null;
+          priority: number | null;
+          created_at: string | null;
+        }>;
 
-        if (profileError) throw profileError;
-        if (!profile) {
+        if (rows.length === 0) {
           setError("This share link is no longer valid. Ask the person who sent it to share a new link.");
           setLoading(false);
           return;
         }
 
-        setPatientInfo({ display_name: profile.display_name });
-
-        const { data: queueData, error: queueError } = await supabase
-          .from("patient_question_queue")
-          .select("id, question, rationale, source, priority, created_at")
-          .eq("user_id", profile.user_id)
-          .eq("status", "queued")
-          .order("priority", { ascending: true });
-
-        if (queueError) throw queueError;
-
-        setQuestions((queueData || []) as SharedQuestion[]);
+        setPatientInfo({ display_name: rows[0].display_name });
+        setQuestions(
+          rows
+            .filter((r) => r.question_id && r.question)
+            .map((r) => ({
+              id: r.question_id!,
+              question: r.question!,
+              rationale: r.rationale,
+              source: (r.source ?? "auto") as "auto" | "manual",
+              priority: r.priority ?? 0,
+              created_at: r.created_at ?? new Date().toISOString(),
+            })),
+        );
       } catch (e: any) {
         console.error("Shared queue load failed:", e);
         setError(e.message || "Could not load the shared questions");
