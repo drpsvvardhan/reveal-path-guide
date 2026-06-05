@@ -23,29 +23,29 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
 
   return (
     <div className={className}>
-      <div className="space-y-10">
+      <div className="space-y-8 sm:space-y-10 min-w-0">
         {lanes.map((lane) => {
           const items = data[lane.key];
           if (items.length === 0) return null;
 
           return (
-            <div key={lane.key}>
+            <div key={lane.key} className="min-w-0">
               {/* Lane header — large, authoritative */}
-              <div className="flex items-baseline gap-4 mb-5">
+              <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1 mb-4 sm:mb-5 min-w-0">
                 <span
-                  className="text-[28px] font-serif font-semibold tracking-tight"
+                  className="text-[22px] sm:text-[28px] font-serif font-semibold tracking-tight break-words"
                   style={{ color: lane.color }}
                 >
                   {lane.title}
                 </span>
                 <span
-                  className="text-[14px] font-serif italic text-muted-foreground/70"
+                  className="text-[13px] sm:text-[14px] font-serif italic text-muted-foreground/70 break-words min-w-0"
                 >
                   {lane.subtitle}
                 </span>
-                <div className="flex-1 h-px mt-1" style={{ backgroundColor: `${lane.color}30` }} />
+                <div className="hidden sm:block flex-1 h-px mt-1" style={{ backgroundColor: `${lane.color}30` }} />
                 <span
-                  className="text-[12px] font-mono font-medium tabular-nums"
+                  className="text-[12px] font-mono font-medium tabular-nums shrink-0 ml-auto sm:ml-0"
                   style={{ color: lane.color }}
                 >
                   {items.length}
@@ -53,11 +53,11 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
               </div>
 
               {/* Items grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:pl-1 min-w-0">
                 {items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="rounded-xl px-5 py-4 border transition-all hover:shadow-sm"
+                    className="rounded-xl px-4 py-3.5 sm:px-5 sm:py-4 border transition-all hover:shadow-sm min-w-0"
                     style={{
                       borderColor: `${lane.color}25`,
                       backgroundColor: `${lane.color}08`,
@@ -67,7 +67,7 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
                   >
                     <TappableProse
                       text={item}
-                      className="text-[15px] font-serif text-foreground leading-[1.7] font-normal"
+                      className="block text-[15px] font-serif text-foreground leading-[1.7] font-normal break-words"
                     />
                   </div>
                 ))}
@@ -77,8 +77,8 @@ const ReversibilityTimeline: React.FC<ReversibilityTimelineProps> = ({
         })}
       </div>
 
-      <div className="mt-10 pt-5 border-t border-border/30 text-center">
-        <p className="text-[13px] text-muted-foreground italic font-serif">
+      <div className="mt-8 sm:mt-10 pt-5 border-t border-border/30 text-center min-w-0">
+        <p className="text-[13px] text-muted-foreground italic font-serif break-words">
           Biology is path-dependent but rarely frozen. Most of this moves.
         </p>
       </div>
