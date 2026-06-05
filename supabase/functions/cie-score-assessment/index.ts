@@ -133,10 +133,32 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const { authenticateRequest, resolveTargetUserId, resolveUserIdFromAssessmentId } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const { assessment_id } = await req.json();
     if (!assessment_id) {
       return new Response(JSON.stringify({ error: "assessment_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const ownerUserId = await resolveUserIdFromAssessmentId(authResult.auth.serviceClient, assessment_id);
+    if (!ownerUserId) {
+      return new Response(JSON.stringify({ error: "Assessment not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const resolved = await resolveTargetUserId(authResult.auth, ownerUserId);
+    if (!resolved.ok) {
+      return new Response(JSON.stringify(resolved.error.body), {
+        status: resolved.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
