@@ -726,13 +726,13 @@ const RecordsSection: React.FC = () => {
                         </div>
                         {upload.error_message && (<p className="text-[11px] text-orange-700 mt-1.5 italic">{upload.error_message}</p>)}
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         {upload.status === "complete" && uploadObs.length > 0 && (
-                          <button onClick={() => toggleExpanded(upload.id)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title={isExpanded ? "Collapse" : "Show observations"}>
+                          <button onClick={() => toggleExpanded(upload.id)} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1.5 rounded-md hover:bg-muted transition-colors" title={isExpanded ? "Collapse" : "Show observations"}>
                             {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                           </button>
                         )}
-                        <button onClick={() => { if (confirm("Delete this upload and all its observations?")) deleteUpload(upload.id); }} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Delete upload">
+                        <button onClick={() => { if (confirm("Delete this upload and all its observations?")) deleteUpload(upload.id); }} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1.5 rounded-md hover:bg-muted transition-colors" title="Delete upload">
                           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       </div>
