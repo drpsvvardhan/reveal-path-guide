@@ -116,6 +116,15 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const { authenticateRequest } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = (await req.json()) as RequestBody;
     const term = (body.term || "").trim();
     const sentence = (body.sentence || "").trim();
@@ -124,6 +133,14 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "term is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Bound user-controlled input to prevent prompt-injection / cost abuse.
+    if (term.length > 200 || sentence.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: "input_too_large", message: "term ≤ 200 chars, sentence ≤ 2000 chars" }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
