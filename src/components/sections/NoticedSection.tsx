@@ -84,39 +84,39 @@ const NoticedSection: React.FC = () => {
 
   /* ── Inline dashboard strip (3 sections) ── */
   const dashboardStrip = hasClusters ? (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-lg border border-border bg-card p-3">
-      <div className="text-center sm:text-left">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-lg border border-border bg-card p-3 min-w-0">
+      <div className="text-center sm:text-left min-w-0">
         <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
           Avg coherence
         </p>
-        <p className="text-lg font-mono font-medium text-foreground">
+        <p className="text-lg font-mono font-medium text-foreground break-words">
           {coherence !== null ? `${Math.round(coherence * 100)}%` : "—"}
         </p>
         {coherence !== null && (() => {
           const lowCount = clusters.filter((c) => (c.confidence_dimensions?.coherence_strength ?? 0) < 0.5).length;
           return lowCount > 0 ? (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] text-muted-foreground break-words">
               {lowCount} cluster{lowCount !== 1 ? "s" : ""} under 50%
             </p>
           ) : null;
         })()}
       </div>
-      <div className="text-center sm:text-left">
+      <div className="text-center sm:text-left min-w-0">
         <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
           Tensions held
         </p>
-        <p className="text-lg font-mono font-medium text-foreground">
+        <p className="text-lg font-mono font-medium text-foreground break-words">
           {tensions.totalTensions}
         </p>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[10px] text-muted-foreground break-words">
           across {tensions.clustersWithTensions} cluster{tensions.clustersWithTensions !== 1 ? "s" : ""}
         </p>
       </div>
-      <div className="text-center sm:text-left">
+      <div className="text-center sm:text-left min-w-0">
         <p className="text-[10px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
           Provenance
         </p>
-        <p className="text-sm font-medium text-foreground mt-1">
+        <p className="text-sm font-medium text-foreground mt-1 break-words">
           {clusters.length} cluster{clusters.length !== 1 ? "s" : ""} from triangulation
         </p>
       </div>
@@ -188,17 +188,17 @@ const NoticedSection: React.FC = () => {
       {dashboardStrip}
 
       {/* Cluster pattern cards */}
-      <div className="space-y-3" ref={containerRef}>
+      <div className="space-y-4 sm:space-y-3 min-w-0" ref={containerRef}>
         {presentTiers.map((tierInfo) => (
-          <div key={tierInfo.tier}>
+          <div key={tierInfo.tier} className="min-w-0">
             {showTierHeaders && (
-              <p className="text-subhead text-muted-foreground mb-2 mt-4 first:mt-0">
+              <p className="text-subhead text-muted-foreground mb-3 mt-6 sm:mt-4 first:mt-0 break-words">
                 {tierInfo.label}
               </p>
             )}
-            <div className="space-y-3">
+            <div className="space-y-4 sm:space-y-3">
               {clustersByTier[tierInfo.tier].map((cluster) => (
-                <div key={cluster.id} id={`cluster-${cluster.id}`}>
+                <div key={cluster.id} id={`cluster-${cluster.id}`} className="min-w-0">
                   <ClusterPatternCard cluster={cluster} />
                 </div>
               ))}
@@ -209,7 +209,7 @@ const NoticedSection: React.FC = () => {
 
       {/* Footer */}
       {hasClusters && lastUpdated && (
-        <div className="text-[11px] text-muted-foreground pt-4 border-t border-border mt-6">
+        <div className="text-[11px] text-muted-foreground leading-relaxed pt-4 border-t border-border mt-6 break-words">
           This reading was last updated {new Date(lastUpdated).toLocaleDateString()}.
           Tap any cluster to expand it, or tap "View the data behind this" to see the underlying biomarkers.
         </div>

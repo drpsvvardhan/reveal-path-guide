@@ -27,11 +27,11 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-lg border border-border bg-card overflow-hidden transition-shadow hover:shadow-sm"
+      className="rounded-lg border border-border bg-card overflow-hidden transition-shadow hover:shadow-sm min-w-0"
     >
       {/* DEPTH 1 — collapsed */}
       <div
-        className="p-4 cursor-pointer select-none"
+        className="px-3 py-4 sm:p-4 cursor-pointer select-none min-w-0"
         onClick={() => setExpanded((v) => !v)}
       >
         {/* Kicker */}
@@ -40,8 +40,8 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
         </p>
 
         {/* Claim + badge */}
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-sm text-foreground leading-relaxed flex-1">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
+          <p className="text-[15px] sm:text-sm text-foreground leading-relaxed flex-1 min-w-0 break-words">
             {cluster.claim}
           </p>
           <ClusterTierBadge tier={cluster.confidence_tier} className="shrink-0 mt-0.5" />
@@ -49,7 +49,7 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
 
         {/* Footer signals */}
         {(tensionCount > 0 || layerCount > 1) && (
-          <div className="flex items-center gap-3 mt-2.5 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2.5 text-[11px] text-muted-foreground">
             {tensionCount > 0 && (
               <span>with {tensionCount} tension{tensionCount !== 1 ? "s" : ""}</span>
             )}
@@ -70,9 +70,9 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border bg-muted/10 px-4 py-4 space-y-4">
+            <div className="border-t border-border bg-muted/10 px-3 py-4 sm:px-4 space-y-4 min-w-0">
               {/* Claim restated */}
-              <p className="text-sm font-medium text-foreground leading-relaxed">
+              <p className="text-[15px] sm:text-sm font-medium text-foreground leading-relaxed break-words">
                 {cluster.claim}
               </p>
 
@@ -84,7 +84,7 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
                   </p>
                   <div className="space-y-2">
                     {cluster.tensions_held.map((t, i) => (
-                      <p key={i} className="text-xs text-foreground/85 leading-relaxed">
+                      <p key={i} className="text-[13px] sm:text-xs text-foreground/85 leading-relaxed break-words">
                         {t.description}
                       </p>
                     ))}
@@ -100,9 +100,9 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
                   </p>
                   <div className="space-y-2">
                     {cluster.missing_evidence.map((m, i) => (
-                      <div key={i}>
-                        <p className="text-xs font-medium text-foreground">{m.item}</p>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <div key={i} className="min-w-0">
+                        <p className="text-[13px] sm:text-xs font-medium text-foreground break-words">{m.item}</p>
+                        <p className="text-[12px] sm:text-[11px] text-muted-foreground leading-relaxed break-words">
                           {m.why_it_would_sharpen}
                         </p>
                       </div>
@@ -114,7 +114,7 @@ const ClusterPatternCard: React.FC<Props> = ({ cluster }) => {
               {/* View data link */}
               <button
                 onClick={handleViewData}
-                className="flex items-center gap-1.5 text-[11px] text-secondary hover:text-secondary/80 transition-colors"
+                className="inline-flex items-center gap-1.5 text-[12px] sm:text-[11px] text-secondary hover:text-secondary/80 transition-colors min-h-[44px]"
               >
                 View the data behind this
                 <ArrowRight className="h-3 w-3" />
