@@ -103,20 +103,20 @@ const IntakeResultsSection: React.FC = () => {
       }
     >
       {/* 9 Gates */}
-      <div className="mb-10">
+      <div className="mb-10 min-w-0">
         <h3 className="font-serif text-lg text-foreground mb-4">Clinical Gates</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
           {gateList.map((gate) => {
             const tl = gate.traffic_light || "YELLOW";
             return (
-              <div key={gate.id} className={`rounded-xl border p-4 ${TRAFFIC_BG[tl] || TRAFFIC_BG.YELLOW}`}>
+              <div key={gate.id} className={`rounded-xl border p-3 sm:p-4 min-w-0 ${TRAFFIC_BG[tl] || TRAFFIC_BG.YELLOW}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`h-3 w-3 rounded-full ${TRAFFIC_COLORS[tl] || TRAFFIC_COLORS.YELLOW}`} />
                   <span className="text-xs font-mono text-muted-foreground">{gate.id}</span>
                 </div>
-                <p className="font-serif text-sm font-medium text-foreground">{gate.name}</p>
+                <p className="font-serif text-sm font-medium text-foreground break-words">{gate.name}</p>
                 <p className="text-2xl font-serif font-bold text-foreground mt-1">{Math.round(gate.score)}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1 break-words">
                   {gate.contributing_domains?.join(", ") || gate.domains.join(", ")}
                 </p>
               </div>
@@ -126,17 +126,17 @@ const IntakeResultsSection: React.FC = () => {
       </div>
 
       {/* 25 Domains by Axis */}
-      <div className="mb-8">
+      <div className="mb-8 min-w-0">
         <h3 className="font-serif text-lg text-foreground mb-4">Domain Scores by Axis</h3>
         <div className="space-y-6">
           {AXES.map((axis) => {
             const axisDomains = CIE_DOMAINS.filter((d) => d.axis === axis.id);
             return (
-              <div key={axis.id}>
-                <h4 className="text-xs font-sans font-semibold text-muted-foreground tracking-wider mb-2">
+              <div key={axis.id} className="min-w-0">
+                <h4 className="text-xs font-sans font-semibold text-muted-foreground tracking-wider mb-2 break-words">
                   AXIS {axis.id} — {axis.name.toUpperCase()}
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 min-w-0">
                   {axisDomains.map((domain) => {
                     const score = domainScores[domain.id];
                     const finalScore = score ? Math.round(score.final_score) : 50;
@@ -144,15 +144,15 @@ const IntakeResultsSection: React.FC = () => {
                       ? finalScore >= 80 ? "GREEN" : finalScore >= 60 ? "YELLOW" : finalScore >= 40 ? "ORANGE" : "RED"
                       : "YELLOW";
                     return (
-                      <div key={domain.id} className={`rounded-lg border p-3 ${TRAFFIC_BG[tl]}`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                      <div key={domain.id} className={`rounded-lg border p-3 min-w-0 ${TRAFFIC_BG[tl]}`}>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <div className={`h-2 w-2 rounded-full ${TRAFFIC_COLORS[tl]}`} />
                             <span className="text-xs font-mono text-muted-foreground">{domain.id}</span>
                           </div>
-                          <span className="text-lg font-serif font-bold text-foreground">{finalScore}</span>
+                          <span className="text-lg font-serif font-bold text-foreground shrink-0">{finalScore}</span>
                         </div>
-                        <p className="text-xs text-foreground/80 mt-1">{domain.name}</p>
+                        <p className="text-xs text-foreground/80 mt-1 break-words">{domain.name}</p>
                         {score?.triggered_layer2 && (
                           <span className="text-[10px] text-accent font-medium">Deep dive completed</span>
                         )}
