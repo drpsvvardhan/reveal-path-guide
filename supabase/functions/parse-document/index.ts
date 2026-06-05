@@ -18,11 +18,29 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const { authenticateRequest } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { fileBase64, fileName, mimeType } = await req.json();
 
     if (!fileBase64) {
       return new Response(JSON.stringify({ error: "No file data provided" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Reject oversized files to prevent AI-credit abuse (~7MB raw -> ~10MB base64).
+    const MAX_BASE64_LEN = 10 * 1024 * 1024;
+    if (typeof fileBase64 !== "string" || fileBase64.length > MAX_BASE64_LEN) {
+      return new Response(JSON.stringify({ error: "file_too_large", message: "Document exceeds 7MB limit." }), {
+        status: 413,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
