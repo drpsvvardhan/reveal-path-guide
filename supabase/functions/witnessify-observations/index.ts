@@ -139,6 +139,22 @@ interface BackfillReport {
 Deno.serve(async (req: Request) => {
   const started_at = Date.now();
   try {
+    // Admin-only backfill tool: require authenticated admin caller.
+    const { authenticateRequest } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return json(authResult.error.body, authResult.error.status);
+    }
+    const { data: roleData } = await authResult.auth.userClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", authResult.auth.callerUserId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!roleData) {
+      return json({ ok: false, error: "forbidden: admin role required" }, 403);
+    }
+
     // Auth + Supabase client setup.
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",

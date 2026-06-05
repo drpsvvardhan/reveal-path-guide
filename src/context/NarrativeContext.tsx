@@ -28,8 +28,6 @@ export const useNarrative = () => {
   return ctx;
 };
 
-const GENERATE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-narrative`;
-
 export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
@@ -100,24 +98,10 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         };
       }
 
-      const resp = await fetch(GENERATE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          manifest: mergedManifest,
-          userId: uid,
-        }),
+      const { data: result, error: invokeError } = await supabase.functions.invoke("generate-narrative", {
+        body: { manifest: mergedManifest, userId: uid },
       });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || `Generation failed (${resp.status})`);
-      }
-
-      const result = (await resp.json()) as NarrativeGenerationResult;
+      if (invokeError) throw new Error(invokeError.message || "Generation failed");
       setLastResult(result);
 
       // Refresh versions to pick up the new one

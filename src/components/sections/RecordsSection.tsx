@@ -160,19 +160,10 @@ const RecordsSection: React.FC = () => {
     setRegenerating(true);
     setRegenerateMsg(null);
     try {
-      const clusterUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-clusters`;
-      const resp = await fetch(clusterUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ patient_id: uid }),
+      const { error: invokeError } = await supabase.functions.invoke("generate-clusters", {
+        body: { patient_id: uid },
       });
-      if (!resp.ok && resp.status !== 202) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error || `Failed (${resp.status})`);
-      }
+      if (invokeError) throw new Error(invokeError.message || "Failed to start cluster generation");
       setRegenerateMsg("Cluster generation started. Results will appear in a few minutes.");
       // Poll for new clusters after a delay
       setTimeout(() => refetch(), 60_000);

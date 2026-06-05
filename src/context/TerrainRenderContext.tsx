@@ -124,21 +124,11 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(true);
       setError(null);
 
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-terrain-render`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ user_id: uid }),
-        }
-      );
-
-      const result = await resp.json();
-      if (!resp.ok || !result.success) {
-        throw new Error(result.error || "Terrain generation failed");
+      const { data: result, error: invokeError } = await supabase.functions.invoke("generate-terrain-render", {
+        body: { user_id: uid },
+      });
+      if (invokeError || !result?.success) {
+        throw new Error(invokeError?.message || result?.error || "Terrain generation failed");
       }
 
       // Refresh to pick up the new active render

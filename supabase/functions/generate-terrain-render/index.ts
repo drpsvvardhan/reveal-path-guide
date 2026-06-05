@@ -476,8 +476,23 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user_id, assessment_id } = await req.json();
-    if (!user_id) throw new Error("user_id is required");
+    const { authenticateRequest, resolveTargetUserId } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { user_id: requestedUserId, assessment_id } = await req.json();
+    const resolved = await resolveTargetUserId(authResult.auth, requestedUserId ?? null);
+    if (!resolved.ok) {
+      return new Response(JSON.stringify(resolved.error.body), {
+        status: resolved.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const user_id = resolved.targetUserId;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

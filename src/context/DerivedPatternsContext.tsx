@@ -35,8 +35,6 @@ export const useDerivedPatterns = () => {
   return ctx;
 };
 
-const DERIVE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/derive-patterns`;
-
 export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
@@ -102,24 +100,10 @@ export const DerivedPatternsProvider: React.FC<{ children: React.ReactNode }> = 
         };
       }
 
-      const resp = await fetch(DERIVE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          manifest: mergedManifest,
-          userId: effectiveUserId,
-        }),
+      const { data: result, error: invokeError } = await supabase.functions.invoke("derive-patterns", {
+        body: { manifest: mergedManifest, userId: effectiveUserId },
       });
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({}));
-        throw new Error(errData.error || `Derivation failed (${resp.status})`);
-      }
-
-      const result = await resp.json();
+      if (invokeError) throw new Error(invokeError.message || "Derivation failed");
       setLastRunResult(result);
 
       // Refresh patterns and queue to pick up new entries
