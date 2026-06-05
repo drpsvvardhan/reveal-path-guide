@@ -61,40 +61,40 @@ const HelpingFeedingSection: React.FC = () => {
       asideSticky
     >
       <div className="grid gap-6 xl:grid-cols-2">
-        <div>
-          <h3 className="flex items-center gap-2 text-subhead text-foreground mb-4">
-            <CheckCircle className="h-5 w-5 text-success" />
-            Working for you
+        <div className="min-w-0">
+          <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-subhead text-foreground mb-4">
+            <CheckCircle className="h-5 w-5 text-success shrink-0" />
+            <span className="break-words min-w-0">Working for you</span>
           </h3>
           <div className="space-y-3">
             {helping.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">Complete your intake to see what's working for you.</p>
             ) : (
               helping.map((item, i) => (
-                <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-3">
-                  <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2" />
-                  <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed" />
+                <div key={i} className="rounded-lg bg-sky-light border border-secondary/10 p-4 sm:p-3 min-w-0">
+                  <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2 break-words" />
+                  <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed break-words" />
                 </div>
               ))
             )}
           </div>
         </div>
-        <div>
-          <h3 className="flex items-center gap-2 text-subhead text-foreground mb-4">
-            <AlertTriangle className="h-5 w-5 text-coral" />
-            Working against you
+        <div className="min-w-0">
+          <h3 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-subhead text-foreground mb-4">
+            <AlertTriangle className="h-5 w-5 text-coral shrink-0" />
+            <span className="break-words min-w-0">Working against you</span>
           </h3>
           <div className="space-y-3">
             {feedingToShow.map((item, i) => (
-              <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-3">
-                <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2" />
-                <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed" />
+              <div key={i} className="rounded-lg bg-coral-light border border-coral/10 p-4 sm:p-3 min-w-0">
+                <TappableProse text={item.label} className="font-serif text-[16px] font-semibold text-foreground block mb-2 break-words" />
+                <TappableProse text={item.mechanism} className="font-serif text-[15px] text-muted-foreground leading-relaxed break-words" />
               </div>
             ))}
             {hasMoreFeeding && !showAllFeeding && (
               <button
                 onClick={() => setShowAllFeeding(true)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] px-1"
               >
                 <ChevronDown className="h-3.5 w-3.5" />
                 See all {allFeeding.length} factors
