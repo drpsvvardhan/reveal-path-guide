@@ -612,7 +612,7 @@ const RecordsSection: React.FC = () => {
           <div className="pt-6 border-t border-border mt-6">
             <button
               onClick={() => setCoherenceOpen((o) => !o)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full min-h-[44px] py-2 -my-2"
             >
               {coherenceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               How your terrain is organized
@@ -638,7 +638,7 @@ const RecordsSection: React.FC = () => {
             <div className="pt-6 border-t border-border mt-6">
               <button
                 onClick={() => setUploadsOpen((o) => !o)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full min-h-[44px] py-2 -my-2 text-left break-words"
               >
                 {uploadsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 Everything else we're tracking ({unclusteredObs.length} markers)
@@ -659,11 +659,22 @@ const RecordsSection: React.FC = () => {
                           </p>
                           <div className="space-y-1">
                             {obs.map((o) => (
-                              <div key={o.id} className="flex items-center gap-3 py-1 px-2 rounded hover:bg-muted/30 transition-colors">
-                                <p className="text-xs text-foreground font-medium flex-1 min-w-0 truncate">{o.canonical_name}</p>
-                                <FlagPill flag={o.flag} />
-                                <span className="text-xs font-mono text-foreground shrink-0">{o.value} {o.unit}</span>
-                                <span className="text-[10px] text-muted-foreground shrink-0">{o.collection_date}</span>
+                              <div
+                                key={o.id}
+                                className="flex flex-col gap-1 py-2 px-2 rounded hover:bg-muted/30 transition-colors sm:flex-row sm:items-center sm:gap-3 sm:py-1"
+                              >
+                                <p className="text-xs text-foreground font-medium min-w-0 break-words sm:flex-1 sm:truncate">
+                                  {o.canonical_name}
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                  <FlagPill flag={o.flag} />
+                                  <span className="text-xs font-mono text-foreground break-all">
+                                    {o.value} {o.unit}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground shrink-0">
+                                    {o.collection_date}
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -705,7 +716,7 @@ const RecordsSection: React.FC = () => {
                       <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-foreground truncate">{upload.original_filename}</p>
+                          <p className="text-sm font-medium text-foreground break-all sm:break-words min-w-0">{upload.original_filename}</p>
                           <StatusBadge status={upload.status} />
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
@@ -715,13 +726,13 @@ const RecordsSection: React.FC = () => {
                         </div>
                         {upload.error_message && (<p className="text-[11px] text-orange-700 mt-1.5 italic">{upload.error_message}</p>)}
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         {upload.status === "complete" && uploadObs.length > 0 && (
-                          <button onClick={() => toggleExpanded(upload.id)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title={isExpanded ? "Collapse" : "Show observations"}>
+                          <button onClick={() => toggleExpanded(upload.id)} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1.5 rounded-md hover:bg-muted transition-colors" title={isExpanded ? "Collapse" : "Show observations"}>
                             {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                           </button>
                         )}
-                        <button onClick={() => { if (confirm("Delete this upload and all its observations?")) deleteUpload(upload.id); }} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Delete upload">
+                        <button onClick={() => { if (confirm("Delete this upload and all its observations?")) deleteUpload(upload.id); }} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1.5 rounded-md hover:bg-muted transition-colors" title="Delete upload">
                           <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       </div>
@@ -731,34 +742,43 @@ const RecordsSection: React.FC = () => {
                   <AnimatePresence>
                     {isExpanded && uploadObs.length > 0 && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="border-t border-border bg-muted/10 overflow-hidden">
-                        <div className="p-4 space-y-1.5">
+                        <div className="p-3 sm:p-4 space-y-2 sm:space-y-1.5">
                           {uploadObs.map((obs) => (
-                            <div key={obs.id} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-card transition-colors group">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-foreground font-medium">
+                            <div
+                              key={obs.id}
+                              className="flex flex-col gap-1.5 py-2 px-2 rounded hover:bg-card transition-colors group sm:flex-row sm:items-center sm:gap-3 sm:py-1.5"
+                            >
+                              <div className="min-w-0 sm:flex-1">
+                                <p className="text-xs text-foreground font-medium break-words">
                                   {obs.canonical_name}
-                                  {obs.canonical_name !== obs.raw_name && (<span className="text-muted-foreground font-normal ml-1">({obs.raw_name})</span>)}
+                                  {obs.canonical_name !== obs.raw_name && (<span className="text-muted-foreground font-normal ml-1 break-words">({obs.raw_name})</span>)}
                                 </p>
-                                {obs.ref_low != null && obs.ref_high != null && (<p className="text-[10px] text-muted-foreground">normal: {obs.ref_low}–{obs.ref_high} {obs.unit}</p>)}
+                                {obs.ref_low != null && obs.ref_high != null && (
+                                  <p className="text-[10px] text-muted-foreground break-words">
+                                    normal: {obs.ref_low}–{obs.ref_high} {obs.unit}
+                                  </p>
+                                )}
                               </div>
-                              <FlagPill flag={obs.flag} />
-                              {editingObs === obs.id ? (
-                                <div className="flex items-center gap-1">
-                                  <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-20 rounded border border-border bg-background px-2 py-1 text-xs" autoFocus />
-                                  <button onClick={handleSaveEdit} className="p-1 rounded hover:bg-muted"><Check className="h-3.5 w-3.5 text-teal-600" /></button>
-                                  <button onClick={handleCancelEdit} className="p-1 rounded hover:bg-muted"><X className="h-3.5 w-3.5 text-muted-foreground" /></button>
-                                </div>
-                              ) : (
-                                <>
-                                  <span className="text-xs font-mono text-foreground">
-                                    {obs.value} {obs.unit}
-                                    {obs.corrected && (<span className="text-[9px] text-amber-600 ml-1" title={`Originally ${obs.original_value}`}>(corrected)</span>)}
-                                  </span>
-                                  <button onClick={() => handleStartEdit(obs)} className="p-1 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity" title="Correct misread value">
-                                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                </>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                <FlagPill flag={obs.flag} />
+                                {editingObs === obs.id ? (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <input value={editValue} onChange={(e) => setEditValue(e.target.value)} className="w-24 rounded border border-border bg-background px-2 py-1 text-xs" autoFocus />
+                                    <button onClick={handleSaveEdit} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1 rounded hover:bg-muted"><Check className="h-3.5 w-3.5 text-teal-600" /></button>
+                                    <button onClick={handleCancelEdit} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1 rounded hover:bg-muted"><X className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-xs font-mono text-foreground break-all">
+                                      {obs.value} {obs.unit}
+                                      {obs.corrected && (<span className="text-[9px] text-amber-600 ml-1" title={`Originally ${obs.original_value}`}>(corrected)</span>)}
+                                    </span>
+                                    <button onClick={() => handleStartEdit(obs)} className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1 rounded hover:bg-muted opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" title="Correct misread value">
+                                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
