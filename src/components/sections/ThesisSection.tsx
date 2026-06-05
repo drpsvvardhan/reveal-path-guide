@@ -147,13 +147,8 @@ const ThesisSection: React.FC = () => {
       intro={patientThesis.body}
       heroVisual={
         terrainAxes.length > 0 ? (
-          <div className="w-full max-w-[320px] mx-auto">
-            <div className="sm:hidden">
-              <TerrainRadar axes={terrainAxes} size={260} />
-            </div>
-            <div className="hidden sm:block">
-              <TerrainRadar axes={terrainAxes} size={320} />
-            </div>
+          <div className="hidden sm:block w-full max-w-[320px] mx-auto px-6">
+            <TerrainRadar axes={terrainAxes} size={260} />
           </div>
         ) : undefined
       }
