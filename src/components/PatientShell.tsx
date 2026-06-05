@@ -67,14 +67,14 @@ const PatientShell: React.FC = () => {
 
   return (
     <NavigationProvider onNavigate={handleNavigate}>
-    <div className="flex h-screen overflow-hidden flex-col">
+    <div className="flex h-screen overflow-hidden flex-col safe-area-px">
       <ViewAsSessionBanner />
       <div className="flex flex-1 overflow-hidden">
       <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto pb-24 md:pb-8">
+      <main ref={mainRef} className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
 
-        <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border px-6 py-3 md:px-10">
+        <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border px-4 py-3 md:px-10 pt-[calc(0.75rem+env(safe-area-inset-top))]">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-sans">
@@ -87,7 +87,7 @@ const PatientShell: React.FC = () => {
             <div className="relative">
               <button
                 onClick={() => setProfileOpen((o) => !o)}
-                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-muted/60 transition-colors"
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 min-h-[44px] hover:bg-muted/60 transition-colors"
               >
                 <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center text-xs font-sans font-semibold text-primary shrink-0">
                   {(manifest.patient.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase()}
@@ -170,7 +170,7 @@ const PatientShell: React.FC = () => {
         </div>
 
         {activeSection === "journey" && (
-          <div className="px-6 pt-6 md:px-10 max-w-3xl space-y-4">
+          <div className="px-4 pt-6 md:px-10 max-w-3xl space-y-4">
             <TodayBar />
             <QuickActions onNavigate={handleNavigate} />
             <WeeklySnapshot />
@@ -184,7 +184,7 @@ const PatientShell: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
-            className="px-6 py-8 md:px-10 lg:px-16 md:py-10"
+            className="px-4 py-6 md:px-10 lg:px-16 md:py-10"
           >
             <ActiveComponent />
           </motion.div>

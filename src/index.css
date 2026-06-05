@@ -111,6 +111,32 @@
     box-shadow: var(--shadow-card);
   }
 
+  /* Safe area utilities for iOS notch / home indicator (Capacitor wrap) */
+  .safe-area-pt {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-pl {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-area-pr {
+    padding-right: env(safe-area-inset-right);
+  }
+  .safe-area-px {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .glass-card-elevated {
     background: hsl(var(--card-elevated));
     @apply border border-border/40 rounded-lg;
@@ -183,6 +209,20 @@
 
   .font-variant-numeric-tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Prevent horizontal scroll at any viewport width (mobile-first baseline) */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Ensure tap targets meet the 44x44 baseline on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  button, a[role="button"], [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 

@@ -32,10 +32,10 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className="w-full max-w-[1360px] mx-auto"
+      className="w-full max-w-[1360px] mx-auto min-w-0"
     >
       {/* HERO AREA */}
-      <header className="relative pb-8 md:pb-12 lg:pb-14">
+      <header className="relative pb-6 md:pb-12 lg:pb-14">
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none"
@@ -51,12 +51,12 @@ const PatientSectionLayout: React.FC<PatientSectionLayoutProps> = ({
               {eyebrow}
             </p>
           )}
-          <div className={heroVisual ? "grid xl:grid-cols-[minmax(0,1fr)_auto] gap-8 xl:gap-14 items-center" : ""}>
-            <div className="max-w-2xl">
+          <div className={heroVisual ? "grid xl:grid-cols-[minmax(0,1fr)_auto] gap-6 xl:gap-14 items-center min-w-0" : "min-w-0"}>
+            <div className="max-w-2xl min-w-0">
               <h1
-                className="font-serif text-foreground leading-[1.12] tracking-[-0.015em]"
+                className="font-serif text-foreground leading-[1.12] tracking-[-0.015em] break-words"
                 style={{
-                  fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)",
+                  fontSize: "clamp(1.5rem, 5vw, 2.5rem)",
                   fontWeight: 500,
                 }}
               >

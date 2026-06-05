@@ -15,8 +15,8 @@ const MobileNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
   }, [activeSection]);
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md safe-area-pb">
-      <div ref={scrollRef} className="flex overflow-x-auto scrollbar-hide py-1.5 px-2 gap-1">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
+      <div ref={scrollRef} className="flex overflow-x-auto scrollbar-hide py-1 px-2 gap-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = activeSection === item.id;
@@ -25,11 +25,11 @@ const MobileNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
               key={item.id}
               data-nav={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg shrink-0 min-w-[56px] transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-lg shrink-0 min-w-[56px] min-h-[44px] transition-colors ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-5 w-5" />
               <span className="text-[10px] font-sans font-medium">{item.shortLabel}</span>
             </button>
           );
