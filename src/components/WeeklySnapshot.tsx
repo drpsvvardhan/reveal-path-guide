@@ -18,7 +18,7 @@ const WeeklySnapshot: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Weekly insight */}
-      <div className="bg-card border border-border/40 rounded-md p-7 space-y-5">
+      <div className="bg-card border border-border/40 rounded-md p-5 sm:p-7 space-y-5">
         <div className="flex items-center justify-between">
           <p className="text-eyebrow text-muted-foreground">This Week</p>
           {snapshot.periodLabel && (
