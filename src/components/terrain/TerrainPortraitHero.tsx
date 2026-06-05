@@ -74,53 +74,53 @@ const TerrainPortraitHero: React.FC<TerrainPortraitHeroProps> = ({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="relative py-12"
+      className="relative py-8 sm:py-12 min-w-0"
     >
       {/* Background FlowLine motif at very low opacity */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.04]">
         <FlowLine variant="hero" className="w-full h-full text-secondary" />
       </div>
 
-      <div className="relative max-w-2xl space-y-0">
+      <div className="relative max-w-2xl space-y-0 min-w-0">
         {/* Eyebrow */}
-        <p className="text-[11px] font-sans font-semibold uppercase tracking-[0.25em] text-secondary mb-8">
+        <p className="text-[10px] sm:text-[11px] font-sans font-semibold uppercase tracking-[0.2em] sm:tracking-[0.25em] text-secondary mb-6 sm:mb-8 break-words">
           YOUR TERRAIN, RIGHT NOW
         </p>
 
         {/* Section 1: What you already know */}
-        <div>
-          <h3 className="text-subhead text-muted-foreground/60 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3 break-words">
             What you already know
           </h3>
-          <TappableProse text={portrait.what_you_already_know} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
+          <TappableProse text={portrait.what_you_already_know} className="font-serif text-base sm:text-lg text-foreground leading-[1.7] sm:leading-[1.8] tracking-[-0.01em] break-words" />
         </div>
 
         <SectionDivider />
 
         {/* Section 2: What's working harder than you realize */}
-        <div>
-          <h3 className="text-subhead text-muted-foreground/60 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3 break-words">
             What's working harder than you realize
           </h3>
-          <TappableProse text={portrait.working_harder_than_you_realize} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
+          <TappableProse text={portrait.working_harder_than_you_realize} className="font-serif text-base sm:text-lg text-foreground leading-[1.7] sm:leading-[1.8] tracking-[-0.01em] break-words" />
         </div>
 
         <SectionDivider />
 
         {/* Section 3: Where to start */}
-        <div>
-          <h3 className="text-subhead text-muted-foreground/60 mb-3">
+        <div className="min-w-0">
+          <h3 className="text-subhead text-muted-foreground/60 mb-3 break-words">
             Where to start
           </h3>
-          <TappableProse text={portrait.where_to_start} className="font-serif text-lg text-foreground leading-[1.8] tracking-[-0.01em]" />
+          <TappableProse text={portrait.where_to_start} className="font-serif text-base sm:text-lg text-foreground leading-[1.7] sm:leading-[1.8] tracking-[-0.01em] break-words" />
         </div>
 
         {/* The One Action card */}
-        <div className="mt-8 rounded-xl border border-border bg-card/60 p-6 border-l-4 border-l-secondary">
-          <p className="text-[10px] font-sans font-semibold uppercase tracking-[0.25em] text-secondary mb-2">
+        <div className="mt-8 rounded-xl border border-border bg-card/60 p-4 sm:p-6 border-l-4 border-l-secondary min-w-0">
+          <p className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] sm:tracking-[0.25em] text-secondary mb-2 break-words">
             START HERE
           </p>
-          <TappableProse text={portrait.the_one_action} className="font-serif text-xl text-foreground leading-snug" />
+          <TappableProse text={portrait.the_one_action} className="font-serif text-lg sm:text-xl text-foreground leading-snug break-words" />
         </div>
 
         {/* Footnote */}
