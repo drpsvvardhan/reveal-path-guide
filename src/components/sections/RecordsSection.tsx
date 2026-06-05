@@ -659,11 +659,22 @@ const RecordsSection: React.FC = () => {
                           </p>
                           <div className="space-y-1">
                             {obs.map((o) => (
-                              <div key={o.id} className="flex items-center gap-3 py-1 px-2 rounded hover:bg-muted/30 transition-colors">
-                                <p className="text-xs text-foreground font-medium flex-1 min-w-0 truncate">{o.canonical_name}</p>
-                                <FlagPill flag={o.flag} />
-                                <span className="text-xs font-mono text-foreground shrink-0">{o.value} {o.unit}</span>
-                                <span className="text-[10px] text-muted-foreground shrink-0">{o.collection_date}</span>
+                              <div
+                                key={o.id}
+                                className="flex flex-col gap-1 py-2 px-2 rounded hover:bg-muted/30 transition-colors sm:flex-row sm:items-center sm:gap-3 sm:py-1"
+                              >
+                                <p className="text-xs text-foreground font-medium min-w-0 break-words sm:flex-1 sm:truncate">
+                                  {o.canonical_name}
+                                </p>
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                  <FlagPill flag={o.flag} />
+                                  <span className="text-xs font-mono text-foreground break-all">
+                                    {o.value} {o.unit}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground shrink-0">
+                                    {o.collection_date}
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>
