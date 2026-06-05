@@ -174,10 +174,34 @@ Deno.serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured.");
     }
 
+    const { authenticateRequest, resolveTargetUserId, resolveUserIdFromPatientId } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { patient_id } = await req.json();
     if (!patient_id) {
       return new Response(JSON.stringify({ error: "patient_id is required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const ownerUserId = await resolveUserIdFromPatientId(authResult.auth.serviceClient, patient_id);
+    if (!ownerUserId) {
+      return new Response(JSON.stringify({ error: "patient_not_found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const resolved = await resolveTargetUserId(authResult.auth, ownerUserId);
+    if (!resolved.ok) {
+      return new Response(JSON.stringify(resolved.error.body), {
+        status: resolved.error.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
