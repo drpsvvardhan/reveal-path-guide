@@ -82,13 +82,10 @@ The biomarker ontology (`ontology/biomarker_ontology.json`, also `biomarker_onto
 - Several `.env` keys are committed for the (public-anon) Supabase frontend config. Backend secrets live in Supabase function env (`Deno.env.get(...)`), not in this repo.
 - `docs/` holds versioned design docs (`*_v1.md`) that precede implementation — consult the matching design doc before changing RAE, CELF, or admission surfaces.
 
-## Known doc ↔ code discrepancies (verified 2026-06-05)
+## Repo rough edges (still live)
 
-Places where the committed docs disagree with the code. Trust the code; treat these as cleanup targets, not instructions.
+Durable gotchas worth knowing before you change things here.
 
-- **The ingest confidence gate is not where `architecture.md` says.** `architecture.md` claims the 0.80 threshold "is tunable and lives in `supabase/functions/_shared/ontology.ts`." It is not there. The gate is hardcoded inline in `process-lab-pdf/index.ts` (`confidence < 0.80`) and duplicated as `const CONFIDENCE_THRESHOLD = 0.80` in `export-celf-bundle/index.ts`. Two copies that can drift; there is no single tunable source.
-- **README's env var name is wrong.** The local-run snippet sets `VITE_SUPABASE_ANON_KEY`, but `src/integrations/supabase/client.ts` reads `VITE_SUPABASE_PUBLISHABLE_KEY` (the name in the committed `.env`). Following the README verbatim yields an app with no anon key.
-- **`.env.example` does not exist** though README points at it. The committed `.env` is the reference for required `VITE_*` keys.
+- **The 0.80 ingest confidence gate is not centralized.** It's hardcoded in `process-lab-pdf/index.ts` (`confidence < 0.80`) and again as `CONFIDENCE_THRESHOLD = 0.80` in `export-celf-bundle/index.ts`. Changing the gate means editing both sites — there is no single tunable source.
 - **Duplicate ontology file.** `biomarker_ontology.json` (repo root) and `ontology/biomarker_ontology.json` are byte-identical. The witness-registry build and README reference the `ontology/` copy; the root copy is redundant and can silently drift.
-- **`architecture.md` is stale in two spots:** its "Known gaps" says the edge functions "have no automated test suite," but there are ~38 `*.test.ts` files (Vitest + Deno) plus the RAE integration harness wired into CI; and its footer reads "Last substantive revision: April 2026" while migrations land through June 2026.
-- **`npm run lint` is not a clean gate.** A fresh checkout reports ~242 errors / ~38 warnings (mostly `@typescript-eslint/no-explicit-any`). Lint failures are overwhelmingly pre-existing — don't assume your change caused them. The Vitest suite (164 tests) does pass clean.
+- **`npm run lint` is not a clean gate.** A fresh checkout reports ~242 errors / ~38 warnings (mostly `@typescript-eslint/no-explicit-any`). These are pre-existing — don't assume your change caused them. The Vitest suite (164 tests) passes clean and is the reliable signal.
