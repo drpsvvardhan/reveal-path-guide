@@ -612,7 +612,7 @@ const RecordsSection: React.FC = () => {
           <div className="pt-6 border-t border-border mt-6">
             <button
               onClick={() => setCoherenceOpen((o) => !o)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full min-h-[44px] py-2 -my-2"
             >
               {coherenceOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               How your terrain is organized
@@ -638,7 +638,7 @@ const RecordsSection: React.FC = () => {
             <div className="pt-6 border-t border-border mt-6">
               <button
                 onClick={() => setUploadsOpen((o) => !o)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full min-h-[44px] py-2 -my-2 text-left break-words"
               >
                 {uploadsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 Everything else we're tracking ({unclusteredObs.length} markers)
@@ -716,7 +716,7 @@ const RecordsSection: React.FC = () => {
                       <FileText className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-foreground truncate">{upload.original_filename}</p>
+                          <p className="text-sm font-medium text-foreground break-all sm:break-words min-w-0">{upload.original_filename}</p>
                           <StatusBadge status={upload.status} />
                         </div>
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
