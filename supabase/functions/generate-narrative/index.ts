@@ -522,18 +522,27 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const body = await req.json();
-    const { manifest, userId } = body;
-
-    if (!manifest) {
-      return new Response(JSON.stringify({ error: "No manifest provided" }), {
-        status: 400,
+    const { authenticateRequest, resolveTargetUserId } = await import("../_shared/auth.ts");
+    const authResult = await authenticateRequest(req);
+    if (!authResult.ok) {
+      return new Response(JSON.stringify(authResult.error.body), {
+        status: authResult.error.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const body = await req.json();
+    const { manifest, userId: requestedUserId } = body;
+    const resolved = await resolveTargetUserId(authResult.auth, requestedUserId ?? null);
+    if (!resolved.ok) {
+      return new Response(JSON.stringify(resolved.error.body), {
+        status: resolved.error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const userId = resolved.targetUserId;
 
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "No userId provided" }), {
+    if (!manifest) {
+      return new Response(JSON.stringify({ error: "No manifest provided" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
