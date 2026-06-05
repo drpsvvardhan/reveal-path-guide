@@ -193,15 +193,9 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
             // Fire-and-forget: trigger cluster generation after successful lab processing
             try {
-              const clusterUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-clusters`;
-              fetch(clusterUrl, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                },
-                body: JSON.stringify({ patient_id: targetUserId }),
-              }).catch((err) => console.warn("[auto-clusters] fire-and-forget failed:", err));
+              supabase.functions
+                .invoke("generate-clusters", { body: { patient_id: targetUserId } })
+                .catch((err) => console.warn("[auto-clusters] fire-and-forget failed:", err));
               console.log("[auto-clusters] Triggered cluster generation after lab upload");
             } catch (clusterErr) {
               console.warn("[auto-clusters] Could not trigger cluster generation:", clusterErr);
