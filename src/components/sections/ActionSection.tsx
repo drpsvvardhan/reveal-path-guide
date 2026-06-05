@@ -93,13 +93,18 @@ const POLICY_CLASS_STYLES: Record<string, string> = {
 const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
-    className={`shrink-0 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
-      done
-        ? "bg-emerald-500 border-emerald-500 text-white scale-105"
-        : "border-muted-foreground/30 hover:border-primary/50"
-    }`}
+    aria-label={done ? "Mark as not done" : "Mark as done"}
+    className="shrink-0 h-11 w-11 -m-2 flex items-center justify-center"
   >
-    {done && <Check className="h-4 w-4" strokeWidth={3} />}
+    <span
+      className={`h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
+        done
+          ? "bg-emerald-500 border-emerald-500 text-white scale-105"
+          : "border-muted-foreground/30 hover:border-primary/50"
+      }`}
+    >
+      {done && <Check className="h-4 w-4" strokeWidth={3} />}
+    </span>
   </button>
 );
 
@@ -133,20 +138,20 @@ const InterventionCard: React.FC<{
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className={`rounded-xl border bg-card p-5 transition-all ${
+      className={`rounded-xl border bg-card p-4 sm:p-5 transition-all min-w-0 ${
         done ? "border-emerald-500/20 opacity-60" : "border-border"
       }`}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
         <ActionCheck done={done} onToggle={onToggle} />
         <div className="flex-1 min-w-0">
           {/* Title — interpreter voice when available */}
-          <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
+          <h4 className={`font-serif text-lg leading-snug mb-2 break-words ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
             <TappableProse text={title} />
           </h4>
 
           {/* Body — terrain-language rationale */}
-          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3 break-words">
             <TappableProse text={body} />
           </p>
 
@@ -185,32 +190,32 @@ const InterventionCard: React.FC<{
           {/* Observation / how — expandable */}
           {(observation || howText || clinicianQuestion) && (
           <Collapsible open={howOpen} onOpenChange={setHowOpen}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors min-h-[44px] py-2 -my-2">
               {howOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {preferCore ? "What to notice" : "How to do it"}
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 border-t border-border pt-2">
+            <CollapsibleContent className="mt-2 border-t border-border pt-2 min-w-0">
               {observation && (
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={observation} />
                 </p>
               )}
               {howText && (
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={howText} />
                 </p>
               )}
               {!preferCore && action.rationale && (
-                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={action.rationale} />
                 </p>
               )}
               {clinicianQuestion && (
-                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
+                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2 min-w-0">
                   <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
                     Worth bringing into a clinical conversation
                   </p>
-                  <p className="text-xs text-foreground leading-relaxed">
+                  <p className="text-xs text-foreground leading-relaxed break-words">
                     <TappableProse text={clinicianQuestion} />
                   </p>
                 </div>
