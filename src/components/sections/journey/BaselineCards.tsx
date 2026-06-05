@@ -55,10 +55,10 @@ const BaselineCards: React.FC<{
           >
             <span className="h-2 w-2 rounded-full bg-muted-foreground/40 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-sans font-medium text-foreground truncate">
+              <p className="text-xs font-sans font-medium text-foreground break-words">
                 {item.name}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground break-words">
                 {item.value} {item.unit}
                 {item.flag === "H" && <span className="ml-1 text-amber-500">↑</span>}
                 {item.flag === "L" && <span className="ml-1 text-blue-400">↓</span>}

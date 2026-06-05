@@ -269,7 +269,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex gap-2 overflow-x-auto pb-1 scrollbar-none"
+            className="grid grid-cols-2 sm:grid-cols-3 gap-2"
           >
             {actions.map((item) => (
               <button
@@ -278,10 +278,10 @@ const QuickActions: React.FC<QuickActionsProps> = ({ onNavigate }) => {
                   if (item.overlay) setActiveOverlay(item.overlay);
                   else if (item.action) onNavigate?.(item.action);
                 }}
-                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-sans font-medium text-foreground hover:bg-muted/60 hover:border-primary/30 transition-all whitespace-nowrap shrink-0"
+                className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-3 min-h-[44px] text-xs font-sans font-medium text-foreground hover:bg-muted/60 hover:border-primary/30 transition-all text-center"
               >
-                <item.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                {item.label}
+                <item.icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="truncate">{item.label}</span>
               </button>
             ))}
           </motion.div>
