@@ -93,13 +93,18 @@ const POLICY_CLASS_STYLES: Record<string, string> = {
 const ActionCheck: React.FC<{ done: boolean; onToggle: () => void }> = ({ done, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
-    className={`shrink-0 h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
-      done
-        ? "bg-emerald-500 border-emerald-500 text-white scale-105"
-        : "border-muted-foreground/30 hover:border-primary/50"
-    }`}
+    aria-label={done ? "Mark as not done" : "Mark as done"}
+    className="shrink-0 h-11 w-11 -m-2 flex items-center justify-center"
   >
-    {done && <Check className="h-4 w-4" strokeWidth={3} />}
+    <span
+      className={`h-7 w-7 rounded-full border-2 flex items-center justify-center transition-all ${
+        done
+          ? "bg-emerald-500 border-emerald-500 text-white scale-105"
+          : "border-muted-foreground/30 hover:border-primary/50"
+      }`}
+    >
+      {done && <Check className="h-4 w-4" strokeWidth={3} />}
+    </span>
   </button>
 );
 
@@ -133,20 +138,20 @@ const InterventionCard: React.FC<{
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className={`rounded-xl border bg-card p-5 transition-all ${
+      className={`rounded-xl border bg-card p-4 sm:p-5 transition-all min-w-0 ${
         done ? "border-emerald-500/20 opacity-60" : "border-border"
       }`}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
         <ActionCheck done={done} onToggle={onToggle} />
         <div className="flex-1 min-w-0">
           {/* Title — interpreter voice when available */}
-          <h4 className={`font-serif text-lg leading-snug mb-2 ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
+          <h4 className={`font-serif text-lg leading-snug mb-2 break-words ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
             <TappableProse text={title} />
           </h4>
 
           {/* Body — terrain-language rationale */}
-          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3 break-words">
             <TappableProse text={body} />
           </p>
 
@@ -185,32 +190,32 @@ const InterventionCard: React.FC<{
           {/* Observation / how — expandable */}
           {(observation || howText || clinicianQuestion) && (
           <Collapsible open={howOpen} onOpenChange={setHowOpen}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors">
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors min-h-[44px] py-2 -my-2">
               {howOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {preferCore ? "What to notice" : "How to do it"}
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 border-t border-border pt-2">
+            <CollapsibleContent className="mt-2 border-t border-border pt-2 min-w-0">
               {observation && (
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={observation} />
                 </p>
               )}
               {howText && (
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={howText} />
                 </p>
               )}
               {!preferCore && action.rationale && (
-                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed break-words">
                   <TappableProse text={action.rationale} />
                 </p>
               )}
               {clinicianQuestion && (
-                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2">
+                <div className="mt-3 rounded-md border border-blue-500/25 bg-blue-500/5 p-2 min-w-0">
                   <p className="text-[10px] font-sans font-semibold uppercase tracking-wide text-blue-700 mb-1">
                     Worth bringing into a clinical conversation
                   </p>
-                  <p className="text-xs text-foreground leading-relaxed">
+                  <p className="text-xs text-foreground leading-relaxed break-words">
                     <TappableProse text={clinicianQuestion} />
                   </p>
                 </div>
@@ -578,17 +583,17 @@ const ActionSection: React.FC = () => {
       {/* ── Block 1: Today's Actions ── */}
       <div className="space-y-4">
         {/* Orientation panel — how to use this page */}
-        <div className="rounded-xl border border-border/60 bg-muted/20 p-5 space-y-2">
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-4 sm:p-5 space-y-2 min-w-0">
           <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
             How to use this page
           </p>
-          <p className="text-sm text-foreground leading-relaxed">
+          <p className="text-sm text-foreground leading-relaxed break-words">
             These suggestions are matched to patterns in your biology, lab trends, recovery signals, and daily rhythms.
           </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed break-words">
             The goal is not to follow a rigid protocol. It is to understand which changes appear to support your terrain over time, which signals deserve attention, and which questions may be worth bringing into a deeper clinical discussion.
           </p>
-          <p className="text-sm text-muted-foreground leading-relaxed italic">
+          <p className="text-sm text-muted-foreground leading-relaxed italic break-words">
             Move gradually. Notice patterns. The sequence matters more than intensity.
           </p>
         </div>
@@ -609,9 +614,9 @@ const ActionSection: React.FC = () => {
       {/* ── Block 2: Sequence ── */}
       {plan.sequence_explanation && (
         <div className="space-y-3 pt-6">
-          <h3 className="font-serif text-xl text-foreground">Why this sequence</h3>
-          <div className="rounded-xl border border-border bg-card p-5">
-            <p className="text-sm text-muted-foreground leading-relaxed">
+          <h3 className="font-serif text-xl text-foreground break-words">Why this sequence</h3>
+          <div className="rounded-xl border border-border bg-card p-4 sm:p-5 min-w-0">
+            <p className="text-sm text-muted-foreground leading-relaxed break-words">
               {plan.sequence_explanation}
             </p>
           </div>
@@ -621,29 +626,29 @@ const ActionSection: React.FC = () => {
       {/* ── Block 3: Retest Schedule ── */}
       {plan.retest_schedule.length > 0 && (
         <div className="space-y-3 pt-6">
-          <h3 className="font-serif text-xl text-foreground flex items-center gap-2">
+          <h3 className="font-serif text-xl text-foreground flex items-center gap-2 break-words">
             <FlaskConical className="h-5 w-5 text-muted-foreground" />
             Retest schedule
           </h3>
           <div className="relative space-y-0">
             {plan.retest_schedule.map((entry, i) => (
-              <div key={entry.weeks} className="flex gap-4 pb-6 last:pb-0">
+              <div key={entry.weeks} className="flex gap-3 sm:gap-4 pb-6 last:pb-0 min-w-0">
                 <div className="flex flex-col items-center">
                   <div className="h-3 w-3 rounded-full bg-primary border-2 border-background shrink-0 z-10" />
                   {i < plan.retest_schedule.length - 1 && <div className="w-px flex-1 bg-border" />}
                 </div>
-                <div className="pb-2 flex-1">
+                <div className="pb-2 flex-1 min-w-0">
                   <p className="font-sans font-semibold text-sm text-foreground mb-1">
                     {entry.weeks} weeks
                   </p>
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {entry.markers.map((m) => (
-                      <span key={m} className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                      <span key={m} className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground break-all">
                         {m}
                       </span>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{entry.rationale}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed break-words">{entry.rationale}</p>
                 </div>
               </div>
             ))}
