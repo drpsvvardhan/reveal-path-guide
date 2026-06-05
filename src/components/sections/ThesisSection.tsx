@@ -39,15 +39,15 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
   if (connectorMatch) {
     const [, left, connector, right] = connectorMatch;
     return (
-      <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
-        <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
-          <p className="text-base md:text-lg text-foreground font-serif leading-snug">
+      <div className="rounded-xl border border-border bg-card/40 p-4 sm:p-5 md:p-6">
+        <div className="grid gap-3 md:gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
+          <p className="text-[15px] sm:text-base md:text-lg text-foreground font-serif leading-snug break-words min-w-0">
             <TappableProse text={left.trim()} />
           </p>
           <div className="flex items-center justify-center text-secondary">
             <ArrowRight className="h-4 w-4 md:rotate-0 rotate-90" />
           </div>
-          <p className="text-base md:text-lg text-muted-foreground leading-snug">
+          <p className="text-[15px] sm:text-base md:text-lg text-muted-foreground leading-snug break-words min-w-0">
             <TappableProse text={right.trim()} />
           </p>
         </div>
@@ -59,8 +59,8 @@ const BridgeCard: React.FC<{ text: string; index: number }> = ({ text, index }) 
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card/40 p-5 md:p-6">
-      <p className="text-base md:text-lg text-foreground leading-relaxed"><TappableProse text={text} /></p>
+    <div className="rounded-xl border border-border bg-card/40 p-4 sm:p-5 md:p-6">
+      <p className="text-[15px] sm:text-base md:text-lg text-foreground leading-relaxed break-words"><TappableProse text={text} /></p>
     </div>
   );
 };
@@ -145,7 +145,18 @@ const ThesisSection: React.FC = () => {
       eyebrow="WHAT'S HAPPENING IN YOUR BODY"
       title={patientThesis.title}
       intro={patientThesis.body}
-      heroVisual={terrainAxes.length > 0 ? <TerrainRadar axes={terrainAxes} size={320} /> : undefined}
+      heroVisual={
+        terrainAxes.length > 0 ? (
+          <div className="w-full max-w-[320px] mx-auto">
+            <div className="sm:hidden">
+              <TerrainRadar axes={terrainAxes} size={260} />
+            </div>
+            <div className="hidden sm:block">
+              <TerrainRadar axes={terrainAxes} size={320} />
+            </div>
+          </div>
+        ) : undefined
+      }
       headerExtra={
         <VoiceValidationIndicator
           status={voiceValidationStatus}
@@ -187,18 +198,18 @@ const ThesisSection: React.FC = () => {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + i * 0.05 }}
-                  className="glass-card p-5"
+                  className="glass-card p-4 sm:p-5"
                 >
-                  <div className="flex items-start gap-3 mb-3">
+                  <div className="flex items-start gap-3 mb-3 min-w-0">
                     <span className="text-2xl">{domain.emoji}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h4 className="font-sans font-semibold text-sm text-foreground">{domain.name}</h4>
-                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${colors.text} ${colors.bg}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-0.5">
+                        <h4 className="font-sans font-semibold text-sm text-foreground break-words">{domain.name}</h4>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${colors.text} ${colors.bg}`}>
                           {domain.statusLabel}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{domain.summary}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words">{domain.summary}</p>
                     </div>
                   </div>
 
