@@ -59,13 +59,13 @@ const PatientCognitiveText: React.FC<PatientCognitiveTextProps> = ({ content, cl
   MARKER_REGEX.lastIndex = 0;
 
   if (!hasMarkers) {
-    return <span className={`whitespace-pre-line ${className}`}>{renderInlineMarkdown(content)}</span>;
+    return <span className={`whitespace-pre-line break-words ${className}`}>{renderInlineMarkdown(content)}</span>;
   }
 
   const parts = content.split(MARKER_REGEX);
 
   return (
-    <span className={`whitespace-pre-line leading-relaxed ${className}`}>
+    <span className={`whitespace-pre-line leading-relaxed break-words ${className}`}>
       {parts.map((part, i) => {
         const mode = PATIENT_MODES.find((m) => m.marker === part);
         if (mode) {

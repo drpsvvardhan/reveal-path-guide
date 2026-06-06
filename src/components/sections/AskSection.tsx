@@ -482,14 +482,14 @@ const AskSection: React.FC = () => {
         />
       }
       conversation={
-        <div ref={scrollRef} className="h-full">
+        <div ref={scrollRef} className="h-full min-w-0">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-8">
-              <div className="max-w-md">
-                <h2 className="font-serif text-2xl text-foreground mb-3">
+            <div className="h-full flex flex-col items-center justify-center text-center px-4 sm:px-8">
+              <div className="max-w-md min-w-0">
+                <h2 className="font-serif text-xl sm:text-2xl text-foreground mb-3 break-words">
                   Ask anything about your results
                 </h2>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                <p className="text-sm text-muted-foreground leading-relaxed mb-6 break-words">
                   Your answers will be grounded in your actual data. The companion will tell you
                   what it knows, what it doesn't, and what to ask your doctor.
                 </p>
@@ -500,7 +500,7 @@ const AskSection: React.FC = () => {
                     <button
                       key={idx}
                       onClick={() => sendMessage(q)}
-                      className="text-[12px] text-foreground bg-muted/40 hover:bg-muted/80 border border-border/60 rounded-full px-4 py-2 transition-colors text-left leading-snug max-w-[280px]"
+                      className="text-[12px] text-foreground bg-muted/40 hover:bg-muted/80 border border-border/60 rounded-2xl px-4 min-h-[44px] py-2 transition-colors text-left leading-snug max-w-full sm:max-w-[280px] break-words"
                     >
                       {q}
                     </button>

@@ -131,15 +131,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
 
   if (message.role === "user") {
     return (
-      <div className="flex justify-end mb-6">
-        <div className="max-w-[75%]">
-          <div className="rounded-2xl rounded-tr-sm bg-secondary text-secondary-foreground px-5 py-3">
-            <p className="font-sans text-[16px] leading-[1.5] font-[450] text-secondary-foreground">{message.content}</p>
+      <div className="flex justify-end mb-6 min-w-0">
+        <div className="max-w-[85%] sm:max-w-[75%] min-w-0">
+          <div className="rounded-2xl rounded-tr-sm bg-secondary text-secondary-foreground px-4 sm:px-5 py-3 min-w-0">
+            <p className="font-sans text-[15px] sm:text-[16px] leading-[1.5] font-[450] text-secondary-foreground break-words">{message.content}</p>
           </div>
           <div className="flex justify-end mt-1">
             <button
               onClick={() => handleCopy("plain")}
-              className="text-[10px] text-muted-foreground/60 hover:text-foreground flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors"
+              className="text-[10px] text-muted-foreground/60 hover:text-foreground flex items-center justify-center gap-1 min-h-[44px] min-w-[44px] rounded transition-colors"
               title="Copy"
             >
               {copied === "plain" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -151,14 +151,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
   }
 
   return (
-    <div className="flex gap-4 mb-8">
+    <div className="flex gap-3 sm:gap-4 mb-8 min-w-0">
       <div className="shrink-0">
-        <div className="h-10 w-10 rounded-full bg-secondary/10 border border-secondary/30 flex items-center justify-center">
+        <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-secondary/10 border border-secondary/30 flex items-center justify-center">
           <Sparkles className="h-4 w-4 text-secondary" />
         </div>
       </div>
 
-      <div className="flex-1 min-w-0 max-w-[calc(100%-56px)]">
+      <div className="flex-1 min-w-0 max-w-[calc(100%-48px)] sm:max-w-[calc(100%-56px)]">
         {/* Render time series blocks if present */}
         {timeSeries.length > 0 && (
           <div className="mb-3">
@@ -193,32 +193,32 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               return (
                 <div
                   key={idx}
-                  className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5"
+                  className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 sm:p-5 min-w-0"
                 >
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-3 min-w-0">
                     <Icon className={`h-4 w-4 ${meta.color}`} />
-                    <p className={`font-serif text-[15px] font-[550] ${meta.color}`}>
+                    <p className={`font-serif text-[15px] font-[550] break-words min-w-0 ${meta.color}`}>
                       {meta.label}
                     </p>
                   </div>
                   
                   {hasSubBlocks ? (
-                    <div className="space-y-6">
+                    <div className="space-y-6 min-w-0">
                       {preamble && (
-                        <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                        <div className="font-serif text-[16px] sm:text-[17px] font-[450] text-foreground leading-[1.65] break-words min-w-0">
                           <PatientCognitiveText content={preamble} />
                         </div>
                       )}
                       {subBlocks.map((block, bi) => {
                         const modeMeta = modeLabels[block.mode];
                         return (
-                          <div key={bi}>
+                          <div key={bi} className="min-w-0">
                             <p
-                              className={`font-sans text-[11px] font-semibold uppercase tracking-[0.06em] mb-4 ${modeMeta?.headerColor || 'text-muted-foreground'}`}
+                              className={`font-sans text-[11px] font-semibold uppercase tracking-[0.06em] mb-4 break-words ${modeMeta?.headerColor || 'text-muted-foreground'}`}
                             >
                               {modeMeta?.label || block.mode}
                             </p>
-                            <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                            <div className="font-serif text-[16px] sm:text-[17px] font-[450] text-foreground leading-[1.65] break-words min-w-0">
                               {bi === subBlocks.length - 1 && isLastSection
                                 ? renderContentWithQuotes(block.content, onSuggestionTap)
                                 : <PatientCognitiveText content={block.content} />
@@ -229,7 +229,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
                       })}
                     </div>
                   ) : (
-                    <div className="font-serif text-[17px] font-[450] text-foreground leading-[1.65]">
+                    <div className="font-serif text-[16px] sm:text-[17px] font-[450] text-foreground leading-[1.65] break-words min-w-0">
                       {isLastSection
                         ? renderContentWithQuotes(displayContent, onSuggestionTap)
                         : <PatientCognitiveText content={displayContent} />
@@ -241,8 +241,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             })}
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-5">
-            <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65]">
+          <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 sm:p-5 min-w-0">
+            <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65] break-words min-w-0">
               {renderContentWithQuotes(
                 stripTimeSeriesBlocks(message.content || ""),
                 isStreaming ? undefined : onSuggestionTap
@@ -262,10 +262,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
           </div>
         )}
         {!isStreaming && (
-          <div className="mt-2 flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+          <div className="mt-2 flex flex-wrap items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
             <button
               onClick={() => handleCopy("plain")}
-              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-3 min-h-[44px] rounded transition-colors"
               title="Copy as plain text"
             >
               {copied === "plain" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
@@ -273,7 +273,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             </button>
             <button
               onClick={() => handleCopy("md")}
-              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+              className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-3 min-h-[44px] rounded transition-colors"
               title="Copy as Markdown"
             >
               {copied === "md" ? <Check className="h-3 w-3" /> : <Code2 className="h-3 w-3" />}
@@ -282,7 +282,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             {onRegenerate && (
               <button
                 onClick={onRegenerate}
-                className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-2 py-1 rounded transition-colors"
+                className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-3 min-h-[44px] rounded transition-colors"
                 title="Regenerate response"
               >
                 <RefreshCw className="h-3 w-3" />
