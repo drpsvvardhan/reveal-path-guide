@@ -282,18 +282,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               <span>Copy</span>
             </button>
             <button
-              onClick={() => handleCopy("md")}
+              onClick={handleDownloadMd}
               className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-3 min-h-[44px] rounded transition-colors"
               title="Download as Markdown (.md)"
             >
               <Code2 className="h-3 w-3" />
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); handleDownloadMd(); }}
-                className="appearance-none bg-transparent p-0 m-0 text-inherit"
-              >
-                Download .md
-              </button>
+              <span>Download .md</span>
             </button>
             {onRegenerate && (
               <button
