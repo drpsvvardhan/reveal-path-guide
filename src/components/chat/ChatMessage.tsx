@@ -122,14 +122,54 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
     setTimeout(() => setCopied(null), 1500);
   };
 
+  /** Build markdown that mirrors what's rendered on screen:
+   *  - Section labels become "## Heading"
+   *  - Cognitive-mode sub-blocks become "### Mode label"
+   *  - Time-series fenced blocks are stripped (they render as charts, not text)
+   *  - All other markdown (paragraphs, lists, **bold**, `code`, ```fences```, [links](url),
+   *    blockquotes, tables) is preserved verbatim, including blank-line paragraph breaks. */
+  const buildRenderedMarkdown = (): string => {
+    const blocks: string[] = [];
+
+    if (message.sections && message.sections.length > 0) {
+      for (const section of message.sections) {
+        const meta = sectionMeta[section.type] || sectionMeta.what_this_means;
+        const body = stripTimeSeriesBlocks(section.content).trim();
+        if (section.type === "acknowledgment") {
+          if (body) blocks.push(body);
+          continue;
+        }
+        if (meta.label) blocks.push(`## ${meta.label}`);
+        const { preamble, subBlocks } = parseCognitiveModeSubBlocks(body);
+        if (subBlocks.length === 0) {
+          if (body) blocks.push(body);
+        } else {
+          if (preamble.trim()) blocks.push(preamble.trim());
+          for (const block of subBlocks) {
+            const modeMeta = modeLabels[block.mode];
+            blocks.push(`### ${modeMeta?.label || block.mode}`);
+            if (block.content.trim()) blocks.push(block.content.trim());
+          }
+        }
+      }
+    } else {
+      const body = stripTimeSeriesBlocks(message.content || "").trim();
+      if (body) blocks.push(body);
+    }
+
+    // Join with blank lines so paragraphs, lists, and fenced code blocks
+    // keep their line breaks exactly as rendered.
+    return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  };
+
   const handleDownloadMd = () => {
-    const raw = fullText();
+    const md = buildRenderedMarkdown();
     const stamp = message.timestamp
       ? new Date(message.timestamp).toISOString().slice(0, 19).replace(/[:T]/g, "-")
       : new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    const preview = raw.replace(/[#*`_>\-]/g, " ").trim().slice(0, 40);
+    const preview = md.replace(/[#*`_>\-]/g, " ").trim().slice(0, 40);
     const name = safeFilename(preview || "message");
-    downloadFile(`${name}_${stamp}.md`, "text/markdown", raw);
+    downloadFile(`${name}_${stamp}.md`, "text/markdown;charset=utf-8", md);
   };
 
   // Parse time series blocks from assistant messages
