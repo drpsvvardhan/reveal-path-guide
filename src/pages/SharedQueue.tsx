@@ -102,30 +102,30 @@ const SharedQueue: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto px-6 py-12 md:px-10 md:py-16">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-12 md:px-10 md:py-16 min-w-0">
         {/* Header */}
-        <div className="space-y-4 pb-8 border-b border-border">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-sans uppercase tracking-widest text-secondary">
+        <div className="space-y-4 pb-8 border-b border-border min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground min-w-0">
+            <span className="font-sans uppercase tracking-widest text-secondary break-words">
               Vizzhy Patient Companion
             </span>
           </div>
-          <h1 className="font-serif text-3xl md:text-4xl text-foreground leading-tight">
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl text-foreground leading-tight break-words">
             Questions for the next visit
           </h1>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-x-4 gap-y-1 text-sm text-muted-foreground flex-wrap min-w-0">
             {patientInfo?.display_name && (
-              <span className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                {patientInfo.display_name}
+              <span className="flex items-center gap-1.5 min-w-0">
+                <User className="h-3.5 w-3.5 shrink-0" />
+                <span className="break-words min-w-0">{patientInfo.display_name}</span>
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" />
-              Prepared {today}
+            <span className="flex items-center gap-1.5 min-w-0">
+              <Calendar className="h-3.5 w-3.5 shrink-0" />
+              <span className="break-words min-w-0">Prepared {today}</span>
             </span>
           </div>
-          <p className="text-sm text-muted-foreground leading-relaxed max-w-xl">
+          <p className="text-sm text-muted-foreground leading-relaxed max-w-xl break-words">
             These are the questions{" "}
             {patientInfo?.display_name ? patientInfo.display_name : "this patient"} would like to
             discuss at the next appointment. They were generated through reflection and
@@ -144,19 +144,19 @@ const SharedQueue: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-5 pt-8">
+          <div className="space-y-5 pt-8 min-w-0">
             {questions.map((q, idx) => (
-              <div key={q.id} className="space-y-2">
-                <div className="flex items-start gap-3">
+              <div key={q.id} className="space-y-2 min-w-0">
+                <div className="flex items-start gap-3 min-w-0">
                   <span className="text-xs font-sans font-semibold text-secondary mt-1 shrink-0 w-6">
                     {idx + 1}.
                   </span>
-                  <div className="flex-1 space-y-1.5">
-                    <p className="font-serif text-lg text-foreground italic leading-relaxed">
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <p className="font-serif text-base sm:text-lg text-foreground italic leading-relaxed break-words">
                       "{q.question}"
                     </p>
                     {q.rationale && (
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words">
                         {q.rationale}
                       </p>
                     )}
@@ -168,8 +168,8 @@ const SharedQueue: React.FC = () => {
         )}
 
         {/* Footer */}
-        <div className="pt-12 mt-12 border-t border-border">
-          <p className="text-xs text-muted-foreground italic leading-relaxed text-center max-w-md mx-auto">
+        <div className="pt-12 mt-12 border-t border-border min-w-0">
+          <p className="text-xs text-muted-foreground italic leading-relaxed text-center max-w-md mx-auto break-words">
             This list was prepared by a patient using the Vizzhy Patient Companion. It is intended
             to help focus the conversation with their doctor. It is not a medical record or
             clinical recommendation.
@@ -180,7 +180,7 @@ const SharedQueue: React.FC = () => {
         <div className="text-center mt-6 print:hidden">
           <button
             onClick={() => window.print()}
-            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+            className="inline-flex items-center justify-center min-h-[44px] px-4 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
           >
             Print this page
           </button>
