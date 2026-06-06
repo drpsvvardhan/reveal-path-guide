@@ -106,28 +106,28 @@ const CheckpointCard: React.FC<{ checkpoint: any; isLast: boolean }> = ({ checkp
   const hasDetail = cp.checking || cp.whyItMatters || cp.owner;
 
   return (
-    <div className="flex gap-4 pb-5 last:pb-0">
+    <div className="flex gap-4 pb-5 last:pb-0 min-w-0">
       <div className="flex flex-col items-center">
         <div className="h-3 w-3 rounded-full bg-primary border-2 border-background shrink-0 z-10" />
         {!isLast && <div className="w-px flex-1 bg-border" />}
       </div>
-      <div className="flex-1">
-        <p className="font-sans font-semibold text-sm text-foreground">
+      <div className="flex-1 min-w-0">
+        <p className="font-sans font-semibold text-sm text-foreground break-words">
           {cp.label} <span className="font-normal text-muted-foreground">— {cp.date}</span>
         </p>
-        <p className="text-sm text-muted-foreground mt-0.5">{cp.description}</p>
+        <p className="text-sm text-muted-foreground mt-0.5 break-words">{cp.description}</p>
         {cp.owner && (
           <span className="inline-block mt-1.5 text-[10px] font-sans font-medium uppercase tracking-wider bg-lavender-light text-primary rounded-full px-2 py-0.5">{cp.owner}</span>
         )}
         {hasDetail && (
           <Collapsible open={open} onOpenChange={setOpen}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1.5">
+            <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors mt-1.5 min-h-[44px]">
               {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               {open ? "Less" : "What & why"}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 space-y-1.5 border-t border-border pt-2">
-              {cp.checking && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>}
-              {cp.whyItMatters && <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Why it matters:</span> {cp.whyItMatters}</p>}
+              {cp.checking && <p className="text-xs text-muted-foreground break-words"><span className="font-medium text-foreground">Checking:</span> {cp.checking}</p>}
+              {cp.whyItMatters && <p className="text-xs text-muted-foreground break-words"><span className="font-medium text-foreground">Why it matters:</span> {cp.whyItMatters}</p>}
             </CollapsibleContent>
           </Collapsible>
         )}
