@@ -193,7 +193,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
               return (
                 <div
                   key={idx}
-                  className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 sm:p-5 min-w-0"
+                  className="min-w-0 sm:rounded-2xl sm:border sm:border-border sm:bg-card sm:shadow-[0_1px_3px_rgba(0,0,0,0.04)] sm:p-5"
                 >
                   <div className="flex items-center gap-2 mb-3 min-w-0">
                     <Icon className={`h-4 w-4 ${meta.color}`} />
@@ -241,7 +241,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             })}
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-4 sm:p-5 min-w-0">
+          <div className="min-w-0 sm:rounded-2xl sm:border sm:border-border sm:bg-card sm:shadow-[0_1px_3px_rgba(0,0,0,0.04)] sm:p-5">
             <div className="font-serif text-[16px] font-[450] text-foreground leading-[1.65] break-words min-w-0">
               {renderContentWithQuotes(
                 stripTimeSeriesBlocks(message.content || ""),
