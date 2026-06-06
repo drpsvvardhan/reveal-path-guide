@@ -7,7 +7,7 @@ import { parseTimeSeriesBlocks, stripTimeSeriesBlocks } from "@/lib/timeSeriesPa
 import { parseCognitiveModeSubBlocks, type CognitiveModeSubBlock } from "@/components/sections/AskSection";
 import type { ParsedTimeSeries } from "@/lib/timeSeriesParser";
 import type { VocabularyViolation } from "@/lib/voiceValidation";
-import { copyToClipboard, stripMarkdown } from "@/lib/exportChat";
+import { copyToClipboard, stripMarkdown, downloadFile, safeFilename } from "@/lib/exportChat";
 
 interface ChatMessageSection {
   type: "what_this_means" | "what_you_can_do" | "watch_for" | "ask_doctor" | "important" | "acknowledgment";
@@ -120,6 +120,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
     await copyToClipboard(mode === "md" ? raw : stripMarkdown(raw));
     setCopied(mode);
     setTimeout(() => setCopied(null), 1500);
+  };
+
+  const handleDownloadMd = () => {
+    const raw = fullText();
+    const stamp = message.timestamp
+      ? new Date(message.timestamp).toISOString().slice(0, 19).replace(/[:T]/g, "-")
+      : new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const preview = raw.replace(/[#*`_>\-]/g, " ").trim().slice(0, 40);
+    const name = safeFilename(preview || "message");
+    downloadFile(`${name}_${stamp}.md`, "text/markdown", raw);
   };
 
   // Parse time series blocks from assistant messages
@@ -274,10 +284,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming, onSugge
             <button
               onClick={() => handleCopy("md")}
               className="text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center gap-1 px-3 min-h-[44px] rounded transition-colors"
-              title="Copy as Markdown"
+              title="Download as Markdown (.md)"
             >
-              {copied === "md" ? <Check className="h-3 w-3" /> : <Code2 className="h-3 w-3" />}
-              <span>Markdown</span>
+              <Code2 className="h-3 w-3" />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDownloadMd(); }}
+                className="appearance-none bg-transparent p-0 m-0 text-inherit"
+              >
+                Download .md
+              </button>
             </button>
             {onRegenerate && (
               <button
