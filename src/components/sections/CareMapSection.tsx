@@ -49,11 +49,11 @@ const CareMapSection: React.FC = () => {
           </h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {cm.medications.map((med, i) => (
-              <div key={i} className="rounded-lg border border-border bg-card p-4">
-                <p className="font-sans font-semibold text-foreground text-sm">{med.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">{med.purpose}</p>
-                {med.dose && <p className="text-xs text-foreground/70 mt-1">Dose: {med.dose}</p>}
-                {med.notes && <p className="text-xs text-muted-foreground italic mt-1">{med.notes}</p>}
+              <div key={i} className="rounded-lg border border-border bg-card p-4 min-w-0">
+                <p className="font-sans font-semibold text-foreground text-sm break-words">{med.name}</p>
+                <p className="text-xs text-muted-foreground mt-1 break-words">{med.purpose}</p>
+                {med.dose && <p className="text-xs text-foreground/70 mt-1 break-words">Dose: {med.dose}</p>}
+                {med.notes && <p className="text-xs text-muted-foreground italic mt-1 break-words">{med.notes}</p>}
               </div>
             ))}
           </div>
@@ -82,12 +82,13 @@ const CareMapSection: React.FC = () => {
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
             {cm.responsibilities.map((r, i) => (
-              <div key={i} className="rounded-lg border border-border bg-card p-4">
-                <p className="font-sans font-semibold text-foreground text-sm mb-2">{r.who}</p>
+              <div key={i} className="rounded-lg border border-border bg-card p-4 min-w-0">
+                <p className="font-sans font-semibold text-foreground text-sm mb-2 break-words">{r.who}</p>
                 <ul className="space-y-1">
                   {r.tasks.map((t, j) => (
-                    <li key={j} className="text-xs text-muted-foreground flex gap-2 items-start">
-                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary shrink-0" />{t}
+                    <li key={j} className="text-xs text-muted-foreground flex gap-2 items-start min-w-0">
+                      <span className="mt-1.5 h-1 w-1 rounded-full bg-primary shrink-0" />
+                      <span className="break-words min-w-0">{t}</span>
                     </li>
                   ))}
                 </ul>
