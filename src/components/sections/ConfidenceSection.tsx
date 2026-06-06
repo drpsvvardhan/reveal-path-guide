@@ -62,23 +62,29 @@ const ConfidenceSection: React.FC = () => {
         />
       }
     >
+      {/* Horizontal gradient: desktop/tablet only. At <640px the SVG would scale
+          down so far that the staggered 11px labels collide and clip. The grouped
+          list below shows the same information in a phone-friendly stacked form. */}
       {gradientItems.length > 0 && (
-        <ConfidenceGradient items={gradientItems} className="mb-8" />
+        <div className="hidden sm:block">
+          <ConfidenceGradient items={gradientItems} className="mb-8" />
+        </div>
       )}
 
-      <div className="space-y-5">
+      <div className="space-y-5 min-w-0">
         {groups.map(({ title, items, icon: Icon, colorClass }) => {
           if (!items?.length) return null;
           return (
-            <div key={title}>
-              <h3 className="text-subhead text-foreground flex items-center gap-2 mb-3">
-                <Icon className={`h-5 w-5 ${colorClass}`} /> {title}
+            <div key={title} className="min-w-0">
+              <h3 className="text-subhead text-foreground flex items-start gap-2 mb-3 min-w-0 break-words">
+                <Icon className={`h-5 w-5 shrink-0 mt-0.5 ${colorClass}`} />
+                <span className="min-w-0 break-words">{title}</span>
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 {items.map((item, i) => (
-                  <div key={i} className="flex gap-3 items-start">
+                  <div key={i} className="flex gap-3 items-start min-w-0">
                     <div className="mt-2 h-1.5 w-1.5 rounded-full bg-foreground/25 shrink-0" />
-                    <p className="text-sm text-foreground/80">{item}</p>
+                    <p className="text-sm text-foreground/80 min-w-0 break-words">{item}</p>
                   </div>
                 ))}
               </div>
