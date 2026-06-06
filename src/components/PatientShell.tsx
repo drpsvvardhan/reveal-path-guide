@@ -72,7 +72,7 @@ const PatientShell: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
       <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+      <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
 
         <div className="sticky top-0 z-30 bg-background/90 backdrop-blur-sm border-b border-border px-4 py-3 md:px-10 pt-[calc(0.75rem+env(safe-area-inset-top))]">
           <div className="flex items-center justify-between">

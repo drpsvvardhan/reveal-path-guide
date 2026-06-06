@@ -1,4 +1,6 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const PATIENT_MODES = [
   {
@@ -23,29 +25,74 @@ const PATIENT_MODES = [
 
 const MARKER_REGEX = /(FROM YOUR DATA:|PUTTING IT TOGETHER:|FROM MEDICAL KNOWLEDGE:)/g;
 
-/** Parse **bold** and *italic* markdown into React elements */
-function renderInlineMarkdown(text: string): React.ReactNode[] {
-  // Match **bold** first, then *italic*
-  const parts: React.ReactNode[] = [];
-  const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    if (match[2]) {
-      parts.push(<strong key={key++} className="font-semibold">{match[2]}</strong>);
-    } else if (match[3]) {
-      parts.push(<em key={key++}>{match[3]}</em>);
-    }
-    lastIndex = re.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-  return parts.length > 0 ? parts : [text];
+/** Render full markdown (headings, lists, bold, italic, code, links, tables) with
+ *  patient-safe defaults: no raw HTML, all elements wrap on narrow screens. */
+function MD({ text }: { text: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ node, ...props }) => (
+          <p className="my-2 first:mt-0 last:mb-0 break-words" {...props} />
+        ),
+        strong: ({ node, ...props }) => <strong className="font-semibold" {...props} />,
+        em: ({ node, ...props }) => <em className="italic" {...props} />,
+        h1: ({ node, ...props }) => (
+          <h3 className="font-serif text-[18px] font-[550] mt-4 mb-2 break-words" {...props} />
+        ),
+        h2: ({ node, ...props }) => (
+          <h3 className="font-serif text-[17px] font-[550] mt-4 mb-2 break-words" {...props} />
+        ),
+        h3: ({ node, ...props }) => (
+          <h4 className="font-serif text-[16px] font-[550] mt-3 mb-1.5 break-words" {...props} />
+        ),
+        ul: ({ node, ...props }) => (
+          <ul className="list-disc pl-5 my-2 space-y-1 marker:text-muted-foreground/60" {...props} />
+        ),
+        ol: ({ node, ...props }) => (
+          <ol className="list-decimal pl-5 my-2 space-y-1 marker:text-muted-foreground/60" {...props} />
+        ),
+        li: ({ node, ...props }) => <li className="break-words leading-[1.55]" {...props} />,
+        a: ({ node, ...props }) => (
+          <a
+            className="underline underline-offset-2 text-secondary break-all"
+            target="_blank"
+            rel="noopener noreferrer"
+            {...props}
+          />
+        ),
+        code: ({ node, ...props }) => (
+          <code className="px-1 py-0.5 rounded bg-muted/60 text-[0.9em] break-all" {...props} />
+        ),
+        pre: ({ node, ...props }) => (
+          <pre
+            className="my-2 p-3 rounded-lg bg-muted/60 text-[13px] overflow-x-auto whitespace-pre-wrap break-words"
+            {...props}
+          />
+        ),
+        blockquote: ({ node, ...props }) => (
+          <blockquote
+            className="border-l-2 border-border pl-3 my-2 text-muted-foreground italic break-words"
+            {...props}
+          />
+        ),
+        hr: () => <hr className="my-3 border-border/60" />,
+        table: ({ node, ...props }) => (
+          <div className="my-2 -mx-1 overflow-x-auto">
+            <table className="w-full text-[14px] border-collapse" {...props} />
+          </div>
+        ),
+        th: ({ node, ...props }) => (
+          <th className="text-left font-semibold border-b border-border px-2 py-1" {...props} />
+        ),
+        td: ({ node, ...props }) => (
+          <td className="border-b border-border/40 px-2 py-1 align-top break-words" {...props} />
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
 }
 
 interface PatientCognitiveTextProps {
@@ -59,13 +106,17 @@ const PatientCognitiveText: React.FC<PatientCognitiveTextProps> = ({ content, cl
   MARKER_REGEX.lastIndex = 0;
 
   if (!hasMarkers) {
-    return <span className={`whitespace-pre-line break-words ${className}`}>{renderInlineMarkdown(content)}</span>;
+    return (
+      <div className={`break-words min-w-0 ${className}`}>
+        <MD text={content} />
+      </div>
+    );
   }
 
   const parts = content.split(MARKER_REGEX);
 
   return (
-    <span className={`whitespace-pre-line leading-relaxed break-words ${className}`}>
+    <div className={`leading-relaxed break-words min-w-0 ${className}`}>
       {parts.map((part, i) => {
         const mode = PATIENT_MODES.find((m) => m.marker === part);
         if (mode) {
@@ -78,9 +129,9 @@ const PatientCognitiveText: React.FC<PatientCognitiveTextProps> = ({ content, cl
             </span>
           );
         }
-        return <React.Fragment key={i}>{renderInlineMarkdown(part)}</React.Fragment>;
+        return <MD key={i} text={part} />;
       })}
-    </span>
+    </div>
   );
 };
 
