@@ -89,3 +89,16 @@ Durable gotchas worth knowing before you change things here.
 - **The 0.80 ingest confidence gate is not centralized.** It's hardcoded in `process-lab-pdf/index.ts` (`confidence < 0.80`) and again as `CONFIDENCE_THRESHOLD = 0.80` in `export-celf-bundle/index.ts`. Changing the gate means editing both sites — there is no single tunable source.
 - **Duplicate ontology file.** `biomarker_ontology.json` (repo root) and `ontology/biomarker_ontology.json` are byte-identical. The witness-registry build and README reference the `ontology/` copy; the root copy is redundant and can silently drift.
 - **`npm run lint` is not a clean gate.** A fresh checkout reports ~242 errors / ~38 warnings (mostly `@typescript-eslint/no-explicit-any`). These are pre-existing — don't assume your change caused them. The Vitest suite (164 tests) passes clean and is the reliable signal.
+
+## Architecture doctrine (the *why* under the mechanics)
+
+The mechanics above exist to protect a few principles. When a change forces a trade-off, these are what to preserve. Each maps to a concrete enforcement point, so treat them as falsifiable constraints, not slogans.
+
+1. **Provenance is sacred; interpretation is provisional.** Source-verbatim fields (`original_name`, `value`, `unit`, `reference_range_text`) are immutable after ingest — they are what the document said. Only the canonical fields (the system's *reading*) may change, and only via the review queue. Never rewrite what the source claimed to make the data look cleaner.
+2. **Human review outranks model confidence.** A reviewer's decision sets `classification_method = 'human_reviewed'` and is trusted absolutely (confidence → 1.0), overriding the 0.80 gate. The LLM proposes; a human disposes. Confidence is a triage signal, not an authority.
+3. **Canonicalize once, then trust.** Truth is generated at exactly one point (ingest). Every downstream consumer reads the canonical fields as settled. Re-deriving truth in a second place (re-running alias/unit/confidence resolution at export) is the cardinal sin — it creates two systems that can disagree about the same fact.
+4. **Trust is server-authoritative.** Client = convenience; Postgres RLS + edge-function gates (`_shared/auth.ts`) = authority. "The UI already checked" is never sufficient reason to skip a server-side check.
+5. **The ontology evolves by proposal, not mutation.** No single actor edits the shared vocabulary in place. Concepts are proposed (`ontology_concept_proposals`) and promoted in a deliberate, separate version step — protecting the vocabulary from any one reviewer's mistake.
+6. **CELF is a contract, not an interpretation layer.** The bundle is additive and versioned (fields added, never renamed/removed) so downstream consumers trust its shape across versions. It ships *evidence, witnessed* — not fresh guesses.
+
+The shared thread: **truth is produced once, witnessed, and trusted — not endlessly reinterpreted.** When in doubt, prefer the design that keeps a single source of truth and an auditable trail over the one that re-computes for convenience.
