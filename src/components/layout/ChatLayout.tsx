@@ -24,11 +24,11 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="w-full max-w-[1600px] mx-auto h-[calc(100vh-6rem)] flex flex-col"
+      className="w-full max-w-[1600px] mx-auto h-[calc(100dvh-6rem)] md:h-[calc(100vh-6rem)] flex flex-col min-w-0"
     >
       {/* Compact hero */}
-      <header className="pb-3 pt-1 shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="pb-3 pt-1 shrink-0 flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="relative">
             <div className="h-9 w-9 rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center">
               <Sparkles className="h-4 w-4 text-secondary" />
@@ -44,7 +44,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
             <p className="text-[10px] font-sans font-medium uppercase tracking-[0.22em] text-signature">
               ASK ANYTHING
             </p>
-            <h1 className="font-serif text-xl md:text-2xl text-foreground leading-tight">
+            <h1 className="font-serif text-lg sm:text-xl md:text-2xl text-foreground leading-tight break-words">
               Your reasoning companion
               {isThinking && (
                 <span className="text-muted-foreground font-serif italic ml-2 text-base">
@@ -55,12 +55,12 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {headerActions}
           {/* Toggle reasoning trace on smaller screens */}
           <button
           onClick={() => setTraceOpen(!traceOpen)}
-          className="xl:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          className="xl:hidden min-h-[44px] min-w-[44px] p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors flex items-center justify-center"
           title={traceOpen ? "Hide reasoning trace" : "Show reasoning trace"}
         >
           {traceOpen ? <PanelRightClose className="h-5 w-5" /> : <PanelRightOpen className="h-5 w-5" />}
@@ -69,13 +69,13 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
       </header>
 
       {/* Main grid — chat takes majority of space */}
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-6 flex-1 min-h-0 pb-2">
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4 sm:gap-6 flex-1 min-h-0 pb-2 min-w-0">
         {/* Conversation column — much wider now */}
-        <div className="flex flex-col min-h-0 relative">
-          <div className="flex-1 overflow-y-auto pr-1 pb-2">
+        <div className="flex flex-col min-h-0 min-w-0 relative">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 pb-2 min-w-0">
             {conversation}
           </div>
-          <div className="shrink-0 pt-2 border-t border-border/40">
+          <div className="shrink-0 pt-2 pb-[env(safe-area-inset-bottom)] border-t border-border/40 min-w-0">
             {inputBar}
           </div>
         </div>
@@ -84,7 +84,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
         <aside
           className={`flex flex-col min-h-0 overflow-y-auto transition-all duration-300 ${
             traceOpen
-              ? "fixed inset-y-0 right-0 w-[320px] bg-background z-50 shadow-2xl p-4 pt-16 border-l border-border"
+              ? "fixed inset-y-0 right-0 w-[min(320px,92vw)] bg-background z-50 shadow-2xl p-4 pt-16 pb-[env(safe-area-inset-bottom)] border-l border-border"
               : "hidden xl:flex"
           }`}
         >
