@@ -12,6 +12,10 @@ import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.t
 import { loadPatientContext } from "../_shared/contextLoader.ts";
 import { detectDosePatternsInActions } from "../_shared/dosePattern.ts";
 import { extractDoseTokens } from "../_shared/dosePolicy.ts";
+// ── AAE: Action Admission Engine ──
+// Admits the causal edge behind each action before it reaches the plan.
+import { admitEdges } from "../_shared/aae/aae.ts";
+import { buildCausalEdge } from "../_shared/aae/edgeProvenance.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -413,6 +417,84 @@ Deno.serve(async (req) => {
       todayActions = cleanActions;
     }
 
+    // ── AAE GATE: admit causal edges before they reach the plan ──
+    //
+    // Each action carries a causal edge: cause (trigger) → intervention (what)
+    // → expected effect (why/axes). AAE admits the edge based on declared
+    // provenance in edgeProvenance.ts. Edges that BLOCK are withheld from the
+    // plan; admitted edges carry their verdict forward so the surface can show
+    // why an action is allowed (ADMIT vs ADMIT_WITH_REVIEW).
+    //
+    // This is the fix for the chain-of-custody break: previously witness-admitted
+    // observations were attached to unadmitted (human-authored) edges and shipped.
+    // Now the edge must clear admission too.
+    const causalEdges = todayActions.map((a) =>
+      buildCausalEdge({
+        id: a.id,
+        what: a.what,
+        why: a.why,
+        coordinates: a.coordinates ?? [],
+      }),
+    );
+    const aaeLedger = admitEdges(causalEdges);
+    const verdictById: Record<string, (typeof aaeLedger.admitted)[number]> = {};
+    for (const r of [...aaeLedger.admitted, ...aaeLedger.blocked]) {
+      verdictById[r.edge_id] = r;
+    }
+
+    // Withhold blocked edges; annotate admitted ones with their verdict.
+    const blockedIds = new Set(aaeLedger.blocked.map((b) => b.edge_id));
+    todayActions = todayActions
+      .filter((a) => !blockedIds.has(a.id))
+      .map((a) => {
+        const v = verdictById[a.id];
+        return {
+          ...a,
+          admission: v
+            ? {
+                verdict: v.verdict,
+                reasons: v.reasons,
+                provenance: v.admitted_provenance,
+              }
+            : { verdict: "BLOCK", reasons: ["No AAE verdict produced."], provenance: [] },
+        };
+      });
+
+    // Structural trace: record the day-after-AAE emptiness for THIS twin.
+    // This is the measurable quantity the CPWE handoff named. Logged, not
+    // silently dropped, so emptiness can be measured across real twins.
+    console.log(
+      "[generate-action-plan][AAE]",
+      JSON.stringify({
+        user_id,
+        total_edges: aaeLedger.total,
+        admitted: aaeLedger.admitted_count,
+        blocked: aaeLedger.blocked_count,
+        emptiness_ratio: Number(aaeLedger.emptiness_ratio.toFixed(3)),
+        blocked_edges: aaeLedger.blocked.map((b) => b.edge_id),
+      }),
+    );
+    try {
+      await supabase.from("patient_chat_validation_log").insert({
+        user_id,
+        message_role: "aae_admission",
+        status:
+          aaeLedger.blocked_count === 0
+            ? "passed"
+            : "failed_with_warnings",
+        original_output: JSON.stringify({
+          total: aaeLedger.total,
+          admitted: aaeLedger.admitted_count,
+          blocked: aaeLedger.blocked_count,
+          emptiness_ratio: aaeLedger.emptiness_ratio,
+          blocked_edges: aaeLedger.blocked.map((b) => b.edge_id),
+        }),
+        last_user_message: "aae_admission",
+      });
+    } catch (e) {
+      console.error("[generate-action-plan][AAE] ledger insert failed:", e);
+    }
+
     // 6. Build retest schedule
     const retestMap: Record<number, Set<string>> = {};
     for (const a of todayActions) {
@@ -577,6 +659,17 @@ Actions:\n${actionSummary}${clusterContext}`
         matched_count: matched.length,
         selected_count: selected.length,
         voice_validation_status: voiceValidationStatus,
+        aae: {
+          total_edges: aaeLedger.total,
+          admitted_count: aaeLedger.admitted_count,
+          blocked_count: aaeLedger.blocked_count,
+          emptiness_ratio: Number(aaeLedger.emptiness_ratio.toFixed(3)),
+          blocked_edges: aaeLedger.blocked.map((b) => ({
+            edge_id: b.edge_id,
+            reasons: b.reasons,
+            what_would_resolve: b.what_would_resolve,
+          })),
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
