@@ -364,6 +364,9 @@ Deno.serve(async (req) => {
     // Structural backstop: in Core mode, today_actions[] must contain zero
     // dose tokens across what/how/rationale/doctor_question. Drops any
     // action that fails and writes an audit row.
+    // Tracks actions removed BEFORE AAE (Core-mode dose backstop), so the
+    // AAE ledger can record the complete custody chain in one row.
+    let upstreamDroppedCount = 0;
     if (actionPlanMode === "core") {
       const cleanActions: any[] = [];
       const droppedActions: Array<{ id: string; field: string; tokens: string[] }> = [];
@@ -395,6 +398,7 @@ Deno.serve(async (req) => {
         }
       }
       if (droppedActions.length > 0) {
+        upstreamDroppedCount = droppedActions.length;
         console.warn(
           "[generate-action-plan] Core mode backstop dropped actions:",
           droppedActions,
@@ -463,14 +467,32 @@ Deno.serve(async (req) => {
     // Structural trace: record the day-after-AAE emptiness for THIS twin.
     // This is the measurable quantity the CPWE handoff named. Logged, not
     // silently dropped, so emptiness can be measured across real twins.
+    //
+    // Complete custody chain in one row:
+    //   selected → dropped upstream (dose backstop) → reached AAE → blocked → admitted
+    // The AAE ledger previously recorded only "edges AAE saw" (total_edges),
+    // which understates total attrition because an upstream stage can remove
+    // actions before AAE. Recording selected_count + dropped_upstream makes the
+    // full chain legible without joining two log streams.
+    const custodyChain = {
+      selected_count: selected.length,
+      dropped_upstream: upstreamDroppedCount,
+      reached_aae: aaeLedger.total,
+      blocked_by_aae: aaeLedger.blocked_count,
+      admitted: aaeLedger.admitted_count,
+      // emptiness AAE measures, over edges that reached AAE
+      aae_emptiness_ratio: Number(aaeLedger.emptiness_ratio.toFixed(3)),
+      // total attrition, selected → persisted (the honest headline number)
+      total_attrition_ratio:
+        selected.length === 0
+          ? 0
+          : Number(((selected.length - aaeLedger.admitted_count) / selected.length).toFixed(3)),
+    };
     console.log(
       "[generate-action-plan][AAE]",
       JSON.stringify({
         user_id,
-        total_edges: aaeLedger.total,
-        admitted: aaeLedger.admitted_count,
-        blocked: aaeLedger.blocked_count,
-        emptiness_ratio: Number(aaeLedger.emptiness_ratio.toFixed(3)),
+        ...custodyChain,
         blocked_edges: aaeLedger.blocked.map((b) => b.edge_id),
       }),
     );
@@ -483,10 +505,7 @@ Deno.serve(async (req) => {
             ? "passed"
             : "failed_with_warnings",
         original_output: JSON.stringify({
-          total: aaeLedger.total,
-          admitted: aaeLedger.admitted_count,
-          blocked: aaeLedger.blocked_count,
-          emptiness_ratio: aaeLedger.emptiness_ratio,
+          ...custodyChain,
           blocked_edges: aaeLedger.blocked.map((b) => b.edge_id),
         }),
         last_user_message: "aae_admission",
@@ -660,10 +679,7 @@ Actions:\n${actionSummary}${clusterContext}`
         selected_count: selected.length,
         voice_validation_status: voiceValidationStatus,
         aae: {
-          total_edges: aaeLedger.total,
-          admitted_count: aaeLedger.admitted_count,
-          blocked_count: aaeLedger.blocked_count,
-          emptiness_ratio: Number(aaeLedger.emptiness_ratio.toFixed(3)),
+          ...custodyChain,
           blocked_edges: aaeLedger.blocked.map((b) => ({
             edge_id: b.edge_id,
             reasons: b.reasons,
