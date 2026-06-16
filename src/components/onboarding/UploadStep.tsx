@@ -158,6 +158,15 @@ const UploadStep: React.FC = () => {
           </div>
         )}
 
+        {/* Zero-extraction notice — let the user know they can still proceed */}
+        {zeroObservations && !localError && !error && (
+          <div className="rounded-lg border border-yellow-400/40 bg-yellow-400/5 px-4 py-3 text-sm text-foreground/80">
+            We couldn't extract biomarkers from this file automatically — it may be a scanned image or
+            non-standard format. You can upload another PDF, or continue and add labs later from the
+            Records section.
+          </div>
+        )}
+
         {/* Tips */}
         <div className="rounded-xl border border-border/60 bg-muted/20 p-5 space-y-2">
           <p className="text-[11px] font-sans font-medium uppercase tracking-[0.15em] text-muted-foreground">
