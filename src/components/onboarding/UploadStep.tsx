@@ -41,7 +41,13 @@ const UploadStep: React.FC = () => {
     advanceToStep("processing");
   };
 
-  const canAdvance = uploads.length > 0 && observations.length > 0 && !uploading && !processing;
+  // Allow advancing whenever an upload exists and we're no longer actively uploading/processing.
+  // Observations may be 0 (scanned image, low-OCR PDF, awaiting identity confirmation) — the
+  // user should not be trapped on this step; downstream surfaces will guide remediation.
+  const completedUpload = uploads.find((u) => u.status === "complete");
+  const hasAnyUpload = uploads.length > 0;
+  const canAdvance = hasAnyUpload && !uploading && !processing && !isSaving;
+  const zeroObservations = !!completedUpload && observations.length === 0;
 
   return (
     <OnboardingLayout
@@ -149,6 +155,15 @@ const UploadStep: React.FC = () => {
           <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive flex items-start gap-2">
             <X className="h-4 w-4 shrink-0 mt-0.5" />
             <span>{localError || error}</span>
+          </div>
+        )}
+
+        {/* Zero-extraction notice — let the user know they can still proceed */}
+        {zeroObservations && !localError && !error && (
+          <div className="rounded-lg border border-yellow-400/40 bg-yellow-400/5 px-4 py-3 text-sm text-foreground/80">
+            We couldn't extract biomarkers from this file automatically — it may be a scanned image or
+            non-standard format. You can upload another PDF, or continue and add labs later from the
+            Records section.
           </div>
         )}
 
