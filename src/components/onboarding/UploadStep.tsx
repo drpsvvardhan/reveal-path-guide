@@ -41,7 +41,13 @@ const UploadStep: React.FC = () => {
     advanceToStep("processing");
   };
 
-  const canAdvance = uploads.length > 0 && observations.length > 0 && !uploading && !processing;
+  // Allow advancing whenever an upload exists and we're no longer actively uploading/processing.
+  // Observations may be 0 (scanned image, low-OCR PDF, awaiting identity confirmation) — the
+  // user should not be trapped on this step; downstream surfaces will guide remediation.
+  const completedUpload = uploads.find((u) => u.status === "complete");
+  const hasAnyUpload = uploads.length > 0;
+  const canAdvance = hasAnyUpload && !uploading && !processing && !isSaving;
+  const zeroObservations = !!completedUpload && observations.length === 0;
 
   return (
     <OnboardingLayout
