@@ -17,11 +17,11 @@ const Index = () => (
   <ManifestProvider>
     <IntakeProvider>
       <CIEAssessmentProvider>
-        <TerrainRenderProvider>
-          <DocumentProvider>
-            <QueueProvider>
-              <ActionCompletionProvider>
-                <LabUploadsProvider>
+        <DocumentProvider>
+          <QueueProvider>
+            <ActionCompletionProvider>
+              <LabUploadsProvider>
+                <TerrainRenderProvider>
                   <DerivedPatternsProvider>
                     <SignatureColorProvider>
                       <NarrativeProvider>
@@ -33,11 +33,11 @@ const Index = () => (
                       </NarrativeProvider>
                     </SignatureColorProvider>
                   </DerivedPatternsProvider>
-                </LabUploadsProvider>
-              </ActionCompletionProvider>
-            </QueueProvider>
-          </DocumentProvider>
-        </TerrainRenderProvider>
+                </TerrainRenderProvider>
+              </LabUploadsProvider>
+            </ActionCompletionProvider>
+          </QueueProvider>
+        </DocumentProvider>
       </CIEAssessmentProvider>
     </IntakeProvider>
   </ManifestProvider>
