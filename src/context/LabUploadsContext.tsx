@@ -112,13 +112,34 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setError(null);
 
       try {
-        // Step 1: Insert upload row to get an ID
+        // Step 1: Upload the file to storage FIRST under a pre-generated UUID.
+        // We avoid the previous insert-then-update flow because a race or a
+        // silently-dropped update left rows stuck at storage_path='pending',
+        // and the edge function then failed with "Object not found".
+        const ext = getFileExtension(file.type);
+        const fileId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const storagePath = `${targetUserId}/${fileId}${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("lab-uploads")
+          .upload(storagePath, file, {
+            contentType: file.type,
+            upsert: false,
+          });
+        if (uploadError) {
+          throw new Error(`Storage upload failed: ${uploadError.message}`);
+        }
+
+        // Step 2: Insert the upload row with the real storage_path already set.
         const { data: uploadRow, error: insertError } = await supabase
           .from("patient_lab_uploads")
           .insert({
             user_id: targetUserId,
             original_filename: file.name,
-            storage_path: "pending",
+            storage_path: storagePath,
             file_size_bytes: file.size,
             status: "uploaded",
           })
@@ -126,29 +147,10 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .single();
 
         if (insertError || !uploadRow) {
+          // Roll back the storage object so we don't leak orphaned files.
+          await supabase.storage.from("lab-uploads").remove([storagePath]);
           throw new Error(insertError?.message || "Failed to create upload row");
         }
-
-        // Step 2: Upload file to storage at {user_id}/{upload_id}{ext}
-        const ext = getFileExtension(file.type);
-        const storagePath = `${targetUserId}/${uploadRow.id}${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("lab-uploads")
-          .upload(storagePath, file, {
-            contentType: file.type,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          await supabase.from("patient_lab_uploads").delete().eq("id", uploadRow.id);
-          throw new Error(`Storage upload failed: ${uploadError.message}`);
-        }
-
-        // Step 3: Update the row with the actual storage path
-        await supabase
-          .from("patient_lab_uploads")
-          .update({ storage_path: storagePath })
-          .eq("id", uploadRow.id);
 
         setUploading(false);
         setProcessing(true);
