@@ -64,11 +64,27 @@ export const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolea
     portrait.where_to_start,
     portrait.the_one_action,
   ].join(" ").toLowerCase();
+  return text.includes("cie has not been completed") || text.includes("complete your cie assessment");
+};
+
+// Returns true when the active render is nudging the user to upload labs
+// even though labs already exist on the server. This indicates the witness
+// layer was stale at generation time (labs not yet witnessified) and a
+// regeneration will now produce a grounded portrait.
+export const hasStaleLabUploadPlaceholder = (
+  render: TerrainRender | null,
+  hasLabObservations: boolean,
+): boolean => {
+  if (!hasLabObservations) return false;
+  const portrait = render?.patient_portrait;
+  if (!portrait) return false;
+  const text = [
+    portrait.what_you_already_know,
+    portrait.working_harder_than_you_realize,
+    portrait.where_to_start,
+    portrait.the_one_action,
+  ].join(" ").toLowerCase();
   return (
-    text.includes("cie has not been completed") ||
-    text.includes("complete your cie assessment") ||
-    // "Upload labs" nudge while labs already exist server-side means the
-    // witness layer is stale — same regeneration path applies.
     text.includes("upload your most recent lab") ||
     text.includes("upload your most recent comprehensive lab") ||
     text.includes("foundational lab work has not arrived")
