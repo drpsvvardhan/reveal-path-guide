@@ -608,7 +608,7 @@ Deno.serve(async (req) => {
     // 2. Fetch assessment (still needed for assessment_id on terrain_renders insert)
     let assessmentFilter = supabase
       .from("cie_assessments")
-      .select("id, version, status")
+      .select("id, version, status, full_completed_at")
       .eq("user_id", user_id)
       .eq("status", "complete")
       .order("created_at", { ascending: false })
@@ -617,7 +617,7 @@ Deno.serve(async (req) => {
     if (assessment_id) {
       assessmentFilter = supabase
         .from("cie_assessments")
-        .select("id, version, status")
+        .select("id, version, status, full_completed_at")
         .eq("id", assessment_id)
         .eq("user_id", user_id)
         .eq("status", "complete")
