@@ -33,6 +33,22 @@ const SUPPORTED_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
+  // Text-based formats parsed server-side
+  "text/csv",
+  "application/vnd.ms-excel", // some browsers report .csv as this
+  "text/plain",
+  "text/markdown",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+];
+
+// Some browsers (Safari especially) leave file.type empty for less common
+// extensions. We use the filename as a fallback check.
+const SUPPORTED_EXTENSIONS = [
+  ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif",
+  ".csv", ".tsv", ".txt", ".md", ".markdown", ".xlsx", ".docx",
 ];
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -43,8 +59,26 @@ function getFileExtension(mimeType: string): string {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "text/csv": ".csv",
+    "application/vnd.ms-excel": ".csv",
+    "text/plain": ".txt",
+    "text/markdown": ".md",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
   };
   return map[mimeType] || ".bin";
+}
+
+function extFromFilename(name: string): string {
+  const idx = name.lastIndexOf(".");
+  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
+}
+
+function isSupportedFile(file: File): boolean {
+  if (file.type && SUPPORTED_TYPES.includes(file.type)) return true;
+  return SUPPORTED_EXTENSIONS.includes(extFromFilename(file.name));
 }
 
 export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -101,8 +135,12 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     async (file: File, options?: { confirmedName?: string }): Promise<LabUploadProcessResult> => {
       if (!user) return { success: false, error: "Not authenticated" };
       const targetUserId = effectiveUserId || user.id;
-      if (!SUPPORTED_TYPES.includes(file.type)) {
-        return { success: false, error: "Unsupported file type. Upload a PDF, JPEG, PNG, or WebP." };
+      if (!isSupportedFile(file)) {
+        return {
+          success: false,
+          error:
+            "Unsupported file type. Upload a PDF, image (JPG/PNG/WebP/HEIC), spreadsheet (CSV/XLSX), Word doc (DOCX), or text file (TXT/MD).",
+        };
       }
       if (file.size > MAX_FILE_SIZE) {
         return { success: false, error: "File too large (20 MB max)" };
@@ -116,7 +154,10 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // We avoid the previous insert-then-update flow because a race or a
         // silently-dropped update left rows stuck at storage_path='pending',
         // and the edge function then failed with "Object not found".
-        const ext = getFileExtension(file.type);
+        const ext =
+          getFileExtension(file.type) !== ".bin"
+            ? getFileExtension(file.type)
+            : extFromFilename(file.name) || ".bin";
         const fileId =
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
@@ -126,7 +167,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
           .upload(storagePath, file, {
-            contentType: file.type,
+            contentType: file.type || "application/octet-stream",
             upsert: false,
           });
         if (uploadError) {
