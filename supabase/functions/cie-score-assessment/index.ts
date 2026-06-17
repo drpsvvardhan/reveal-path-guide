@@ -7,7 +7,7 @@ import {
   type CieDomainScoreInput,
   type CieGateScoreInput,
 } from "../_shared/witnessify_impl.ts";
-import { loadRegistryFromSupabase } from "../witnessify-observations/supabaseRegistry.ts";
+import { loadRegistryFromSupabase } from "../_shared/witnessRegistry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
