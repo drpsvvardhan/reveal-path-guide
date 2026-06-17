@@ -430,7 +430,7 @@ const RecordsSection: React.FC = () => {
              : processing ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading report...</>)
              : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
           </button>
-          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,text/csv,text/plain,text/markdown,.md,.csv,.tsv,.txt,.xlsx,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelect} className="hidden" />
 
           <button
             onClick={triggerFibroFilePicker}
@@ -467,7 +467,7 @@ const RecordsSection: React.FC = () => {
              : processing ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Reading report...</>)
              : (<><Upload className="h-3.5 w-3.5" />Upload lab report</>)}
           </button>
-          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+          <input ref={fileInputRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,text/csv,text/plain,text/markdown,.md,.csv,.tsv,.txt,.xlsx,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelect} className="hidden" />
 
           <button
             onClick={triggerFibroFilePicker}

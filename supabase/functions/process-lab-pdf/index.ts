@@ -163,9 +163,114 @@ function detectMimeFromPath(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
     pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg",
-    png: "image/png", webp: "image/webp", heic: "image/heic",
+    png: "image/png", webp: "image/webp", heic: "image/heic", heif: "image/heif",
+    csv: "text/csv", tsv: "text/tab-separated-values",
+    txt: "text/plain", md: "text/markdown", markdown: "text/markdown",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   };
   return map[ext || ""] || "application/pdf";
+}
+
+// Classifies how the raw bytes should be fed to the LLM.
+//   - "file_native": send as PDF or image (Gemini multimodal file part).
+//   - "text":        parse server-side to text, send as a text-only message.
+function classifyUploadKind(mimeType: string): "file_native" | "text" {
+  if (mimeType === "application/pdf") return "file_native";
+  if (mimeType.startsWith("image/")) return "file_native";
+  return "text";
+}
+
+// ============================================================================
+// TEXT EXTRACTION for CSV / TSV / TXT / MD / XLSX / DOCX
+// ============================================================================
+
+const TEXT_PAYLOAD_CHAR_LIMIT = 60_000; // keep prompt under model budget
+
+async function extractTextFromBytes(bytes: Uint8Array, mimeType: string, filename: string): Promise<string> {
+  const lower = filename.toLowerCase();
+
+  // Plain text / CSV / TSV / Markdown — just decode UTF-8.
+  if (
+    mimeType === "text/csv" ||
+    mimeType === "text/tab-separated-values" ||
+    mimeType === "text/plain" ||
+    mimeType === "text/markdown" ||
+    lower.endsWith(".csv") ||
+    lower.endsWith(".tsv") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".md") ||
+    lower.endsWith(".markdown")
+  ) {
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+    return decoder.decode(bytes);
+  }
+
+  // XLSX — read every sheet as CSV using SheetJS.
+  if (
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    lower.endsWith(".xlsx") ||
+    lower.endsWith(".xls")
+  ) {
+    const XLSX: any = await import("https://esm.sh/xlsx@0.18.5");
+    const wb = XLSX.read(bytes, { type: "array" });
+    const parts: string[] = [];
+    for (const name of wb.SheetNames) {
+      const sheet = wb.Sheets[name];
+      const csv: string = XLSX.utils.sheet_to_csv(sheet);
+      if (csv && csv.trim().length > 0) {
+        parts.push(`### Sheet: ${name}\n${csv}`);
+      }
+    }
+    return parts.join("\n\n");
+  }
+
+  // DOCX — extract raw text via mammoth.
+  if (
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    lower.endsWith(".docx")
+  ) {
+    const mammoth: any = await import("https://esm.sh/mammoth@1.8.0?target=deno");
+    const result = await mammoth.extractRawText({ arrayBuffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) });
+    return typeof result?.value === "string" ? result.value : "";
+  }
+
+  // Fallback: try UTF-8 decode and hope for the best.
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+async function callLLMWithText(textPayload: string, systemPrompt: string, filename: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+  const trimmed = textPayload.length > TEXT_PAYLOAD_CHAR_LIMIT
+    ? textPayload.slice(0, TEXT_PAYLOAD_CHAR_LIMIT) + "\n\n[... truncated for length ...]"
+    : textPayload;
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `The following content was extracted from the uploaded file "${filename}". Treat it as the full text of a medical lab / investigation report. Extract every biomarker observation as specified in your instructions. Return ONLY the JSON object.\n\n----- BEGIN FILE CONTENT -----\n${trimmed}\n----- END FILE CONTENT -----`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`AI Gateway error ${response.status}: ${errText}`);
+  }
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
 }
 
 // ============================================================================
@@ -645,11 +750,9 @@ async function processUpload(
       .update({ content_sha256: contentSha256 })
       .eq("id", uploadId);
 
-    // Slice exactly to the view in case Uint8Array is a view over a larger buffer
-    const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-    const base64Data = arrayBufferToBase64(exactBuffer);
-    console.log(`[encode] pdfBytes.length=${pdfBytes.length}, base64.length=${base64Data.length}`);
     const mimeType = detectMimeFromPath(upload.storage_path);
+    const uploadKind = classifyUploadKind(mimeType);
+    console.log(`[classify] upload=${uploadId} mime=${mimeType} kind=${uploadKind} filename=${upload.original_filename}`);
 
     // Detect if this is an InBody report
     const isInBody = isInBodyReport(upload.original_filename);
@@ -719,9 +822,31 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
 
     console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}, ontology=${ontology ? 'loaded' : 'unavailable'}`);
 
-    // Call Gemini vision with appropriate prompt
+    // Call the LLM with the appropriate input shape for this file kind.
     const llmStartedAt = Date.now();
-    const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    let rawOutput: string;
+    if (uploadKind === "file_native") {
+      // PDF / image — send raw bytes via Gemini multimodal file part.
+      const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+      const base64Data = arrayBufferToBase64(exactBuffer);
+      console.log(`[encode] upload=${uploadId} bytes=${pdfBytes.length} base64=${base64Data.length}`);
+      rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    } else {
+      // CSV / TSV / TXT / MD / XLSX / DOCX — extract text server-side and
+      // send a text-only chat message. Gemini handles structured text well
+      // and we sidestep multimodal-format limits.
+      let textPayload = "";
+      try {
+        textPayload = await extractTextFromBytes(pdfBytes, mimeType, upload.original_filename || "upload");
+      } catch (e) {
+        throw new Error(`Failed to read uploaded file as text: ${(e as Error).message}`);
+      }
+      if (!textPayload || textPayload.trim().length < 5) {
+        throw new Error("Uploaded file appears to be empty after parsing.");
+      }
+      console.log(`[encode] upload=${uploadId} text_chars=${textPayload.length}`);
+      rawOutput = await callLLMWithText(textPayload, systemPrompt, upload.original_filename || "upload");
+    }
     const llmMs = Date.now() - llmStartedAt;
     console.log(`[timing] upload=${uploadId} llm_call_ms=${llmMs} model=google/gemini-3-flash-preview`);
     console.log(`[llm-raw] upload=${uploadId} output_length=${rawOutput.length}, preview=${rawOutput.slice(0, 600)}`);
