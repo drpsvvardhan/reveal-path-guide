@@ -32,6 +32,10 @@ vi.mock("@/context/CIEAssessmentContext", () => ({
   }),
 }));
 
+vi.mock("@/context/LabUploadsContext", () => ({
+  useLabUploads: () => ({ observations: [] }),
+}));
+
 // Supabase client mock that drives the test scenarios via mutable state.
 type RenderRow = {
   id: string;
