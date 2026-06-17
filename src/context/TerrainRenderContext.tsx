@@ -139,10 +139,12 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       setError(null);
 
       if (currentAssessment?.status === "complete") {
-        const { error: scoringError } = await supabase.functions.invoke("cie-score-assessment", {
+        const { data: scoringResult, error: scoringError } = await supabase.functions.invoke("cie-score-assessment", {
           body: { assessment_id: currentAssessment.id },
         });
-        if (scoringError) throw new Error(scoringError.message || "Failed to prepare CIE data for terrain generation");
+        if (scoringError || !scoringResult?.success || scoringResult?.witness_error) {
+          throw new Error(scoringError?.message || scoringResult?.witness_error || "Failed to prepare CIE data for terrain generation");
+        }
       }
 
       const { data: result, error: invokeError } = await supabase.functions.invoke("generate-terrain-render", {
