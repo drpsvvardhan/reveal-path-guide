@@ -592,6 +592,21 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // Lazy backfill: ensure every patient_lab_observations row for this
+    // user is represented as a witness BEFORE we load the reasoning
+    // context. Without this, freshly-uploaded labs are invisible to the
+    // LLM and the portrait keeps telling the user to "upload labs"
+    // even though they already did. Idempotent — existing witnesses
+    // conflict-skip on the unique index.
+    try {
+      const wRes = await witnessifyDirectForUser(supabase, user_id);
+      if (wRes.produced > 0 || wRes.registry_misses > 0) {
+        console.log("witnessifyDirectForUser:", JSON.stringify(wRes));
+      }
+    } catch (e) {
+      console.error("witnessifyDirectForUser failed (continuing):", e instanceof Error ? e.message : String(e));
+    }
+
     // 1. P1a: load all reasoning context from the witness layer.
     // Raw reads of patient_lab_observations, cie_domain_scores,
     // cie_gate_scores, and cie_responses are forbidden on this surface.
