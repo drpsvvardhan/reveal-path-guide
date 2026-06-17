@@ -526,6 +526,8 @@ Deno.serve(async (req) => {
         .from("cie_assessments")
         .select("id, version, status")
         .eq("id", assessment_id)
+        .eq("user_id", user_id)
+        .eq("status", "complete")
         .limit(1);
     }
 
@@ -542,6 +544,16 @@ Deno.serve(async (req) => {
     const domainScores = witnessContext.cie.domain_scores;
     const gateScores = witnessContext.cie.gate_scores;
     const responses = witnessContext.cie.sample_responses;
+
+    if (domainScores.length === 0 || gateScores.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "CIE assessment is complete, but the terrain evidence layer is still being prepared. Please retry shortly.",
+      }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Union the three witness-backed observation streams. Preserve the
     // legacy `source === "InBody"` semantics so resolveInBodyMapping bucketing

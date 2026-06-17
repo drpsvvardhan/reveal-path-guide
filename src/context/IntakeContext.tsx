@@ -491,6 +491,15 @@ export function IntakeProvider({ children }: { children: React.ReactNode }) {
       })
       .eq("id", state.currentAssessmentId);
 
+    // Re-score after the assessment is marked complete so the witness-backed
+    // terrain layer is indexed before any terrain render is generated.
+    const { error: finalScoringError } = await supabase.functions.invoke("cie-score-assessment", {
+      body: { assessment_id: state.currentAssessmentId },
+    });
+    if (finalScoringError) {
+      console.error("Failed to prepare completed CIE for terrain generation:", finalScoringError);
+    }
+
     const { data: domainRows } = await supabase
       .from("cie_domain_scores")
       .select("*")
