@@ -1,4 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { type WitnessObject } from "../_shared/witness.ts";
+import {
+  witnessifyCieAssessment,
+  type CieAssessmentInput,
+  type CieResponseInput,
+  type CieDomainScoreInput,
+  type CieGateScoreInput,
+} from "../_shared/witnessify_impl.ts";
+import { loadRegistryFromSupabase } from "../witnessify-observations/supabaseRegistry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +16,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const DEFAULT_REGISTRY_SEED_VERSION = "p1a_initial";
+const WITNESS_INSERT_BATCH_SIZE = 100;
 
 // ── Scoring maps (default: negative polarity — "yes" = symptom present = 0) ──
 const SCORE_MAPS: Record<string, Record<string, number>> = {
@@ -296,11 +307,31 @@ Deno.serve(async (req) => {
       });
     }
 
+    let witnessSummary: Awaited<ReturnType<typeof witnessifyCompletedCieAssessment>> | null = null;
+    let witnessError: string | null = null;
+
+    const { data: completedAssessment } = await supabase
+      .from("cie_assessments")
+      .select("id, user_id, status, full_completed_at, layer1_completed_at, created_at")
+      .eq("id", assessment_id)
+      .maybeSingle();
+
+    if (completedAssessment?.status === "complete") {
+      try {
+        witnessSummary = await witnessifyCompletedCieAssessment(supabase, completedAssessment);
+      } catch (err) {
+        witnessError = err instanceof Error ? err.message : String(err);
+        console.error("CIE witness indexing failed:", witnessError);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       assessment_id,
       domains_scored: domainRows.length,
       gates_scored: gateRows.length,
+      cie_witnesses: witnessSummary,
+      witness_error: witnessError,
       domain_scores: Object.fromEntries(domainRows.map((r) => [r.domain_id, r.final_score])),
       gate_scores: Object.fromEntries(gateRows.map((r) => [r.gate_id, { score: r.score, traffic_light: r.traffic_light }])),
     }), {
