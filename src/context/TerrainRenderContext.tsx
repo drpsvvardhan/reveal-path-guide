@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
+import { useLabUploads } from "@/context/LabUploadsContext";
 
 interface TerrainPortrait {
   what_you_already_know: string;
@@ -67,6 +68,30 @@ export const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolea
   return text.includes("cie has not been completed") || text.includes("complete your cie assessment");
 };
 
+// Returns true when the active render is nudging the user to upload labs
+// even though labs already exist on the server. This indicates the witness
+// layer was stale at generation time (labs not yet witnessified) and a
+// regeneration will now produce a grounded portrait.
+export const hasStaleLabUploadPlaceholder = (
+  render: TerrainRender | null,
+  hasLabObservations: boolean,
+): boolean => {
+  if (!hasLabObservations) return false;
+  const portrait = render?.patient_portrait;
+  if (!portrait) return false;
+  const text = [
+    portrait.what_you_already_know,
+    portrait.working_harder_than_you_realize,
+    portrait.where_to_start,
+    portrait.the_one_action,
+  ].join(" ").toLowerCase();
+  return (
+    text.includes("upload your most recent lab") ||
+    text.includes("upload your most recent comprehensive lab") ||
+    text.includes("foundational lab work has not arrived")
+  );
+};
+
 export const useTerrainRender = () => {
   const ctx = useContext(TerrainRenderContext);
   if (!ctx) throw new Error("useTerrainRender must be used within TerrainRenderProvider");
@@ -77,6 +102,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
   const { currentAssessment } = useCIEAssessment();
+  const { observations: labObservations } = useLabUploads();
   const [activeRender, setActiveRender] = useState<TerrainRender | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,16 +207,19 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!cieTs) return;
     const renderTs = activeRender?.generated_at || activeRender?.created_at;
     const placeholder = hasCompletedCiePlaceholder(activeRender);
+    const staleLabs = hasStaleLabUploadPlaceholder(activeRender, (labObservations?.length ?? 0) > 0);
     const stale =
       !activeRender ||
       placeholder ||
+      staleLabs ||
       (renderTs && new Date(renderTs).getTime() < new Date(cieTs).getTime());
     if (!stale) return;
-    const key = `${effectiveUserId}:${currentAssessment.id}:${activeRender?.id ?? "none"}:${placeholder ? "placeholder" : "stale"}`;
+    const reason = placeholder ? "placeholder" : staleLabs ? "stalelabs" : "stale";
+    const key = `${effectiveUserId}:${currentAssessment.id}:${activeRender?.id ?? "none"}:${reason}`;
     if (autoRegenTriggered.current.has(key)) return;
     autoRegenTriggered.current.add(key);
     void regenerate();
-  }, [effectiveUserId, currentAssessment, activeRender, isLoading, regenerate]);
+  }, [effectiveUserId, currentAssessment, activeRender, isLoading, regenerate, labObservations]);
 
   return (
     <TerrainRenderContext.Provider value={{ activeRender, isLoading, error, hasFailed, refresh: fetchRender, regenerate }}>
