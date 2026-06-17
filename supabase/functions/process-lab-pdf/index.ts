@@ -551,6 +551,22 @@ async function processUpload(
     return;
   }
 
+  // Guard: refuse rows whose storage_path was never finalised. These rows
+  // come from the legacy insert-then-update flow where the update raced the
+  // edge function and the function tried to download a literal "pending"
+  // path. Surface a clear error rather than the opaque "Object not found".
+  if (!upload.storage_path || upload.storage_path === "pending") {
+    await supabase
+      .from("patient_lab_uploads")
+      .update({
+        status: "failed",
+        error_message:
+          "Upload was never finalised in storage. Please re-upload the file.",
+      })
+      .eq("id", uploadId);
+    return;
+  }
+
   // Mark as processing
   await supabase
     .from("patient_lab_uploads")
