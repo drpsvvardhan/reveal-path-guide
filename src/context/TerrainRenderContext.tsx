@@ -55,6 +55,18 @@ interface TerrainRenderContextValue {
 
 const TerrainRenderContext = createContext<TerrainRenderContextValue | null>(null);
 
+const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolean => {
+  const portrait = render?.patient_portrait;
+  if (!portrait) return false;
+  const text = [
+    portrait.what_you_already_know,
+    portrait.working_harder_than_you_realize,
+    portrait.where_to_start,
+    portrait.the_one_action,
+  ].join(" ").toLowerCase();
+  return text.includes("cie has not been completed") || text.includes("complete your cie assessment");
+};
+
 export const useTerrainRender = () => {
   const ctx = useContext(TerrainRenderContext);
   if (!ctx) throw new Error("useTerrainRender must be used within TerrainRenderProvider");
@@ -126,8 +138,15 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(true);
       setError(null);
 
+      if (currentAssessment?.status === "complete") {
+        const { error: scoringError } = await supabase.functions.invoke("cie-score-assessment", {
+          body: { assessment_id: currentAssessment.id },
+        });
+        if (scoringError) throw new Error(scoringError.message || "Failed to prepare CIE data for terrain generation");
+      }
+
       const { data: result, error: invokeError } = await supabase.functions.invoke("generate-terrain-render", {
-        body: { user_id: uid },
+        body: { user_id: uid, assessment_id: currentAssessment?.id },
       });
       if (invokeError || !result?.success) {
         throw new Error(invokeError?.message || result?.error || "Terrain generation failed");
@@ -140,7 +159,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       setError(e.message || "Failed to regenerate terrain");
       setIsLoading(false);
     }
-  }, [effectiveUserId, fetchRender]);
+  }, [effectiveUserId, currentAssessment, fetchRender]);
 
   useEffect(() => {
     fetchRender();
@@ -159,11 +178,13 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
     const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
     if (!cieTs) return;
     const renderTs = activeRender?.generated_at || activeRender?.created_at;
+    const placeholder = hasCompletedCiePlaceholder(activeRender);
     const stale =
       !activeRender ||
+      placeholder ||
       (renderTs && new Date(renderTs).getTime() < new Date(cieTs).getTime());
     if (!stale) return;
-    const key = `${effectiveUserId}:${currentAssessment.id}`;
+    const key = `${effectiveUserId}:${currentAssessment.id}:${activeRender?.id ?? "none"}:${placeholder ? "placeholder" : "stale"}`;
     if (autoRegenTriggered.current.has(key)) return;
     autoRegenTriggered.current.add(key);
     void regenerate();
