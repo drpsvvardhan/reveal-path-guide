@@ -526,6 +526,8 @@ Deno.serve(async (req) => {
         .from("cie_assessments")
         .select("id, version, status")
         .eq("id", assessment_id)
+        .eq("user_id", user_id)
+        .eq("status", "complete")
         .limit(1);
     }
 
