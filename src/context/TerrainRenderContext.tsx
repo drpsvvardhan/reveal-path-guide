@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 
 interface TerrainPortrait {
   what_you_already_know: string;
@@ -63,6 +64,7 @@ export const useTerrainRender = () => {
 export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
+  const { currentAssessment } = useCIEAssessment();
   const [activeRender, setActiveRender] = useState<TerrainRender | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +145,29 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     fetchRender();
   }, [fetchRender]);
+
+  // Auto-regenerate the terrain render when the CIE assessment is newer
+  // than the active render (or no active render exists despite a completed
+  // CIE). Prevents the stale "Your terrain rendering cannot be generated
+  // yet because your CIE has not been completed" copy from sticking after
+  // the user finishes the assessment.
+  const autoRegenTriggered = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (isLoading) return;
+    if (!effectiveUserId) return;
+    if (!currentAssessment || currentAssessment.status !== "complete") return;
+    const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
+    if (!cieTs) return;
+    const renderTs = activeRender?.generated_at || activeRender?.created_at;
+    const stale =
+      !activeRender ||
+      (renderTs && new Date(renderTs).getTime() < new Date(cieTs).getTime());
+    if (!stale) return;
+    const key = `${effectiveUserId}:${currentAssessment.id}`;
+    if (autoRegenTriggered.current.has(key)) return;
+    autoRegenTriggered.current.add(key);
+    void regenerate();
+  }, [effectiveUserId, currentAssessment, activeRender, isLoading, regenerate]);
 
   return (
     <TerrainRenderContext.Provider value={{ activeRender, isLoading, error, hasFailed, refresh: fetchRender, regenerate }}>
