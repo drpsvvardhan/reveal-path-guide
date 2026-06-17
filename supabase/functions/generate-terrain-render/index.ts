@@ -246,6 +246,99 @@ function validateTerrainRender(obj: any): { valid: boolean; errors: string[] } {
 }
 
 // ============================================================================
+// CIE EVIDENCE VALIDATION
+// ----------------------------------------------------------------------------
+// Refuses to render terrain when the CIE evidence index is missing or
+// internally inconsistent. This is a hard gate executed BEFORE any LLM call
+// or partial section synthesis so we never publish a render that mixes a
+// completed CIE with stale "CIE not done" copy.
+//
+// Returns the list of inconsistencies. An empty list means the evidence
+// layer is coherent enough to render.
+// ============================================================================
+
+const EXPECTED_GATE_COUNT = 9;
+const ALL_DOMAIN_IDS = new Set(CIE_AXES.flatMap((a) => a.domains));
+
+function validateCieEvidence(args: {
+  assessment: { id: string; status: string; full_completed_at?: string | null } | null;
+  domainScores: any[];
+  gateScores: any[];
+}): { ok: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  const { assessment, domainScores, gateScores } = args;
+
+  if (!assessment) {
+    reasons.push("No completed CIE assessment found for this user.");
+    return { ok: false, reasons };
+  }
+  if (assessment.status !== "complete") {
+    reasons.push(`CIE assessment status is '${assessment.status}', expected 'complete'.`);
+  }
+
+  if (!Array.isArray(domainScores) || domainScores.length === 0) {
+    reasons.push("CIE domain_scores are missing from the evidence index.");
+  }
+  if (!Array.isArray(gateScores) || gateScores.length === 0) {
+    reasons.push("CIE gate_scores are missing from the evidence index.");
+  }
+
+  if (reasons.length > 0) return { ok: false, reasons };
+
+  // Gate-count check — CIE v2.2 always produces exactly 9 gate scores.
+  if (gateScores.length !== EXPECTED_GATE_COUNT) {
+    reasons.push(
+      `Expected ${EXPECTED_GATE_COUNT} CIE gate scores, found ${gateScores.length}.`,
+    );
+  }
+
+  // Per-domain integrity
+  const domainIdsSeen = new Set<string>();
+  for (const d of domainScores) {
+    if (!d || typeof d.domain_id !== "string") {
+      reasons.push("A domain score row is missing a domain_id.");
+      continue;
+    }
+    if (!ALL_DOMAIN_IDS.has(d.domain_id)) {
+      reasons.push(`Domain '${d.domain_id}' is not a known CIE v2.2 domain.`);
+    }
+    const score = Number(d.final_score);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      reasons.push(`Domain '${d.domain_id}' has invalid final_score=${d.final_score}.`);
+    }
+    domainIdsSeen.add(d.domain_id);
+  }
+
+  // Per-gate integrity
+  for (const g of gateScores) {
+    if (!g || typeof g.gate_id !== "string") {
+      reasons.push("A gate score row is missing a gate_id.");
+      continue;
+    }
+    const score = Number(g.score);
+    if (!Number.isFinite(score) || score < 0 || score > 100) {
+      reasons.push(`Gate '${g.gate_id}' has invalid score=${g.score}.`);
+    }
+    if (!g.traffic_light || !["GREEN", "AMBER", "RED"].includes(String(g.traffic_light).toUpperCase())) {
+      reasons.push(`Gate '${g.gate_id}' has invalid traffic_light='${g.traffic_light}'.`);
+    }
+    const contributing: string[] = Array.isArray(g.contributing_domains) ? g.contributing_domains : [];
+    if (contributing.length === 0) {
+      reasons.push(`Gate '${g.gate_id}' has no contributing_domains.`);
+    }
+    for (const dId of contributing) {
+      if (!domainIdsSeen.has(dId)) {
+        reasons.push(
+          `Gate '${g.gate_id}' references contributing domain '${dId}' which has no scored row.`,
+        );
+      }
+    }
+  }
+
+  return { ok: reasons.length === 0, reasons };
+}
+
+// ============================================================================
 // INPUT COMPOSITION
 // ============================================================================
 
@@ -545,10 +638,26 @@ Deno.serve(async (req) => {
     const gateScores = witnessContext.cie.gate_scores;
     const responses = witnessContext.cie.sample_responses;
 
-    if (domainScores.length === 0 || gateScores.length === 0) {
+    // Hard evidence gate — refuses to generate any terrain section when the
+    // CIE evidence index is missing or internally inconsistent. This prevents
+    // mixed-state renders (e.g. one slide claims 75/75 answered, another says
+    // "CIE not done") by short-circuiting before any LLM synthesis runs.
+    const evidenceCheck = validateCieEvidence({
+      assessment,
+      domainScores,
+      gateScores,
+    });
+    if (!evidenceCheck.ok) {
+      console.warn("Refusing terrain render: CIE evidence layer inconsistent", {
+        user_id,
+        assessment_id: assessment.id,
+        reasons: evidenceCheck.reasons,
+      });
       return new Response(JSON.stringify({
         success: false,
-        error: "CIE assessment is complete, but the terrain evidence layer is still being prepared. Please retry shortly.",
+        error: "CIE evidence index is missing or inconsistent — terrain render refused to prevent mixed-state output.",
+        evidence_reasons: evidenceCheck.reasons,
+        retryable: true,
       }), {
         status: 409,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
