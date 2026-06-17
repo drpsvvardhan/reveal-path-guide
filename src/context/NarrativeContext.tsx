@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useManifest } from "@/context/ManifestContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
+import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { PatientNarrativeVersion, NarrativeGenerationResult, GeneratedNarrativeFields } from "@/types/manifest";
 
 interface NarrativeContextValue {
@@ -33,6 +34,7 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { effectiveUserId } = useViewAs();
   const { manifest } = useManifest();
   const { observations, observationsAsTimeline } = useLabUploads();
+  const { currentAssessment } = useCIEAssessment();
   const [activeNarrative, setActiveNarrative] = useState<GeneratedNarrativeFields | null>(null);
   const [allVersions, setAllVersions] = useState<PatientNarrativeVersion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -116,6 +118,27 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setGenerating(false);
     }
   }, [effectiveUserId, manifest, observations, observationsAsTimeline, refresh]);
+
+  // Auto-regenerate the narrative when the CIE assessment is newer than the
+  // active narrative. Without this, a narrative authored before the CIE was
+  // completed keeps telling the user to "Complete your CIE assessment" even
+  // though the terrain page now shows full domain/gate scores.
+  const autoRegenTriggered = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (loading || generating) return;
+    if (!effectiveUserId || !manifest) return;
+    if (!currentAssessment || currentAssessment.status !== "complete") return;
+    const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
+    if (!cieTs) return;
+    const active = allVersions.find((v) => v.status === "active");
+    const narrativeTs = (active as any)?.created_at;
+    const stale = !active || (narrativeTs && new Date(narrativeTs).getTime() < new Date(cieTs).getTime());
+    if (!stale) return;
+    const key = `${effectiveUserId}:${currentAssessment.id}`;
+    if (autoRegenTriggered.current.has(key)) return;
+    autoRegenTriggered.current.add(key);
+    void generateNarrative();
+  }, [effectiveUserId, manifest, currentAssessment, allVersions, loading, generating, generateNarrative]);
 
   const restoreVersion = useCallback(
     async (versionId: string) => {
