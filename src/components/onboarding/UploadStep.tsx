@@ -130,7 +130,7 @@ const UploadStep: React.FC = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,text/csv,text/plain,text/markdown,.md,.csv,.tsv,.txt,.xlsx,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           onChange={handleFileSelect}
           className="hidden"
         />
