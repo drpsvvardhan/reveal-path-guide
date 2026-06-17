@@ -13,6 +13,7 @@ import {
 } from "../_shared/framework_v2.ts";
 import type { ClusterTier, VocabularyViolation } from "../_shared/framework_v2.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
+import { witnessifyDirectForUser } from "../_shared/witnessifyDirectForUser.ts";
 import {
   INBODY_TERRAIN_MAP,
   INBODY_NAME_LOOKUP,
