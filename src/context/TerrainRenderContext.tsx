@@ -55,7 +55,7 @@ interface TerrainRenderContextValue {
 
 const TerrainRenderContext = createContext<TerrainRenderContextValue | null>(null);
 
-const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolean => {
+export const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolean => {
   const portrait = render?.patient_portrait;
   if (!portrait) return false;
   const text = [
