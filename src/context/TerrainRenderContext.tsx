@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
+import type { LabObservationRow } from "@/types/manifest";
 
 interface TerrainPortrait {
   what_you_already_know: string;
@@ -90,6 +91,30 @@ export const hasStaleLabUploadPlaceholder = (
     text.includes("upload your most recent comprehensive lab") ||
     text.includes("foundational lab work has not arrived")
   );
+};
+
+// Returns true when there is at least one lab observation that was created
+// or collected AFTER the active render was generated. Any new lab data —
+// whether arriving via upload, manual entry, or backfill — should immediately
+// invalidate the existing portrait so the next render reflects it.
+export const hasLabObservationsNewerThanRender = (
+  render: TerrainRender | null,
+  observations: Pick<LabObservationRow, "created_at" | "collection_date">[] | null | undefined,
+): boolean => {
+  if (!observations || observations.length === 0) return false;
+  if (!render) return true; // labs present but no render yet
+  const renderTs = render.generated_at || render.created_at;
+  if (!renderTs) return true;
+  const renderMs = new Date(renderTs).getTime();
+  if (Number.isNaN(renderMs)) return true;
+  for (const obs of observations) {
+    const candidates = [obs.created_at, obs.collection_date].filter(Boolean) as string[];
+    for (const ts of candidates) {
+      const ms = new Date(ts).getTime();
+      if (!Number.isNaN(ms) && ms > renderMs) return true;
+    }
+  }
+  return false;
 };
 
 export const useTerrainRender = () => {
@@ -208,14 +233,25 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
     const renderTs = activeRender?.generated_at || activeRender?.created_at;
     const placeholder = hasCompletedCiePlaceholder(activeRender);
     const staleLabs = hasStaleLabUploadPlaceholder(activeRender, (labObservations?.length ?? 0) > 0);
+    const newerLabs = hasLabObservationsNewerThanRender(activeRender, labObservations);
     const stale =
       !activeRender ||
       placeholder ||
       staleLabs ||
+      newerLabs ||
       (renderTs && new Date(renderTs).getTime() < new Date(cieTs).getTime());
     if (!stale) return;
-    const reason = placeholder ? "placeholder" : staleLabs ? "stalelabs" : "stale";
-    const key = `${effectiveUserId}:${currentAssessment.id}:${activeRender?.id ?? "none"}:${reason}`;
+    const reason = placeholder
+      ? "placeholder"
+      : staleLabs
+        ? "stalelabs"
+        : newerLabs
+          ? "newerlabs"
+          : "stale";
+    // Include observation count so additional uploads re-trigger regeneration
+    // even when the same (now-stale) render is still active.
+    const obsCount = labObservations?.length ?? 0;
+    const key = `${effectiveUserId}:${currentAssessment.id}:${activeRender?.id ?? "none"}:${reason}:${obsCount}`;
     if (autoRegenTriggered.current.has(key)) return;
     autoRegenTriggered.current.add(key);
     void regenerate();
