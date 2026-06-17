@@ -355,7 +355,7 @@ async function callAnthropicForJson(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 4096,
       system: systemPrompt,
       messages,
@@ -722,7 +722,7 @@ Deno.serve(async (req) => {
       userId,
       parsed,
       retryCount,
-      "claude-sonnet-4-20250514",
+      "claude-sonnet-4-5",
       generationMs,
       patternList.length,
       biomarkerCount,
