@@ -64,7 +64,15 @@ export const hasCompletedCiePlaceholder = (render: TerrainRender | null): boolea
     portrait.where_to_start,
     portrait.the_one_action,
   ].join(" ").toLowerCase();
-  return text.includes("cie has not been completed") || text.includes("complete your cie assessment");
+  return (
+    text.includes("cie has not been completed") ||
+    text.includes("complete your cie assessment") ||
+    // "Upload labs" nudge while labs already exist server-side means the
+    // witness layer is stale — same regeneration path applies.
+    text.includes("upload your most recent lab") ||
+    text.includes("upload your most recent comprehensive lab") ||
+    text.includes("foundational lab work has not arrived")
+  );
 };
 
 export const useTerrainRender = () => {
