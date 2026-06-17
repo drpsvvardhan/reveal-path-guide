@@ -1,15 +1,62 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import OnboardingLayout from "./OnboardingLayout";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { useLabUploads } from "@/context/LabUploadsContext";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import IdentityConfirmModal, { IdentityConfirmRequest } from "@/components/records/IdentityConfirmModal";
 import { ArrowLeft, ArrowRight, Upload, CheckCircle2, Loader2, X } from "lucide-react";
 
 const UploadStep: React.FC = () => {
   const { advanceToStep, markProcessingMilestone, isSaving } = useOnboarding();
   const { uploadAndProcess, uploads, observations, uploading, processing, error } = useLabUploads();
+  const { user } = useAuth();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [identityRequest, setIdentityRequest] = useState<IdentityConfirmRequest | null>(null);
+
+  // Surface the identity-confirmation modal whenever any upload lands in
+  // awaiting state. Ingestion is paused server-side until the user confirms
+  // (or rejects) ownership of the report.
+  useEffect(() => {
+    if (identityRequest) return;
+    const awaiting = uploads.find((u: any) => u.status === "awaiting_identity_confirmation");
+    if (!awaiting) return;
+    const a: any = awaiting;
+    const kind: "unknown" | "mismatch" =
+      a.name_match_status === "needs_confirmation_mismatch" ? "mismatch" : "unknown";
+    const isFibro = (a.original_filename ?? "").startsWith("[FibroScan]");
+    setIdentityRequest({
+      uploadId: a.id,
+      kind,
+      extractedName: a.extracted_patient_name ?? null,
+      accountName: user?.user_metadata?.full_name ?? user?.email ?? null,
+      score: a.name_match_score ?? null,
+      processor: isFibro ? "process-fibroscan" : "process-lab-pdf",
+      storagePath: a.storage_path,
+    });
+  }, [uploads, identityRequest, user]);
+
+  const handleIdentityConfirm = useCallback(async (req: IdentityConfirmRequest, confirmedName: string) => {
+    const overrideKind = req.kind === "mismatch" ? "mismatch_overridden" : "unknown_accepted";
+    const body: any = req.processor === "process-lab-pdf"
+      ? { uploadId: req.uploadId, identity_override: { kind: overrideKind, confirmed_name: confirmedName } }
+      : { upload_id: req.uploadId, storage_path: req.storagePath, identity_override: { kind: overrideKind, confirmed_name: confirmedName } };
+    const { error: invokeError } = await supabase.functions.invoke(req.processor, { body });
+    if (invokeError) throw new Error(invokeError.message ?? "Could not confirm");
+    setIdentityRequest(null);
+    setLocalError(null);
+  }, []);
+
+  const handleIdentityReject = useCallback(async (req: IdentityConfirmRequest) => {
+    const { error: invokeError } = await supabase.functions.invoke("reject-upload-identity", {
+      body: { upload_id: req.uploadId },
+    });
+    if (invokeError) throw new Error(invokeError.message ?? "Could not reject");
+    setIdentityRequest(null);
+    setLocalError("Report rejected — it didn't match your account. You can upload another file.");
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -24,7 +71,7 @@ const UploadStep: React.FC = () => {
         observations_extracted: result.observations_extracted || 0,
         current_status: `Extracted ${result.observations_extracted} biomarkers`,
       });
-    } else {
+    } else if (!(result as any).awaiting_identity_confirmation) {
       setLocalError(result.error || "Upload failed");
     }
 
@@ -46,7 +93,8 @@ const UploadStep: React.FC = () => {
   // user should not be trapped on this step; downstream surfaces will guide remediation.
   const completedUpload = uploads.find((u) => u.status === "complete");
   const hasAnyUpload = uploads.length > 0;
-  const canAdvance = hasAnyUpload && !uploading && !processing && !isSaving;
+  const awaitingIdentity = uploads.some((u: any) => u.status === "awaiting_identity_confirmation");
+  const canAdvance = hasAnyUpload && !uploading && !processing && !isSaving && !awaitingIdentity;
   const zeroObservations = !!completedUpload && observations.length === 0;
 
   return (
@@ -180,6 +228,12 @@ const UploadStep: React.FC = () => {
           </ul>
         </div>
       </div>
+      <IdentityConfirmModal
+        request={identityRequest}
+        onConfirm={handleIdentityConfirm}
+        onReject={handleIdentityReject}
+        onClose={() => setIdentityRequest(null)}
+      />
     </OnboardingLayout>
   );
 };
