@@ -81,29 +81,6 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     refresh();
   }, [refresh]);
 
-  // Auto-regenerate the narrative when the CIE assessment is newer than the
-  // active narrative. Without this, a narrative authored before the CIE was
-  // completed keeps telling the user to "Complete your CIE assessment" even
-  // though the terrain page now shows full domain/gate scores.
-  const autoRegenTriggered = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (loading || generating) return;
-    if (!effectiveUserId || !manifest) return;
-    if (!currentAssessment || currentAssessment.status !== "complete") return;
-    const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
-    if (!cieTs) return;
-    const active = allVersions.find((v) => v.status === "active");
-    const narrativeTs = active?.created_at;
-    const stale = !active || (narrativeTs && new Date(narrativeTs).getTime() < new Date(cieTs).getTime());
-    if (!stale) return;
-    const key = `${effectiveUserId}:${currentAssessment.id}`;
-    if (autoRegenTriggered.current.has(key)) return;
-    autoRegenTriggered.current.add(key);
-    void generateNarrative();
-    // generateNarrative is stable via deps below; ref guard prevents loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveUserId, manifest, currentAssessment, allVersions, loading, generating]);
-
   const generateNarrative = useCallback(async (): Promise<NarrativeGenerationResult | null> => {
     const uid = effectiveUserId;
     if (!uid || !manifest) return null;
@@ -141,6 +118,27 @@ export const NarrativeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setGenerating(false);
     }
   }, [effectiveUserId, manifest, observations, observationsAsTimeline, refresh]);
+
+  // Auto-regenerate the narrative when the CIE assessment is newer than the
+  // active narrative. Without this, a narrative authored before the CIE was
+  // completed keeps telling the user to "Complete your CIE assessment" even
+  // though the terrain page now shows full domain/gate scores.
+  const autoRegenTriggered = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (loading || generating) return;
+    if (!effectiveUserId || !manifest) return;
+    if (!currentAssessment || currentAssessment.status !== "complete") return;
+    const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
+    if (!cieTs) return;
+    const active = allVersions.find((v) => v.status === "active");
+    const narrativeTs = (active as any)?.created_at;
+    const stale = !active || (narrativeTs && new Date(narrativeTs).getTime() < new Date(cieTs).getTime());
+    if (!stale) return;
+    const key = `${effectiveUserId}:${currentAssessment.id}`;
+    if (autoRegenTriggered.current.has(key)) return;
+    autoRegenTriggered.current.add(key);
+    void generateNarrative();
+  }, [effectiveUserId, manifest, currentAssessment, allVersions, loading, generating, generateNarrative]);
 
   const restoreVersion = useCallback(
     async (versionId: string) => {
