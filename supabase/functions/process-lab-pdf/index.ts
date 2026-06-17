@@ -750,11 +750,9 @@ async function processUpload(
       .update({ content_sha256: contentSha256 })
       .eq("id", uploadId);
 
-    // Slice exactly to the view in case Uint8Array is a view over a larger buffer
-    const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
-    const base64Data = arrayBufferToBase64(exactBuffer);
-    console.log(`[encode] pdfBytes.length=${pdfBytes.length}, base64.length=${base64Data.length}`);
     const mimeType = detectMimeFromPath(upload.storage_path);
+    const uploadKind = classifyUploadKind(mimeType);
+    console.log(`[classify] upload=${uploadId} mime=${mimeType} kind=${uploadKind} filename=${upload.original_filename}`);
 
     // Detect if this is an InBody report
     const isInBody = isInBodyReport(upload.original_filename);
@@ -824,9 +822,31 @@ propose a new concept in snake_case. Never force a wrong match just to avoid
 
     console.log(`Processing upload ${uploadId}: isInBody=${isInBody}, filename=${upload.original_filename}, ontology=${ontology ? 'loaded' : 'unavailable'}`);
 
-    // Call Gemini vision with appropriate prompt
+    // Call the LLM with the appropriate input shape for this file kind.
     const llmStartedAt = Date.now();
-    const rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    let rawOutput: string;
+    if (uploadKind === "file_native") {
+      // PDF / image — send raw bytes via Gemini multimodal file part.
+      const exactBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength) as ArrayBuffer;
+      const base64Data = arrayBufferToBase64(exactBuffer);
+      console.log(`[encode] upload=${uploadId} bytes=${pdfBytes.length} base64=${base64Data.length}`);
+      rawOutput = await callClaudeWithDocument(base64Data, mimeType, systemPrompt);
+    } else {
+      // CSV / TSV / TXT / MD / XLSX / DOCX — extract text server-side and
+      // send a text-only chat message. Gemini handles structured text well
+      // and we sidestep multimodal-format limits.
+      let textPayload = "";
+      try {
+        textPayload = await extractTextFromBytes(pdfBytes, mimeType, upload.original_filename || "upload");
+      } catch (e) {
+        throw new Error(`Failed to read uploaded file as text: ${(e as Error).message}`);
+      }
+      if (!textPayload || textPayload.trim().length < 5) {
+        throw new Error("Uploaded file appears to be empty after parsing.");
+      }
+      console.log(`[encode] upload=${uploadId} text_chars=${textPayload.length}`);
+      rawOutput = await callLLMWithText(textPayload, systemPrompt, upload.original_filename || "upload");
+    }
     const llmMs = Date.now() - llmStartedAt;
     console.log(`[timing] upload=${uploadId} llm_call_ms=${llmMs} model=google/gemini-3-flash-preview`);
     console.log(`[llm-raw] upload=${uploadId} output_length=${rawOutput.length}, preview=${rawOutput.slice(0, 600)}`);
