@@ -178,10 +178,13 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const uploadContentType = BUCKET_ALLOWED.has(realType)
           ? realType
           : "application/pdf"; // safe placeholder; real type derived from extension server-side
+        const uploadBody = uploadContentType === realType
+          ? file
+          : new Blob([file], { type: uploadContentType });
 
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
-          .upload(storagePath, file, {
+          .upload(storagePath, uploadBody, {
             contentType: uploadContentType,
             upsert: false,
           });
