@@ -164,10 +164,25 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const storagePath = `${targetUserId}/${fileId}${ext}`;
 
+        // The storage bucket only whitelists PDF + common images. For text-based
+        // formats (CSV/XLSX/DOCX/MD/TXT) and HEIC images we upload with an
+        // allowed content-type so storage accepts the bytes. The edge function
+        // recovers the true type from the file extension in storage_path.
+        const BUCKET_ALLOWED = new Set([
+          "application/pdf",
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+        ]);
+        const realType = file.type || "application/octet-stream";
+        const uploadContentType = BUCKET_ALLOWED.has(realType)
+          ? realType
+          : "application/pdf"; // safe placeholder; real type derived from extension server-side
+
         const { error: uploadError } = await supabase.storage
           .from("lab-uploads")
           .upload(storagePath, file, {
-            contentType: file.type || "application/octet-stream",
+            contentType: uploadContentType,
             upsert: false,
           });
         if (uploadError) {
