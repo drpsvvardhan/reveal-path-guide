@@ -300,11 +300,27 @@ const SpineCard: React.FC<{
     };
     const admission = admitPME(runtimePme);
 
+    // Clinician/admin review surface: admission ignoring the data-binding gate,
+    // so the unsigned teaching can be seen and signed even before the patient's
+    // markers have been RAE-admitted under the exact required ids. Only the
+    // teaching components (causal_model, analogy, register) need to clear BLOCK.
+    const clinicianRenderable =
+      admission.component_verdicts.causal_model !== "BLOCK" &&
+      admission.component_verdicts.analogy !== "BLOCK" &&
+      admission.component_verdicts.register !== "BLOCK";
+
     pmeVerdict = admission.verdict;
     pmeProvisional = runtimePme.provisional;
-    pmeReviewFlags = Object.entries(admission.component_verdicts)
-      .filter(([, v]) => v === "ADMIT_WITH_REVIEW")
+    const reviewFromVerdicts = Object.entries(admission.component_verdicts)
+      .filter(([k, v]) => v === "ADMIT_WITH_REVIEW" && k !== "data_binding")
       .map(([k]) => k);
+    pmeReviewFlags = reviewFromVerdicts.slice();
+    if (mode === "clinician" && !allRequiredPresent) {
+      const missing = required.filter((m) => !admittedMarkers.has(m));
+      pmeReviewFlags.push(
+        `data_binding pending (missing: ${missing.join(", ") || "—"})`,
+      );
+    }
 
     // Pick the register text: full cycle vs maintenance-only variant.
     if (action.id === "resistance_training_sarcopenia" && !cyclePresent) {
@@ -315,11 +331,18 @@ const SpineCard: React.FC<{
     }
 
     // Patient-facing safety policy: a provisional PME whose analogy is not
-    // clinically signed off does NOT render in patient view. Clinicians still
-    // see it with the review flags surfaced.
-    const patientUnsafe = runtimePme.provisional || !runtimePme.analogy.signed_off_by;
-    const allowedForViewer = mode === "clinician" || !patientUnsafe;
-    pmeRenderable = admission.renderable && allowedForViewer;
+    // clinically signed off does NOT render in patient view. Clinicians always
+    // see it (this is the review surface where sign-off happens).
+    if (mode === "clinician") {
+      pmeRenderable = clinicianRenderable;
+      // Force verdict away from BLOCK in clinician preview so PMEBlock renders
+      // the prose; data_binding pending is surfaced via reviewFlags.
+      if (pmeVerdict === "BLOCK") pmeVerdict = "ADMIT_WITH_REVIEW";
+    } else {
+      const patientUnsafe =
+        runtimePme.provisional || !runtimePme.analogy.signed_off_by;
+      pmeRenderable = admission.renderable && !patientUnsafe;
+    }
   }
 
   return (
