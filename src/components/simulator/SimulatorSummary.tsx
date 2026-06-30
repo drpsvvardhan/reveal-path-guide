@@ -12,7 +12,7 @@ const SummaryInner: React.FC = () => {
 
   return (
     <button
-      onClick={() => nav.onNavigate("simulator")}
+      onClick={() => nav.navigateTo("simulator")}
       className="w-full text-left rounded-xl border border-border bg-card hover:border-signature/40 transition-colors p-4 sm:p-5 min-w-0 group"
     >
       <div className="flex items-start gap-3 min-w-0">
