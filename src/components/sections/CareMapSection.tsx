@@ -35,6 +35,35 @@ const COORD_LABELS: Record<string, string> = {
   E: "Energy", I: "Inflammation", V: "Vascular", R: "Regulation", "Σ": "Scar memory",
 };
 
+const normalizeMarker = (s: string | null | undefined) =>
+  (s || "").toString().trim().toLowerCase().replace(/[\s\-/]+/g, "_");
+
+const MARKER_ALIASES: Record<string, string[]> = {
+  skeletal_muscle_mass: ["skeletal_muscle_mass", "smm", "skeletal_muscle", "muscle_mass"],
+  f16_musculoskeletal: ["f16_musculoskeletal", "f16", "musculoskeletal"],
+};
+
+const expandMarker = (marker: string) => {
+  const normalized = normalizeMarker(marker);
+  const aliases = MARKER_ALIASES[normalized] || [];
+  return Array.from(new Set([normalized, ...aliases.map(normalizeMarker)])).filter(Boolean);
+};
+
+const addMarkerWithAliases = (markers: Set<string>, value: string | null | undefined) => {
+  const normalized = normalizeMarker(value);
+  if (!normalized) return;
+  markers.add(normalized);
+  Object.entries(MARKER_ALIASES).forEach(([canonical, aliases]) => {
+    if (canonical === normalized || aliases.map(normalizeMarker).includes(normalized)) {
+      markers.add(canonical);
+      aliases.forEach((alias) => markers.add(normalizeMarker(alias)));
+    }
+  });
+};
+
+const markerPresent = (admittedMarkers: Set<string>, marker: string) =>
+  expandMarker(marker).some((candidate) => admittedMarkers.has(candidate));
+
 interface AdmissionBlock {
   verdict: "ADMIT" | "ADMIT_WITH_REVIEW" | "BLOCK";
   reasons?: string[];
@@ -134,7 +163,7 @@ const CareMapSection: React.FC = () => {
         .maybeSingle();
 
       // 3. patient marker presence — lab observations + CIE gates.
-      const [{ data: obsRows }, { data: gateRows }] = await Promise.all([
+      const [{ data: obsRows }, { data: gateRows }, { data: domainRows }] = await Promise.all([
         supabase
           .from("patient_lab_observations")
           .select("raw_name, canonical_name, canonical_concept_id, biomarker_class")
@@ -143,21 +172,24 @@ const CareMapSection: React.FC = () => {
           .from("cie_gate_scores")
           .select("gate_id, gate_name")
           .eq("user_id", userId),
+        supabase
+          .from("cie_domain_scores")
+          .select("domain_id, axis")
+          .eq("user_id", userId),
       ]);
       const markers = new Set<string>();
-      const norm = (s: string | null | undefined) =>
-        (s || "").toString().trim().toLowerCase().replace(/[\s\-/]+/g, "_");
       (obsRows || []).forEach((o: any) => {
         [o.raw_name, o.canonical_name, o.canonical_concept_id, o.biomarker_class].forEach((v) => {
-          const n = norm(v);
-          if (n) markers.add(n);
+          addMarkerWithAliases(markers, v);
         });
       });
       (gateRows || []).forEach((g: any) => {
-        const id = norm(g.gate_id);
-        if (id) markers.add(id);
-        const name = norm(g.gate_name);
-        if (name) markers.add(name);
+        addMarkerWithAliases(markers, g.gate_id);
+        addMarkerWithAliases(markers, g.gate_name);
+      });
+      (domainRows || []).forEach((d: any) => {
+        addMarkerWithAliases(markers, d.domain_id);
+        addMarkerWithAliases(markers, d.axis);
       });
 
       if (cancelled) return;
@@ -282,16 +314,17 @@ const SpineCard: React.FC<{
   let pmeReviewFlags: string[] = [];
 
   if (authored) {
-    const norm = (s: string) => s.trim().toLowerCase().replace(/[\s\-/]+/g, "_");
-    const required = authored.data_binding.required_markers.map(norm);
+    const required = authored.data_binding.required_markers.map(normalizeMarker);
+    const matchedRequired = required.filter((m) => markerPresent(admittedMarkers, m));
+    const missingRequired = required.filter((m) => !markerPresent(admittedMarkers, m));
     const allRequiredPresent =
-      required.length > 0 && required.every((m) => admittedMarkers.has(m));
+      required.length > 0 && required.every((m) => markerPresent(admittedMarkers, m));
 
     // Optional "cycle" markers — gate which register variant to use for the
     // muscle PME (full cycle vs maintenance-only). Absence is not a block;
     // it only narrows the teaching.
     const cycleMarkers = ["glucose", "homa_ir", "body_fat_pct", "visceral_fat"];
-    const cyclePresent = cycleMarkers.some((m) => admittedMarkers.has(m));
+    const cyclePresent = cycleMarkers.some((m) => markerPresent(admittedMarkers, m));
 
     // Compute admitted_required from real data, ignoring the authored placeholder.
     const runtimePme: PME = {
@@ -316,7 +349,7 @@ const SpineCard: React.FC<{
       .map(([k]) => k);
     pmeReviewFlags = reviewFromVerdicts.slice();
     if (mode === "clinician" && !allRequiredPresent) {
-      const missing = required.filter((m) => !admittedMarkers.has(m));
+      const missing = missingRequired;
       pmeReviewFlags.push(
         `data_binding pending (missing: ${missing.join(", ") || "—"})`,
       );
@@ -342,6 +375,34 @@ const SpineCard: React.FC<{
       const patientUnsafe =
         runtimePme.provisional || !runtimePme.analogy.signed_off_by;
       pmeRenderable = admission.renderable && !patientUnsafe;
+    }
+
+    if (action.id === "resistance_training_sarcopenia") {
+      console.debug("[CareMap PME] resistance_training_sarcopenia", {
+        registryFound: Boolean(authored),
+        admitPMERan: true,
+        admissionVerdict: admission.verdict,
+        componentVerdicts: admission.component_verdicts,
+        allRequiredPresent,
+        requiredMatched: matchedRequired,
+        requiredMissing: missingRequired,
+        mode,
+        clinicianPreviewCondition: {
+          compositionNotBlock: admission.component_verdicts.causal_model !== "BLOCK" &&
+            admission.component_verdicts.analogy !== "BLOCK" &&
+            admission.component_verdicts.register !== "BLOCK",
+          dataBindingResolves: allRequiredPresent,
+          rendersWhen: "mode === clinician && compositionNotBlock && dataBindingResolves; unsigned/provisional is allowed for clinician review",
+        },
+        pmeBlockProps: {
+          renderable: pmeRenderable,
+          verdict: pmeVerdict,
+          registerTextPresent: Boolean(pmeRegisterText),
+          mode: mode === "clinician" ? "clinician" : "patient",
+          provisional: pmeProvisional,
+          reviewFlags: pmeReviewFlags,
+        },
+      });
     }
   }
 
