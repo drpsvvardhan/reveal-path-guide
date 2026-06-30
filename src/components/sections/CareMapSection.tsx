@@ -261,12 +261,66 @@ const CareMapSection: React.FC = () => {
 };
 
 // ── Causal Spine card ──
-const SpineCard: React.FC<{ action: ActionItem; mode: "patient" | "clinician" }> = ({ action, mode }) => {
+const SpineCard: React.FC<{
+  action: ActionItem;
+  mode: "patient" | "clinician";
+  admittedMarkers: Set<string>;
+}> = ({ action, mode, admittedMarkers }) => {
   const lang = provisionalSpineLanguage(action);
   const strongest = (action.admission?.provenance || []).some((p) =>
     ["literature_witness", "mechanistic_inference", "population_evidence", "twin_evidence", "provider_judgment"].includes(p),
   );
   const linkDash = strongest ? "none" : "6 4"; // visual weight only; no patient label
+
+  // ── PME lookup & runtime data binding ──
+  // Edge id without an authored PME → nothing teaches; spine stands alone.
+  const authored: PME | undefined = PME_REGISTRY[action.id];
+  let pmeRenderable = false;
+  let pmeVerdict: "ADMIT" | "ADMIT_WITH_REVIEW" | "BLOCK" = "BLOCK";
+  let pmeRegisterText: string | undefined;
+  let pmeProvisional = false;
+  let pmeReviewFlags: string[] = [];
+
+  if (authored) {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/[\s\-/]+/g, "_");
+    const required = authored.data_binding.required_markers.map(norm);
+    const allRequiredPresent =
+      required.length > 0 && required.every((m) => admittedMarkers.has(m));
+
+    // Optional "cycle" markers — gate which register variant to use for the
+    // muscle PME (full cycle vs maintenance-only). Absence is not a block;
+    // it only narrows the teaching.
+    const cycleMarkers = ["glucose", "homa_ir", "body_fat_pct", "visceral_fat"];
+    const cyclePresent = cycleMarkers.some((m) => admittedMarkers.has(m));
+
+    // Compute admitted_required from real data, ignoring the authored placeholder.
+    const runtimePme: PME = {
+      ...authored,
+      data_binding: { ...authored.data_binding, admitted_required: allRequiredPresent },
+    };
+    const admission = admitPME(runtimePme);
+
+    pmeVerdict = admission.verdict;
+    pmeProvisional = runtimePme.provisional;
+    pmeReviewFlags = Object.entries(admission.component_verdicts)
+      .filter(([, v]) => v === "ADMIT_WITH_REVIEW")
+      .map(([k]) => k);
+
+    // Pick the register text: full cycle vs maintenance-only variant.
+    if (action.id === "resistance_training_sarcopenia" && !cyclePresent) {
+      pmeRegisterText =
+        PME_VARIANTS.resistance_training_sarcopenia_muscle_only.register_text;
+    } else {
+      pmeRegisterText = runtimePme.register.text;
+    }
+
+    // Patient-facing safety policy: a provisional PME whose analogy is not
+    // clinically signed off does NOT render in patient view. Clinicians still
+    // see it with the review flags surfaced.
+    const patientUnsafe = runtimePme.provisional || !runtimePme.analogy.signed_off_by;
+    const allowedForViewer = mode === "clinician" || !patientUnsafe;
+    pmeRenderable = admission.renderable && allowedForViewer;
+  }
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 mb-4 min-w-0">
@@ -286,6 +340,16 @@ const SpineCard: React.FC<{ action: ActionItem; mode: "patient" | "clinician" }>
           <div className="text-sm text-foreground break-words">{lang.effect_patient}</div>
         </div>
       </div>
+      {/* PME teaching block — renders only when authored PME admits AND data
+          binding is satisfied AND, in patient view, the analogy is signed off. */}
+      <PMEBlock
+        renderable={pmeRenderable}
+        verdict={pmeVerdict}
+        registerText={pmeRegisterText}
+        provisional={pmeProvisional}
+        reviewFlags={pmeReviewFlags}
+        mode={mode === "clinician" ? "clinician" : "patient"}
+      />
       <div className="mt-4 pt-3 border-t border-dashed border-border flex gap-3 flex-wrap items-center">
         {action.coordinates?.length ? (
           <span className="text-[11px] text-muted-foreground border border-border rounded-full px-2.5 py-0.5">
