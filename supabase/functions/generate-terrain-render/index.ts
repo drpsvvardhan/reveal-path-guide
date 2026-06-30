@@ -320,7 +320,7 @@ function validateCieEvidence(args: {
     if (!Number.isFinite(score) || score < 0 || score > 100) {
       reasons.push(`Gate '${g.gate_id}' has invalid score=${g.score}.`);
     }
-    if (!g.traffic_light || !["GREEN", "AMBER", "RED"].includes(String(g.traffic_light).toUpperCase())) {
+    if (!g.traffic_light || !["GREEN", "YELLOW", "AMBER", "ORANGE", "RED"].includes(String(g.traffic_light).toUpperCase())) {
       reasons.push(`Gate '${g.gate_id}' has invalid traffic_light='${g.traffic_light}'.`);
     }
     const contributing: string[] = Array.isArray(g.contributing_domains) ? g.contributing_domains : [];
