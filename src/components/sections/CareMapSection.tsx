@@ -338,6 +338,7 @@ const SpineCard: React.FC<{
     // markers have been RAE-admitted under the exact required ids. Only the
     // teaching components (causal_model, analogy, register) need to clear BLOCK.
     const clinicianRenderable =
+      allRequiredPresent &&
       admission.component_verdicts.causal_model !== "BLOCK" &&
       admission.component_verdicts.analogy !== "BLOCK" &&
       admission.component_verdicts.register !== "BLOCK";
