@@ -10,6 +10,7 @@ import { useActionCompletions } from "@/context/ActionCompletionContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideVisualPanel from "@/components/layout/AsideVisualPanel";
 import VoiceValidationIndicator from "@/components/clusters/VoiceValidationIndicator";
+import SimulatorSummary from "@/components/simulator/SimulatorSummary";
 
 // ── Types ──
 
@@ -597,6 +598,9 @@ const ActionSection: React.FC = () => {
             Move gradually. Notice patterns. The sequence matters more than intensity.
           </p>
         </div>
+
+        {/* Simulator embed — entry point to the predictive intuition loop */}
+        <SimulatorSummary />
 
         {/* Action cards */}
         {actions.map((action, i) => (
