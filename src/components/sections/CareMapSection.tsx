@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
+import PMEBlock from "@/components/sections/PMEBlock";
+import { admitPME, type PME } from "@shared/pme/pme";
+import { PME_REGISTRY, PME_VARIANTS } from "@shared/pme/pmeRegistry";
 
 // ─────────────────────────────────────────────────────────────
 // Care Map v1 — Causal Spine
@@ -96,6 +99,11 @@ const CareMapSection: React.FC = () => {
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [ledger, setLedger] = useState<AaeLedger | null>(null);
   const [loading, setLoading] = useState(true);
+  // Set of normalized marker identifiers admitted for THIS patient.
+  // Built from lab observation names + CIE gate ids. Used to evaluate each
+  // PME's data_binding at runtime instead of trusting the registry's
+  // authored placeholder (always false until clinical confirmation).
+  const [admittedMarkers, setAdmittedMarkers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!userId) {
@@ -125,8 +133,36 @@ const CareMapSection: React.FC = () => {
         .limit(1)
         .maybeSingle();
 
+      // 3. patient marker presence — lab observations + CIE gates.
+      const [{ data: obsRows }, { data: gateRows }] = await Promise.all([
+        supabase
+          .from("patient_lab_observations")
+          .select("raw_name, canonical_name, canonical_concept_id, biomarker_class")
+          .eq("user_id", userId),
+        supabase
+          .from("cie_gate_scores")
+          .select("gate_id, gate_name")
+          .eq("user_id", userId),
+      ]);
+      const markers = new Set<string>();
+      const norm = (s: string | null | undefined) =>
+        (s || "").toString().trim().toLowerCase().replace(/[\s\-/]+/g, "_");
+      (obsRows || []).forEach((o: any) => {
+        [o.raw_name, o.canonical_name, o.canonical_concept_id, o.biomarker_class].forEach((v) => {
+          const n = norm(v);
+          if (n) markers.add(n);
+        });
+      });
+      (gateRows || []).forEach((g: any) => {
+        const id = norm(g.gate_id);
+        if (id) markers.add(id);
+        const name = norm(g.gate_name);
+        if (name) markers.add(name);
+      });
+
       if (cancelled) return;
       setActions(((plan?.today_actions as any[]) || []) as ActionItem[]);
+      setAdmittedMarkers(markers);
       // original_output may be JSONB (already an object) or a JSON string,
       // depending on column type — handle both.
       const raw = (aaeRow as any)?.original_output;
@@ -165,7 +201,7 @@ const CareMapSection: React.FC = () => {
           </div>
         ) : (
           admitted.map((a) => (
-            <SpineCard key={a.id} action={a} mode={viewerRole} />
+            <SpineCard key={a.id} action={a} mode={viewerRole} admittedMarkers={admittedMarkers} />
           ))
         )}
       </div>
@@ -185,7 +221,9 @@ const CareMapSection: React.FC = () => {
             </div>
           )
         ) : underReview.length > 0 ? (
-          underReview.map((a) => <SpineCard key={a.id} action={a} mode="clinician" />)
+          underReview.map((a) => (
+            <SpineCard key={a.id} action={a} mode="clinician" admittedMarkers={admittedMarkers} />
+          ))
         ) : (
           <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
             No ADMIT_WITH_REVIEW edges for this twin.
