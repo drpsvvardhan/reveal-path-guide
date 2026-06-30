@@ -379,7 +379,7 @@ const SpineCard: React.FC<{
     }
 
     if (action.id === "resistance_training_sarcopenia") {
-      console.debug("[CareMap PME] resistance_training_sarcopenia", {
+      console.debug("[CareMap PME] resistance_training_sarcopenia", JSON.stringify({
         registryFound: Boolean(authored),
         admitPMERan: true,
         admissionVerdict: admission.verdict,
@@ -403,7 +403,7 @@ const SpineCard: React.FC<{
           provisional: pmeProvisional,
           reviewFlags: pmeReviewFlags,
         },
-      });
+      }));
     }
   }
 
