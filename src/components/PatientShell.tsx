@@ -28,6 +28,7 @@ import CareTeamSection from "@/components/sections/CareTeamSection";
 import QueueSection from "@/components/sections/QueueSection";
 import NoticedSection from "@/components/sections/NoticedSection";
 import IntakeResultsSection from "@/components/sections/IntakeResultsSection";
+import SimulatorSection from "@/components/sections/SimulatorSection";
 import { navItems } from "@/components/navigation/navItems";
 
 const sections: Record<string, React.FC> = {
@@ -37,6 +38,7 @@ const sections: Record<string, React.FC> = {
   
   reversibility: ReversibilitySection,
   actions: ActionSection,
+  simulator: SimulatorSection,
   records: RecordsSection,
   ask: AskSection,
   queue: QueueSection,
