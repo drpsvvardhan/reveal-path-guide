@@ -8,6 +8,7 @@
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { admitExperiments } from "../_shared/aae/experimentAdmission.ts";
+import { loadPatientContext } from "../_shared/contextLoader.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -89,10 +90,10 @@ async function loadCompactContext(supabase: any, userId: string) {
       .limit(20),
     supabase
       .from("patient_lab_observations")
-      .select("biomarker_name, value, unit, collection_date")
+      .select("canonical_name, raw_name, display_name, value, unit, collection_date")
       .eq("user_id", userId)
       .order("collection_date", { ascending: false })
-      .limit(40),
+      .limit(60),
     supabase
       .from("cie_domain_scores")
       .select("domain_id, axis, final_score")
@@ -112,33 +113,48 @@ async function loadCompactContext(supabase: any, userId: string) {
 // contraindications) from already-loaded context. Conservative v0.1: flags are
 // inferred from labs/CIE where confidently present. This is the one place to
 // expand as real contraindication data sources come online.
-function derivePatientGuards(ctx: any): { biomarkers: Set<string>; flags: Set<string> } {
+// Derive the patient's biomarker set (for binding) and safety flags (for
+// contraindications) from the WITNESS CONTEXT — the same admitted, RAE-witnessed
+// view that terrain-render and every other reasoning surface trusts. This is the
+// structurally-correct source: it includes labs, InBody (Phase Angle, Visceral
+// Fat), FibroScan, and CIE domains/gates — everything RAE admitted — so a real
+// admitted marker can never be falsely rejected as "unbound" due to a raw-table
+// column mismatch. (Raw reads previously missed InBody entirely.)
+function derivePatientGuards(wc: any): { biomarkers: Set<string>; flags: Set<string> } {
   const biomarkers = new Set<string>();
-  for (const lab of ctx.labs ?? []) {
-    if (lab.biomarker_name) biomarkers.add(String(lab.biomarker_name));
-  }
-  for (const c of ctx.cie ?? []) {
-    if (c.domain_id) biomarkers.add(String(c.domain_id));
-  }
+  const add = (s: unknown) => { if (s) biomarkers.add(String(s)); };
+
+  // All four admitted observation sources carry canonical_name.
+  for (const o of wc?.labs?.observations ?? []) add(o.canonical_name);
+  for (const o of wc?.inbody?.observations ?? []) add(o.canonical_name);     // Phase Angle, Visceral Fat
+  for (const o of wc?.fibroscan?.observations ?? []) add(o.canonical_name);
+  // CIE domains + gates (axis names + domain/gate ids the LLM may reference).
+  for (const d of wc?.cie?.domain_scores ?? []) { add(d.domain_id); add(d.axis); }
+  for (const g of wc?.cie?.gate_scores ?? []) { add(g.gate_id); add(g.gate_name); }
 
   const flags = new Set<string>();
-  const labByName: Record<string, number> = {};
-  for (const lab of ctx.labs ?? []) {
-    const n = String(lab.biomarker_name || "").toLowerCase();
-    const v = typeof lab.value === "number" ? lab.value : parseFloat(lab.value);
-    if (n && !isNaN(v)) labByName[n] = v;
-  }
-  // Conservative inferred flags (extend as dedicated sources land):
-  // low HRV → poor-recovery terrain
-  for (const [n, v] of Object.entries(labByName)) {
+  // Build a name→value map across all numeric observation sources for flag rules.
+  const byName: Record<string, number> = {};
+  const ingest = (obs: any[]) => {
+    for (const o of obs ?? []) {
+      const v = typeof o.value === "number" ? o.value : parseFloat(o.value);
+      const n = String(o.canonical_name || "").toLowerCase();
+      if (n && !isNaN(v)) byName[n] = v;
+    }
+  };
+  ingest(wc?.labs?.observations);
+  ingest(wc?.inbody?.observations);
+  ingest(wc?.fibroscan?.observations);
+
+  for (const [n, v] of Object.entries(byName)) {
     if (n.includes("hrv") && v < 30) flags.add("low_hrv");
-    if ((n.includes("bmi") || n.includes("body_mass_index")) && v < 18.5) flags.add("underweight");
+    if ((n.includes("bmi") || n.includes("body mass index")) && v < 18.5) flags.add("underweight");
     if (n.includes("egfr") && v < 60) flags.add("ckd");
     if ((n.includes("troponin") || n.includes("coronary") || n.includes("cac")) && v > 0) flags.add("cardiac_risk");
   }
-  // NOTE: ed_history and pregnancy are NOT inferable from labs — they must come
-  // from a profile/condition source. Until that source is wired, these flags are
-  // absent, so those contraindication rules cannot fire. Flagged as a known gap.
+  // NOTE: ed_history and pregnancy are NOT inferable from observations — they
+  // need a profile/condition source. Until wired, those contraindication rules
+  // cannot fire. Known gap (carried from v0.1).
   return { biomarkers, flags };
 }
 
@@ -234,7 +250,17 @@ Deno.serve(async (req) => {
     // a causal edge (lever → predicted biomarker deltas). Gate on binding +
     // safety; label confidence. Blocked (unsafe/unbound) experiments are
     // withheld from the patient and surfaced clinician-only.
-    const { biomarkers, flags } = derivePatientGuards(ctx);
+    //
+    // Binding is checked against the WITNESS CONTEXT (loadPatientContext) — the
+    // admitted, RAE-witnessed view that includes labs + InBody + FibroScan + CIE.
+    // This is what makes Phase Angle / Visceral Fat bind correctly: they are
+    // InBody observations, absent from a raw patient_lab_observations read.
+    const witnessCtx = await loadPatientContext(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      user_id,
+    );
+    const { biomarkers, flags } = derivePatientGuards(witnessCtx);
     const { results, ledger } = admitExperiments(cards as any[], biomarkers, flags);
 
     console.log(
