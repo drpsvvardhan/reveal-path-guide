@@ -1733,6 +1733,238 @@ export type Database = {
           },
         ]
       }
+      simulator_checkpoints: {
+        Row: {
+          biomarkers: string[]
+          checkpoint_at: string
+          completed_at: string | null
+          created_at: string
+          experiment_id: string
+          id: string
+          measured_deltas: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+          verdict: string | null
+          verdict_summary: string | null
+        }
+        Insert: {
+          biomarkers?: string[]
+          checkpoint_at: string
+          completed_at?: string | null
+          created_at?: string
+          experiment_id: string
+          id?: string
+          measured_deltas?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          verdict?: string | null
+          verdict_summary?: string | null
+        }
+        Update: {
+          biomarkers?: string[]
+          checkpoint_at?: string
+          completed_at?: string | null
+          created_at?: string
+          experiment_id?: string
+          id?: string
+          measured_deltas?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          verdict?: string | null
+          verdict_summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_checkpoints_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_experiments: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          horizon_days: number
+          id: string
+          lever: string
+          notes: string | null
+          predicted_deltas: Json
+          rationale: string
+          source_card_id: string | null
+          source_cluster_ids: string[]
+          source_terrain_render_id: string | null
+          started_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          horizon_days?: number
+          id?: string
+          lever: string
+          notes?: string | null
+          predicted_deltas?: Json
+          rationale: string
+          source_card_id?: string | null
+          source_cluster_ids?: string[]
+          source_terrain_render_id?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          horizon_days?: number
+          id?: string
+          lever?: string
+          notes?: string | null
+          predicted_deltas?: Json
+          rationale?: string
+          source_card_id?: string | null
+          source_cluster_ids?: string[]
+          source_terrain_render_id?: string | null
+          started_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_experiments_source_card_id_fkey"
+            columns: ["source_card_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_what_if_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_learnings: {
+        Row: {
+          body: string | null
+          checkpoint_id: string | null
+          confidence: number | null
+          created_at: string
+          evidence_witness_ids: string[]
+          experiment_id: string | null
+          graduated: boolean
+          headline: string
+          id: string
+          kind: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          checkpoint_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          evidence_witness_ids?: string[]
+          experiment_id?: string | null
+          graduated?: boolean
+          headline: string
+          id?: string
+          kind?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          checkpoint_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          evidence_witness_ids?: string[]
+          experiment_id?: string | null
+          graduated?: boolean
+          headline?: string
+          id?: string
+          kind?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_learnings_checkpoint_id_fkey"
+            columns: ["checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_checkpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulator_learnings_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_what_if_cards: {
+        Row: {
+          committed_experiment_id: string | null
+          confidence: number | null
+          created_at: string
+          dismissed_at: string | null
+          engine_version: string | null
+          focus: string | null
+          horizon_days: number
+          id: string
+          lever: string
+          predicted_deltas: Json
+          rationale: string
+          seen_at: string | null
+          source_cluster_ids: string[]
+          source_terrain_render_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          committed_experiment_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          dismissed_at?: string | null
+          engine_version?: string | null
+          focus?: string | null
+          horizon_days?: number
+          id?: string
+          lever: string
+          predicted_deltas?: Json
+          rationale: string
+          seen_at?: string | null
+          source_cluster_ids?: string[]
+          source_terrain_render_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          committed_experiment_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          dismissed_at?: string | null
+          engine_version?: string | null
+          focus?: string | null
+          horizon_days?: number
+          id?: string
+          lever?: string
+          predicted_deltas?: Json
+          rationale?: string
+          seen_at?: string | null
+          source_cluster_ids?: string[]
+          source_terrain_render_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       terrain_renders: {
         Row: {
           assessment_id: string | null
