@@ -120,7 +120,7 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setError(null);
     try {
       const [cardsRes, expRes, chkRes, lrnRes] = await Promise.all([
-        supabase.from("simulator_what_if_cards").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(20),
+        supabase.from("simulator_what_if_cards").select("*").eq("user_id", uid).eq("patient_safe", true).order("created_at", { ascending: false }).limit(20),
         supabase.from("simulator_experiments").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
         supabase.from("simulator_checkpoints").select("*").eq("user_id", uid).order("checkpoint_at", { ascending: true }),
         supabase.from("simulator_learnings").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(50),

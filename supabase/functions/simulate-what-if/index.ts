@@ -7,6 +7,7 @@
 // → Simulate → Choose → Act → Compare → Learn → Internalize).
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { admitExperiments } from "../_shared/aae/experimentAdmission.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,6 +108,40 @@ async function loadCompactContext(supabase: any, userId: string) {
   };
 }
 
+// Derive the patient's biomarker set (for binding) and safety flags (for
+// contraindications) from already-loaded context. Conservative v0.1: flags are
+// inferred from labs/CIE where confidently present. This is the one place to
+// expand as real contraindication data sources come online.
+function derivePatientGuards(ctx: any): { biomarkers: Set<string>; flags: Set<string> } {
+  const biomarkers = new Set<string>();
+  for (const lab of ctx.labs ?? []) {
+    if (lab.biomarker_name) biomarkers.add(String(lab.biomarker_name));
+  }
+  for (const c of ctx.cie ?? []) {
+    if (c.domain_id) biomarkers.add(String(c.domain_id));
+  }
+
+  const flags = new Set<string>();
+  const labByName: Record<string, number> = {};
+  for (const lab of ctx.labs ?? []) {
+    const n = String(lab.biomarker_name || "").toLowerCase();
+    const v = typeof lab.value === "number" ? lab.value : parseFloat(lab.value);
+    if (n && !isNaN(v)) labByName[n] = v;
+  }
+  // Conservative inferred flags (extend as dedicated sources land):
+  // low HRV → poor-recovery terrain
+  for (const [n, v] of Object.entries(labByName)) {
+    if (n.includes("hrv") && v < 30) flags.add("low_hrv");
+    if ((n.includes("bmi") || n.includes("body_mass_index")) && v < 18.5) flags.add("underweight");
+    if (n.includes("egfr") && v < 60) flags.add("ckd");
+    if ((n.includes("troponin") || n.includes("coronary") || n.includes("cac")) && v > 0) flags.add("cardiac_risk");
+  }
+  // NOTE: ed_history and pregnancy are NOT inferable from labs — they must come
+  // from a profile/condition source. Until that source is wired, these flags are
+  // absent, so those contraindication rules cannot fire. Flagged as a known gap.
+  return { biomarkers, flags };
+}
+
 async function callClaude(ctx: any, focus: string | null): Promise<GeneratedCard[] | null> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
@@ -194,17 +229,51 @@ Deno.serve(async (req) => {
     let cards = await callClaude(ctx, focus ?? null);
     if (!cards || cards.length === 0) cards = fallbackCards();
 
-    const rows = cards.map((c) => ({
-      user_id,
-      lever: c.lever,
-      rationale: c.rationale,
-      predicted_deltas: c.predicted_deltas ?? [],
-      horizon_days: c.horizon_days ?? 28,
-      confidence: c.confidence ?? null,
-      focus: focus ?? null,
-      source_terrain_render_id: ctx.render?.id ?? null,
-      engine_version: ENGINE_VERSION,
-    }));
+    // ── EXPERIMENT ADMISSION GATE (EAE) ──
+    // Generation is done; nothing reaches the patient un-admitted. Each card is
+    // a causal edge (lever → predicted biomarker deltas). Gate on binding +
+    // safety; label confidence. Blocked (unsafe/unbound) experiments are
+    // withheld from the patient and surfaced clinician-only.
+    const { biomarkers, flags } = derivePatientGuards(ctx);
+    const { results, ledger } = admitExperiments(cards as any[], biomarkers, flags);
+
+    console.log(
+      "[simulate-what-if][EAE]",
+      JSON.stringify({
+        user_id,
+        total: ledger.total,
+        admitted: ledger.admitted,
+        blocked: ledger.blocked,
+        blocked_unsafe: ledger.blocked_unsafe,
+        blocked_unbound: ledger.blocked_unbound,
+        emptiness_ratio: Number(ledger.emptiness_ratio.toFixed(3)),
+      }),
+    );
+
+    // Persist ALL cards with their verdict (so the clinician can see blocked
+    // ones), but mark patient visibility. Patient-facing reads filter on
+    // patient_safe = true.
+    const rows = cards.map((c, i) => {
+      const a = results[i];
+      return {
+        user_id,
+        lever: c.lever,
+        rationale: c.rationale,
+        predicted_deltas: c.predicted_deltas ?? [],
+        horizon_days: c.horizon_days ?? 28,
+        confidence: c.confidence ?? null,
+        focus: focus ?? null,
+        source_terrain_render_id: ctx.render?.id ?? null,
+        engine_version: ENGINE_VERSION,
+        // EAE admission fields:
+        admission_verdict: a.verdict,
+        admission_reasons: a.reasons,
+        evidence_label: a.evidence_label,
+        patient_safe: a.patient_safe,
+        safety_flags: a.safety_flags,
+        unbound_biomarkers: a.unbound_biomarkers,
+      };
+    });
 
     const { data: inserted, error } = await supabase
       .from("simulator_what_if_cards")
@@ -212,9 +281,24 @@ Deno.serve(async (req) => {
       .select();
     if (error) throw error;
 
-    return new Response(JSON.stringify({ cards: inserted, count: inserted?.length ?? 0 }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Return only patient-safe cards to the patient client; full set + ledger
+    // available to clinician views via a separate authorized read.
+    const patientCards = (inserted ?? []).filter((r: any) => r.patient_safe);
+
+    return new Response(
+      JSON.stringify({
+        cards: patientCards,
+        count: patientCards.length,
+        eae: {
+          total: ledger.total,
+          admitted: ledger.admitted,
+          blocked: ledger.blocked,
+          blocked_unsafe: ledger.blocked_unsafe,
+          blocked_unbound: ledger.blocked_unbound,
+        },
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (e: any) {
     console.error("simulate-what-if error:", e);
     return new Response(JSON.stringify({ error: e.message || String(e) }), {

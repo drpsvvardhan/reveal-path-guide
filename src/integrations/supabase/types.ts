@@ -1910,56 +1910,74 @@ export type Database = {
       }
       simulator_what_if_cards: {
         Row: {
+          admission_reasons: Json | null
+          admission_verdict: string | null
           committed_experiment_id: string | null
           confidence: number | null
           created_at: string
           dismissed_at: string | null
           engine_version: string | null
+          evidence_label: string | null
           focus: string | null
           horizon_days: number
           id: string
           lever: string
+          patient_safe: boolean
           predicted_deltas: Json
           rationale: string
+          safety_flags: Json | null
           seen_at: string | null
           source_cluster_ids: string[]
           source_terrain_render_id: string | null
+          unbound_biomarkers: Json | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          admission_reasons?: Json | null
+          admission_verdict?: string | null
           committed_experiment_id?: string | null
           confidence?: number | null
           created_at?: string
           dismissed_at?: string | null
           engine_version?: string | null
+          evidence_label?: string | null
           focus?: string | null
           horizon_days?: number
           id?: string
           lever: string
+          patient_safe?: boolean
           predicted_deltas?: Json
           rationale: string
+          safety_flags?: Json | null
           seen_at?: string | null
           source_cluster_ids?: string[]
           source_terrain_render_id?: string | null
+          unbound_biomarkers?: Json | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          admission_reasons?: Json | null
+          admission_verdict?: string | null
           committed_experiment_id?: string | null
           confidence?: number | null
           created_at?: string
           dismissed_at?: string | null
           engine_version?: string | null
+          evidence_label?: string | null
           focus?: string | null
           horizon_days?: number
           id?: string
           lever?: string
+          patient_safe?: boolean
           predicted_deltas?: Json
           rationale?: string
+          safety_flags?: Json | null
           seen_at?: string | null
           source_cluster_ids?: string[]
           source_terrain_render_id?: string | null
+          unbound_biomarkers?: Json | null
           updated_at?: string
           user_id?: string
         }
