@@ -77,22 +77,23 @@ const ExperimentCard: React.FC<Props> = ({
         <TappableProse text={experiment.rationale} />
       </p>
 
-      {protocol && (
-        <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-xs text-muted-foreground space-y-1 break-words">
-          <p><span className="font-sans font-semibold uppercase tracking-wider text-[10px] text-foreground/70">Protocol · </span>{protocol.perturbation_category}</p>
-          {protocol.primary_outcome_marker && (
-            <p>Primary outcome: <span className="text-foreground">{protocol.primary_outcome_marker}</span></p>
-          )}
-          <p>Run-in {protocol.run_in_days}d → intervention {protocol.intervention_days}d</p>
-          {observationsForExperiment.length > 0 && (
-            <p>Daily observations logged: {observationsForExperiment.length}</p>
-          )}
-        </div>
-      )}
+      {protocol && (() => {
+        const marker = (protocol.primary_outcome as any)?.marker
+          ?? (protocol.primary_outcome as any)?.name
+          ?? null;
+        return (
+          <div className="rounded-lg border border-border/60 bg-muted/10 p-3 text-xs text-muted-foreground space-y-1 break-words">
+            <p><span className="font-sans font-semibold uppercase tracking-wider text-[10px] text-foreground/70">Protocol · </span>{protocol.perturbation_category}</p>
+            {marker && <p>Primary outcome: <span className="text-foreground">{marker}</span></p>}
+            <p>Run-in {protocol.run_in_days}d → intervention {protocol.intervention_days}d</p>
+            {observationsForExperiment.length > 0 && (
+              <p>Daily observations logged: {observationsForExperiment.length}</p>
+            )}
+          </div>
+        );
+      })()}
 
-      {comparison && (
-        <ComparisonResultPanel comparison={comparison} />
-      )}
+      {comparison && <ComparisonResultPanel comp={comparison} />}
 
       {dueCheckpoints.length > 0 && (
         <div className="space-y-2">
