@@ -100,8 +100,8 @@ const SimulatorInner: React.FC = () => {
   return (
     <PatientSectionLayout
       eyebrow="BIOLOGICAL SIMULATOR"
-      title="What are we trying to learn about you?"
-      intro="Not habit tracking. Not population rules. Each experiment starts with a specific question, a designed protocol, and a way to tell whether the answer is real for you — not typical."
+      title="Your plan now"
+      intro="Concrete moves grounded in your current biology. We start with the highest-value, lowest-risk actions, watch how you respond, and adjust — no need to wait for proof before we act."
       headerExtra={<LoopBar activeId={activeStep} />}
     >
       {error && (
@@ -114,7 +114,7 @@ const SimulatorInner: React.FC = () => {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
             <FlaskConical className="h-4 w-4 text-signature shrink-0" />
-            <h2 className="font-serif text-xl text-foreground break-words">What-if hypotheses</h2>
+            <h2 className="font-serif text-xl text-foreground break-words">Recommended moves</h2>
           </div>
           <button
             onClick={() => generateCards()}
@@ -122,7 +122,7 @@ const SimulatorInner: React.FC = () => {
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-sans hover:bg-muted/40 transition-colors disabled:opacity-50 min-h-[44px]"
           >
             {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {openCards.length === 0 ? "Generate from my terrain" : "Refresh"}
+            {openCards.length === 0 ? "Suggest moves from my terrain" : "Refresh"}
           </button>
         </div>
 
@@ -132,9 +132,9 @@ const SimulatorInner: React.FC = () => {
           </div>
         ) : openCards.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-muted/10 p-6 text-sm text-muted-foreground leading-relaxed break-words">
-            There is not enough patient-specific signal to design an interpretable
-            experiment right now. Add data — a fresh lab, an InBody, or a CIE
-            re-take — and generate again.
+            Ready when you are. Tap "Suggest moves from my terrain" and we'll rank
+            the best next actions from your labs, terrain, and history — starting
+            with the ones that carry real signal for you.
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 min-w-0">
@@ -153,7 +153,7 @@ const SimulatorInner: React.FC = () => {
 
       {activeExperimentsInPhase.length > 0 && (
         <section className="space-y-3 pt-3 min-w-0">
-          <h2 className="font-serif text-xl text-foreground break-words">What changed today?</h2>
+          <h2 className="font-serif text-xl text-foreground break-words">What changed since last time?</h2>
           <div className="grid gap-4 md:grid-cols-2 min-w-0">
             {activeExperimentsInPhase.map((e) => {
               const proto = protocols.find((p) => p.experiment_id === e.id) ?? null;
@@ -176,12 +176,12 @@ const SimulatorInner: React.FC = () => {
       <section className="space-y-3 pt-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <Telescope className="h-4 w-4 text-emerald-600 shrink-0" />
-          <h2 className="font-serif text-xl text-foreground break-words">Experiments in flight</h2>
+          <h2 className="font-serif text-xl text-foreground break-words">Plans in motion</h2>
         </div>
         {activeExperiments.length === 0 ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            No experiments in flight yet. Design one from a hypothesis above — each
-            experiment carries its own protocol, run-in, and stop criteria.
+            Nothing running yet. Pick a recommended move above and start it — we'll
+            watch how it lands and adjust from there.
           </p>
         ) : (
           <div className="space-y-4 min-w-0">
@@ -225,12 +225,12 @@ const SimulatorInner: React.FC = () => {
       <section className="space-y-3 pt-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <Brain className="h-4 w-4 text-purple-600 shrink-0" />
-          <h2 className="font-serif text-xl text-foreground break-words">What did we learn — and how certain are we?</h2>
+          <h2 className="font-serif text-xl text-foreground break-words">What we've learned about you</h2>
         </div>
         {learnings.length === 0 ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Every completed cycle adds a line here — a piece of intuition the system
-            holds about how your body actually behaves, not just what's typical.
+            As you respond to each move, we build a picture of how your body
+            actually behaves — not what's typical — and use it to sharpen the next plan.
           </p>
         ) : (
           <ul className="space-y-2.5">
