@@ -203,7 +203,7 @@ const SimulatorInner: React.FC = () => {
                   index={i}
                   onRunCheckpoint={handleCheckpoint}
                   onAdvancePhase={(target, reason) => advancePhase(e.id, target, reason)}
-                  onCompare={() => comparePhases(e.id)}
+                  onCompare={async () => { await comparePhases(e.id); }}
                   onAbandon={() => abandonExperiment(e.id)}
                   onGraduate={() => graduateExperiment(e.id)}
                   runningCheckpointId={runningCheckpointId}
