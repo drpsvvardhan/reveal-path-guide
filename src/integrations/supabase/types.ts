@@ -1786,21 +1786,275 @@ export type Database = {
           },
         ]
       }
+      simulator_daily_observations: {
+        Row: {
+          actual_dose: Json | null
+          actual_duration_min: number | null
+          actual_time: string | null
+          confounders: Json
+          created_at: string
+          energy: number | null
+          experiment_id: string
+          id: string
+          intervention_performed: boolean | null
+          logged_at: string
+          note: string | null
+          observed_on: string
+          phase: string
+          primary_value: number | null
+          recovery: number | null
+          secondary_values: Json
+          sleep_hours: number | null
+          sleep_quality: number | null
+          symptom: number | null
+          user_id: string
+        }
+        Insert: {
+          actual_dose?: Json | null
+          actual_duration_min?: number | null
+          actual_time?: string | null
+          confounders?: Json
+          created_at?: string
+          energy?: number | null
+          experiment_id: string
+          id?: string
+          intervention_performed?: boolean | null
+          logged_at?: string
+          note?: string | null
+          observed_on: string
+          phase: string
+          primary_value?: number | null
+          recovery?: number | null
+          secondary_values?: Json
+          sleep_hours?: number | null
+          sleep_quality?: number | null
+          symptom?: number | null
+          user_id: string
+        }
+        Update: {
+          actual_dose?: Json | null
+          actual_duration_min?: number | null
+          actual_time?: string | null
+          confounders?: Json
+          created_at?: string
+          energy?: number | null
+          experiment_id?: string
+          id?: string
+          intervention_performed?: boolean | null
+          logged_at?: string
+          note?: string | null
+          observed_on?: string
+          phase?: string
+          primary_value?: number | null
+          recovery?: number | null
+          secondary_values?: Json
+          sleep_hours?: number | null
+          sleep_quality?: number | null
+          symptom?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_daily_observations_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_experiment_comparisons: {
+        Row: {
+          abs_change: number | null
+          adherence_pct: number | null
+          computed_at: string
+          confounder_burden: number | null
+          direction_consistency_pct: number | null
+          experiment_id: string
+          human_summary: string | null
+          id: string
+          median_a: number | null
+          median_b: number | null
+          missingness_pct: number | null
+          n_a: number
+          n_b: number
+          overlap_ratio: number | null
+          pct_change: number | null
+          phase_a: string
+          phase_b: string
+          reasons: Json
+          result: string
+          user_id: string
+        }
+        Insert: {
+          abs_change?: number | null
+          adherence_pct?: number | null
+          computed_at?: string
+          confounder_burden?: number | null
+          direction_consistency_pct?: number | null
+          experiment_id: string
+          human_summary?: string | null
+          id?: string
+          median_a?: number | null
+          median_b?: number | null
+          missingness_pct?: number | null
+          n_a: number
+          n_b: number
+          overlap_ratio?: number | null
+          pct_change?: number | null
+          phase_a: string
+          phase_b: string
+          reasons?: Json
+          result: string
+          user_id: string
+        }
+        Update: {
+          abs_change?: number | null
+          adherence_pct?: number | null
+          computed_at?: string
+          confounder_burden?: number | null
+          direction_consistency_pct?: number | null
+          experiment_id?: string
+          human_summary?: string | null
+          id?: string
+          median_a?: number | null
+          median_b?: number | null
+          missingness_pct?: number | null
+          n_a?: number
+          n_b?: number
+          overlap_ratio?: number | null
+          pct_change?: number | null
+          phase_a?: string
+          phase_b?: string
+          reasons?: Json
+          result?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_experiment_comparisons_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_experiment_protocols: {
+        Row: {
+          admission_reasons: Json | null
+          admission_verdict: string | null
+          allowed_cointerventions: string[]
+          clinician_review_required: boolean
+          contraindications: string[]
+          created_at: string
+          crossover: Json | null
+          evidence_refs: Json
+          expected_direction: string | null
+          experiment_id: string
+          hold_stable: string[]
+          hypothesis_question: string
+          id: string
+          intervention: Json
+          intervention_days: number
+          min_adherence_pct: number
+          min_observations_per_phase: number
+          perturbation_category: string
+          primary_outcome: Json
+          protocol_version: number
+          run_in_days: number
+          secondary_outcomes: Json
+          stop_criteria: string[]
+          updated_at: string
+          user_id: string
+          washout_days: number | null
+        }
+        Insert: {
+          admission_reasons?: Json | null
+          admission_verdict?: string | null
+          allowed_cointerventions?: string[]
+          clinician_review_required?: boolean
+          contraindications?: string[]
+          created_at?: string
+          crossover?: Json | null
+          evidence_refs?: Json
+          expected_direction?: string | null
+          experiment_id: string
+          hold_stable?: string[]
+          hypothesis_question: string
+          id?: string
+          intervention?: Json
+          intervention_days?: number
+          min_adherence_pct?: number
+          min_observations_per_phase?: number
+          perturbation_category: string
+          primary_outcome: Json
+          protocol_version?: number
+          run_in_days?: number
+          secondary_outcomes?: Json
+          stop_criteria?: string[]
+          updated_at?: string
+          user_id: string
+          washout_days?: number | null
+        }
+        Update: {
+          admission_reasons?: Json | null
+          admission_verdict?: string | null
+          allowed_cointerventions?: string[]
+          clinician_review_required?: boolean
+          contraindications?: string[]
+          created_at?: string
+          crossover?: Json | null
+          evidence_refs?: Json
+          expected_direction?: string | null
+          experiment_id?: string
+          hold_stable?: string[]
+          hypothesis_question?: string
+          id?: string
+          intervention?: Json
+          intervention_days?: number
+          min_adherence_pct?: number
+          min_observations_per_phase?: number
+          perturbation_category?: string
+          primary_outcome?: Json
+          protocol_version?: number
+          run_in_days?: number
+          secondary_outcomes?: Json
+          stop_criteria?: string[]
+          updated_at?: string
+          user_id?: string
+          washout_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_experiment_protocols_experiment_id_fkey"
+            columns: ["experiment_id"]
+            isOneToOne: false
+            referencedRelation: "simulator_experiments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       simulator_experiments: {
         Row: {
           created_at: string
           ended_at: string | null
           horizon_days: number
           id: string
+          intervention_started_at: string | null
           lever: string
           notes: string | null
+          phase: string
+          phase_started_at: string | null
           predicted_deltas: Json
           rationale: string
+          run_in_started_at: string | null
           source_card_id: string | null
           source_cluster_ids: string[]
           source_terrain_render_id: string | null
           started_at: string
           status: string
+          stopped_reason: string | null
           updated_at: string
           user_id: string
         }
@@ -1809,15 +2063,20 @@ export type Database = {
           ended_at?: string | null
           horizon_days?: number
           id?: string
+          intervention_started_at?: string | null
           lever: string
           notes?: string | null
+          phase?: string
+          phase_started_at?: string | null
           predicted_deltas?: Json
           rationale: string
+          run_in_started_at?: string | null
           source_card_id?: string | null
           source_cluster_ids?: string[]
           source_terrain_render_id?: string | null
           started_at?: string
           status?: string
+          stopped_reason?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1826,15 +2085,20 @@ export type Database = {
           ended_at?: string | null
           horizon_days?: number
           id?: string
+          intervention_started_at?: string | null
           lever?: string
           notes?: string | null
+          phase?: string
+          phase_started_at?: string | null
           predicted_deltas?: Json
           rationale?: string
+          run_in_started_at?: string | null
           source_card_id?: string | null
           source_cluster_ids?: string[]
           source_terrain_render_id?: string | null
           started_at?: string
           status?: string
+          stopped_reason?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1854,12 +2118,15 @@ export type Database = {
           checkpoint_id: string | null
           confidence: number | null
           created_at: string
+          cycle_count: number
           evidence_witness_ids: string[]
           experiment_id: string | null
           graduated: boolean
           headline: string
           id: string
           kind: string
+          learning_status: string
+          replicated_by_experiment_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1868,12 +2135,15 @@ export type Database = {
           checkpoint_id?: string | null
           confidence?: number | null
           created_at?: string
+          cycle_count?: number
           evidence_witness_ids?: string[]
           experiment_id?: string | null
           graduated?: boolean
           headline: string
           id?: string
           kind?: string
+          learning_status?: string
+          replicated_by_experiment_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1882,12 +2152,15 @@ export type Database = {
           checkpoint_id?: string | null
           confidence?: number | null
           created_at?: string
+          cycle_count?: number
           evidence_witness_ids?: string[]
           experiment_id?: string | null
           graduated?: boolean
           headline?: string
           id?: string
           kind?: string
+          learning_status?: string
+          replicated_by_experiment_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1923,7 +2196,10 @@ export type Database = {
           id: string
           lever: string
           patient_safe: boolean
+          perturbation_category: string | null
           predicted_deltas: Json
+          primary_outcome: Json | null
+          protocol_template: Json | null
           rationale: string
           safety_flags: Json | null
           seen_at: string | null
@@ -1947,7 +2223,10 @@ export type Database = {
           id?: string
           lever: string
           patient_safe?: boolean
+          perturbation_category?: string | null
           predicted_deltas?: Json
+          primary_outcome?: Json | null
+          protocol_template?: Json | null
           rationale: string
           safety_flags?: Json | null
           seen_at?: string | null
@@ -1971,7 +2250,10 @@ export type Database = {
           id?: string
           lever?: string
           patient_safe?: boolean
+          perturbation_category?: string | null
           predicted_deltas?: Json
+          primary_outcome?: Json | null
+          protocol_template?: Json | null
           rationale?: string
           safety_flags?: Json | null
           seen_at?: string | null
