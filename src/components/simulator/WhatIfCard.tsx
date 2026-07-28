@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowRight, ArrowUp, FlaskConical, X, PencilRuler } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, Compass, X, Play } from "lucide-react";
 import TappableProse from "@/components/terrain/TappableProse";
 import type { PredictedDelta, WhatIfCard as WhatIfCardType } from "@/context/SimulatorContext";
 
@@ -28,11 +28,11 @@ const WhatIfCard: React.FC<Props> = ({ card, index, onDesign, onDismiss }) => {
       <header className="flex items-start justify-between gap-3 min-w-0">
         <div className="flex items-start gap-3 min-w-0">
           <div className="h-9 w-9 rounded-lg bg-signature/15 text-signature flex items-center justify-center shrink-0">
-            <FlaskConical className="h-4 w-4" />
+            <Compass className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-muted-foreground">
-              What if you
+              Recommended move
             </p>
             <h3 className="font-serif text-lg leading-snug text-foreground break-words">
               <TappableProse text={card.lever} />
@@ -55,7 +55,7 @@ const WhatIfCard: React.FC<Props> = ({ card, index, onDesign, onDismiss }) => {
       {card.predicted_deltas.length > 0 && (
         <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
           <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            What this should change in ~{card.horizon_days} days
+            What we're watching over ~{card.horizon_days} days
           </p>
           <ul className="space-y-1.5">
             {card.predicted_deltas.map((d, i) => (
@@ -82,15 +82,15 @@ const WhatIfCard: React.FC<Props> = ({ card, index, onDesign, onDismiss }) => {
       <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
         <p className="text-xs text-muted-foreground">
           {card.confidence != null
-            ? `Confidence ${Math.round(card.confidence * 100)}%`
-            : "Prediction"}
+            ? `Fit ${Math.round(card.confidence * 100)}%`
+            : "Best starting move"}
         </p>
         <button
           onClick={onDesign}
           className="inline-flex items-center gap-2 rounded-lg bg-signature text-signature-foreground px-3.5 py-2 text-sm font-sans font-medium hover:opacity-90 transition-opacity min-h-[44px]"
         >
-          <PencilRuler className="h-3.5 w-3.5" />
-          Design this experiment
+          <Play className="h-3.5 w-3.5" />
+          Review and start plan
         </button>
       </div>
     </motion.article>
