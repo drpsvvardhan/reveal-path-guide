@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { ArrowDown, ArrowRight, ArrowUp, FlaskConical, X, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, FlaskConical, X, PencilRuler } from "lucide-react";
 import TappableProse from "@/components/terrain/TappableProse";
 import type { PredictedDelta, WhatIfCard as WhatIfCardType } from "@/context/SimulatorContext";
 
@@ -13,12 +13,11 @@ const DirectionIcon: React.FC<{ d: PredictedDelta["direction"] }> = ({ d }) => {
 interface Props {
   card: WhatIfCardType;
   index: number;
-  committing: boolean;
-  onCommit: () => void;
+  onDesign: () => void;
   onDismiss: () => void;
 }
 
-const WhatIfCard: React.FC<Props> = ({ card, index, committing, onCommit, onDismiss }) => {
+const WhatIfCard: React.FC<Props> = ({ card, index, onDesign, onDismiss }) => {
   return (
     <motion.article
       initial={{ opacity: 0, y: 12 }}
@@ -80,19 +79,18 @@ const WhatIfCard: React.FC<Props> = ({ card, index, committing, onCommit, onDism
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
         <p className="text-xs text-muted-foreground">
           {card.confidence != null
             ? `Confidence ${Math.round(card.confidence * 100)}%`
             : "Prediction"}
         </p>
         <button
-          onClick={onCommit}
-          disabled={committing}
-          className="inline-flex items-center gap-2 rounded-lg bg-signature text-signature-foreground px-3.5 py-2 text-sm font-sans font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+          onClick={onDesign}
+          className="inline-flex items-center gap-2 rounded-lg bg-signature text-signature-foreground px-3.5 py-2 text-sm font-sans font-medium hover:opacity-90 transition-opacity min-h-[44px]"
         >
-          {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
-          Run this experiment
+          <PencilRuler className="h-3.5 w-3.5" />
+          Design this experiment
         </button>
       </div>
     </motion.article>
