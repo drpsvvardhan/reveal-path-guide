@@ -1,84 +1,120 @@
-# Vizzhy Biological Simulator — Integration Plan
 
-Embed the Simulator inside the existing Patient Reveal shell. Reuse the current Reveal design language (Source Serif 4 / Source Sans 3, signature accent, dark surfaces, 1360px section width). No new app, no habit-tracking framing — every surface speaks the predictive-intuition loop.
+# Precision Perturbation Engine v2 — Vertical Slice
 
-## The loop, mapped to surfaces
+Additive upgrade on top of today's Simulator. No deploy/publish. No removal of AAE/EAE/PME gates or `patient_safe` filtering. Reveal design language preserved.
 
-```text
-Observe → already in Terrain + Coherence Map (link in, don't duplicate)
-Explain → already in Narrative + Clusters (link in)
-Simulate → NEW: What-if cards on Action page + /simulator
-Choose   → NEW: commit a simulation as an active experiment
-Act      → existing ActionSection check-ins, now tied to an experiment
-Compare  → NEW: prediction-vs-reality panel at retest
-Learn    → NEW: "What we've learned about you" log
-Internalize → NEW: scaffold graduation badges + retest checkpoints
-```
+## 1. Data model (reversible migration)
 
-## Navigation
+New tables (all with GRANT + RLS + `service_role` grants):
 
-- New sidebar item **Simulator** (flask icon) under existing chapter list, between "What to do" and the rest.
-- On the existing Action / "What to do" page, add a top-level **Simulator** summary card that links into `/simulator` and surfaces the 1–2 active experiments + next retest checkpoint.
+- **`simulator_experiment_protocols`** — one row per experiment, joined 1:1 to `simulator_experiments.id`.
+  - `protocol_version` (int), `hypothesis_question` (text)
+  - `perturbation_category` (enum text: food|sleep|movement|stress|timing|recovery)
+  - `intervention` jsonb: `{ dose, intensity, duration_min, timing, frequency }`
+  - `primary_outcome` jsonb: `{ source, name, unit, direction: "increase"|"decrease"|"stabilize", cadence: "daily"|"per_session"|"weekly" }`
+  - `secondary_outcomes` jsonb[], `hold_stable` text[], `allowed_cointerventions` text[]
+  - `run_in_days`, `intervention_days`, `washout_days` (nullable), `crossover` jsonb (nullable)
+  - `min_observations_per_phase`, `min_adherence_pct`
+  - `stop_criteria` text[], `contraindications` text[], `clinician_review_required` bool
+  - `expected_direction` text (never magnitude)
+  - `admission_verdict`, `admission_reasons` jsonb, `evidence_refs` jsonb
+  - timestamps
 
-## New routes / components (frontend)
+- **`simulator_daily_observations`** — immutable append-only per-day rows.
+  - `experiment_id`, `user_id`, `phase` (run_in|intervention|washout|crossover_a|crossover_b)
+  - `observed_on` date, `logged_at` timestamptz
+  - `intervention_performed` bool, `actual_dose` jsonb, `actual_time` time, `actual_duration_min` int
+  - `primary_value` numeric, `secondary_values` jsonb
+  - `sleep_hours` numeric, `sleep_quality` int, `energy` int, `recovery` int, `symptom` int
+  - `confounders` jsonb `{ illness, travel, alcohol, unusual_stress, diet_deviation, med_change, other }`
+  - `note` text
 
-- `src/pages/Simulator.tsx` — full loop hub. Tabs: **Simulate**, **Active experiments**, **Compare**, **What we've learned**, **Checkpoints**.
-- `src/components/simulator/WhatIfCard.tsx` — one intervention hypothesis: lever, predicted Δ on 1–3 biomarkers/coordinates, time horizon, confidence band, "Run this experiment" CTA.
-- `src/components/simulator/ActiveExperimentCard.tsx` — committed simulation with daily check-in progress + days-to-checkpoint.
-- `src/components/simulator/PredictionVsRealityPanel.tsx` — predicted vs measured deltas at a retest, with a "calibration" verdict (over/under/on-target).
-- `src/components/simulator/LearningsFeed.tsx` — `What we've learned about you`: short, second-person insights derived from past experiments.
-- `src/components/simulator/ScaffoldGraduation.tsx` — milestone chips ("You no longer need the reminder for…") that graduate when intuition is internalized.
-- `src/components/simulator/RetestCheckpointCard.tsx` — date, biomarkers to re-measure, what each result will confirm or refute.
-- `src/components/sections/SimulatorSummarySection.tsx` — the embed on the "What to do" page.
-- `src/components/navigation/navItems.ts` — add Simulator entry.
+- **`simulator_experiment_comparisons`** — deterministic comparator output.
+  - `experiment_id`, `phase_a`, `phase_b` (e.g. run_in vs intervention)
+  - `n_a`, `n_b`, `median_a`, `median_b`, `abs_change`, `pct_change`, `direction_consistency_pct`, `overlap_ratio`, `adherence_pct`, `missingness_pct`, `confounder_burden`
+  - `result` text (SIGNAL_DETECTED | POSSIBLE_SIGNAL | NO_DETECTABLE_SIGNAL | NOT_INTERPRETABLE | STOPPED_FOR_SAFETY)
+  - `reasons` jsonb, `human_summary` text (LLM-explained, not LLM-decided)
+  - `computed_at`
 
-## New tables
+Additive columns:
+- `simulator_experiments`: `phase text` (draft|run_in|intervention|washout|crossover|ready_to_compare|completed|stopped|not_interpretable), `phase_started_at`, `run_in_started_at`, `intervention_started_at`, `stopped_reason`.
+- `simulator_learnings`: `status text` (provisional|replicated|refuted|inconclusive|superseded), `cycle_count int default 1`, `replicated_by_experiment_id uuid`.
+- `simulator_what_if_cards`: `protocol_template jsonb`, `primary_outcome jsonb`, `perturbation_category text`.
 
-All under `public`, RLS scoped to `auth.uid()`, full GRANTs for `authenticated` + `service_role`. Each has `id uuid pk`, `user_id uuid`, `created_at`, `updated_at`.
+## 2. Edge functions
 
-1. **`simulator_experiments`** — committed What-ifs.
-   - `lever` text (intervention concept), `rationale` text, `predicted_deltas` jsonb (biomarker/coordinate → {direction, magnitude, unit, confidence}), `horizon_days` int, `started_at`, `status` text (`active|paused|graduated|abandoned`), `source_cluster_ids` uuid[], `source_terrain_render_id` uuid.
-2. **`simulator_what_if_cards`** — generated candidate cards (not yet committed). Same predicted_deltas shape, plus `engine_version` text, `seen_at`, `dismissed_at`. Cards become an experiment by inserting into table 1.
-3. **`simulator_checkpoints`** — retest dates per experiment. `experiment_id` fk, `checkpoint_at`, `biomarkers` text[], `status` (`pending|completed|missed`), `measured_deltas` jsonb (filled at completion), `verdict` text (`confirmed|partial|refuted`), `verdict_summary` text.
-4. **`simulator_learnings`** — durable "what we've learned about you" entries. `experiment_id` fk nullable, `kind` text (`responder|non_responder|threshold|interaction|stability`), `headline` text, `body` text, `confidence` numeric, `evidence_witness_ids` uuid[]. Append-only from UI; updates only via edge function.
+- **`simulate-what-if` (edit)** — abstain when no patient-bound, measurable, interpretable hypothesis exists (return zero cards + `abstain_reason`). Every emitted card carries `protocol_template`, `primary_outcome`, `perturbation_category`. Medication/supplement/fasting/high-risk exercise → `patient_safe=false`.
+- **`design-experiment-protocol` (new)** — validates a proposed protocol, checks patient-bound outcome availability, runs AAE/EAE admission, writes `simulator_experiment_protocols` + creates `simulator_experiments` in `phase=draft`. Returns missing-field list on failure.
+- **`start-experiment-phase` (new)** — transitions phases (draft→run_in→intervention→…). Enforces phase-min days and observation floors.
+- **`compare-experiment-phases` (new, deterministic)** — pure TS comparator over `simulator_daily_observations`. No LLM in the decision. Writes `simulator_experiment_comparisons`, updates phase to `completed|not_interpretable|stopped`. Result rules:
+  - `adherence_pct < min_adherence_pct` OR `n_intervention < min_observations` OR `confounder_burden ≥ 30%` → **NOT_INTERPRETABLE**
+  - non-overlapping medians in desired direction, direction_consistency ≥ 70%, ≥ min obs both phases → **SIGNAL_DETECTED**
+  - direction matches but overlap high or consistency 50–70% → **POSSIBLE_SIGNAL**
+  - direction consistency < 50% or |pct_change| small with heavy overlap → **NO_DETECTABLE_SIGNAL**
+  - any stop-criteria hit → **STOPPED_FOR_SAFETY**
+  - Optional LLM `explain-comparison` may narrate the result but cannot alter it.
+- **`checkpoint-comparator` (existing)** — untouched; remains the slow lab evidence layer.
 
-Add a trigger on `simulator_experiments` to auto-schedule a `simulator_checkpoints` row at `started_at + horizon_days`.
+## 3. Frontend (Simulator section only)
 
-## New edge functions
+- `SimulatorContext`: add `protocols`, `dailyObservations`, `comparisons`; new actions `designProtocol`, `logDailyObservation`, `advancePhase`, `comparePhases`, `markProvisional`, `replicateExperiment`.
+- Replace `WhatIfCard` primary CTA "Run this experiment" → **"Design this experiment"**.
+- New `ProtocolBuilderModal` — stepper: Hypothesis → Perturbation → Primary/Secondary outcomes → Run-in/Intervention/Washout → Adherence & stop criteria → Review & confirm. Blocks confirm when required fields or bound outcomes missing.
+- New `PhasedTimelineStrip` on `ExperimentCard` — pill row for DRAFT→RUN_IN→INTERVENTION→(WASHOUT)→READY_TO_COMPARE→COMPLETED/STOPPED/NOT_INTERPRETABLE.
+- New `DailyCheckInCard` — appears in Simulator section for any active experiment with a check-in due today. Only shows protocol-required fields.
+- New `ComparisonResultPanel` — replaces the current single-value verdict UI. Shows medians, overlap, direction consistency, adherence, missingness, confounders, and a human-language uncertainty line.
+- Graduation gate: `Graduate` disabled until `cycle_count ≥ 2` (replication) OR clinician approval recorded via existing admin view-as authorization.
+- Admin/view-as clinician surface: full protocol, admission verdict + reasons, blocked/unbound cards list, contraindications, stop criteria, adherence, deterministic comparison details. Uses existing role check — no new bypass.
+- UI copy replaced with "What are we trying to learn about you?", "What changed?", "Was the experiment interpretable?", "What did we learn — and how certain are we?".
 
-1. **`simulate-what-if`** — given `user_id` + optional `focus` (cluster id, coordinate, biomarker), loads terrain render, clusters, latest labs, witness objects; uses Lovable AI (`google/gemini-3-flash-preview`) with the existing Framework v2 voice rules to produce 3 What-if cards. Writes to `simulator_what_if_cards`. Re-uses `_shared/contextLoader.ts`.
-2. **`compare-experiment-checkpoint`** — given `checkpoint_id`, loads experiment + new lab observations after `started_at`; computes measured deltas, classifies verdict, drafts a `simulator_learnings` entry, marks the checkpoint completed, optionally graduates the experiment.
+## 4. Demo experiment
 
-Both follow the `creating-or-editing-new-edge-function-native` rules (CORS, in-code JWT validation, Zod input validation, `verify_jwt = false` per project default — no `config.toml` edit needed).
+Dev-only seeded protocol (behind an `import.meta.env.DEV` guard, not auto-prescribed):
+> "Does morning vs late-afternoon resistance training improve this individual's session performance and next-day recovery without worsening sleep?"
 
-## Client wiring
+5-day run-in, 14-day alternating AM/PM intervention. Primary: session RPE-adjusted work (manual entry). Secondary: next-day recovery, sleep quality. Confounders per schema.
 
-- `src/context/SimulatorContext.tsx` — exposes `whatIfCards`, `experiments`, `checkpoints`, `learnings`, `generateCards()`, `commitCard(cardId)`, `runCheckpoint(checkpointId)`, `dismissCard(cardId)`.
-- Provider mounted in `src/pages/Index.tsx` inside the existing context tree (after `LabUploadsProvider` so it can read lab data).
-- Reuse `useAuth`, `useViewAs`, `useTerrainRender`, `useClusters` for inputs.
-- Cards/experiments render with existing tokens; signature accent for predicted-improvement deltas, muted destructive for refuted predictions.
+## 5. Verification (no deploy)
 
-## Existing files touched
+- `tsgo` type-check, `bunx vitest run` on new comparator (`supabase/functions/compare-experiment-phases/comparator.test.ts`) with fixtures for each of the 5 result states.
+- Playwright headless (localhost) flow on demo user: card → design protocol → start run-in → seed 5 daily obs → advance to intervention → seed 10 daily obs → compare → provisional learning row appears → graduation still blocked.
+- Second fixture: low adherence + heavy confounders → asserts `NOT_INTERPRETABLE`, not `NO_DETECTABLE_SIGNAL`.
+- SQL check: a card with `patient_safe=false` never appears in the patient query.
 
-- `src/pages/Index.tsx` — add `/simulator` route + provider.
-- `src/App.tsx` (or router file) — same.
-- `src/components/navigation/navItems.ts` — add Simulator nav item.
-- `src/components/sections/ActionSection.tsx` — embed `<SimulatorSummarySection />` near the top.
-- `src/components/navigation/DesktopNav.tsx` / `MobileNav.tsx` — pick up the new nav item automatically if they iterate `navItems`; otherwise small edit.
+## Files touched (net)
 
-## Out of scope (first pass)
+New:
+- `supabase/migrations/<ts>_ppe_v2_slice.sql`
+- `supabase/functions/design-experiment-protocol/index.ts`
+- `supabase/functions/start-experiment-phase/index.ts`
+- `supabase/functions/compare-experiment-phases/index.ts` (+ `comparator.ts`, `comparator.test.ts`)
+- `src/components/simulator/ProtocolBuilderModal.tsx`
+- `src/components/simulator/PhasedTimelineStrip.tsx`
+- `src/components/simulator/DailyCheckInCard.tsx`
+- `src/components/simulator/ComparisonResultPanel.tsx`
+- `src/components/simulator/ClinicianReviewPanel.tsx`
+- `src/lib/ppe/comparator.ts` (shared client-side types)
+- `scripts/seed-ppe-demo.ts`
 
-- Push notifications for checkpoints (use in-app card + existing nudges).
-- Wearable/CGM ingestion beyond the existing lab pipeline.
-- Multi-user / clinician annotation of experiments (read-only via existing share link only).
+Edited:
+- `supabase/functions/simulate-what-if/index.ts` (abstain + protocol_template)
+- `src/context/SimulatorContext.tsx`
+- `src/components/simulator/WhatIfCard.tsx`
+- `src/components/simulator/ExperimentCard.tsx`
+- `src/components/sections/SimulatorSection.tsx`
 
-## Build order
+Untouched: AAE / EAE / PME modules, patient-chat, terrain, CIE, action plan, care map, RAE.
 
-1. Migration: 4 tables + trigger + RLS + GRANTs.
-2. Edge functions: `simulate-what-if`, `compare-experiment-checkpoint`.
-3. `SimulatorContext` + types.
-4. `/simulator` page + 7 components.
-5. Nav item + Action page summary embed.
-6. Smoke test: generate cards → commit → simulate checkpoint completion → see learning appear.
+## Non-goals for this slice
 
-Reply **approve** to build, or tell me what to change.
+- No population recommendations.
+- No LLM decides efficacy.
+- No auto-prescribed morning-vs-afternoon RT; demo only.
+- No changes to existing lab checkpoint comparator.
+- No deploy or publish.
+
+## Assumptions to confirm
+
+- The additive-migration approach (separate protocol/observations/comparisons tables) is preferred over stuffing JSONB into `simulator_experiments`. Say the word if you'd rather keep it single-table.
+- Daily check-in lives inside the Simulator section (not on Journey/Today). Confirm if you want a Today-bar nudge as well.
+- "Clinician approval" for graduation uses existing admin view-as role — no new signing surface in this slice.
