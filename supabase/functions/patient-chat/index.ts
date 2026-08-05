@@ -1543,7 +1543,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         capturedResponse,
         roleResult.violations,
         lastUserMessage,
-        systemPrompt,
+        finalSystemPrompt,
         normalizedModel,
       );
 
