@@ -1465,7 +1465,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           model: normalizedModel,
           stream: false,
           messages: [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: finalSystemPrompt },
             ...messages,
           ],
         }),
