@@ -1588,6 +1588,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ----- Step 3: emergency intent without dose token (independent path) -----
+    // ----- Step 2b: BioTwin governance gate -----
+    // The imported report outranks generic narrative: its prohibited headlines
+    // and its medication / PGx / CGM holds are enforced on the final output.
+    let biotwinViolations: unknown[] = [];
+    if (
+      biotwinPacket.has_report &&
+      (status === "passed" || status === "regenerated_successfully")
+    ) {
+      const biotwinResult = validateBiotwinOutput(finalOutput, biotwinPacket);
+      if (!biotwinResult.valid) {
+        biotwinViolations = biotwinResult.violations;
+        finalOutput = biotwinReplacementMessage(biotwinPacket);
+        status = "replaced_with_fallback";
+        replacementTemplateUsed = "biotwin_governance_violation";
+      }
+    }
+
     if (
       status === "passed" &&
       dosePolicyContext.emergencyIntentPresent &&
