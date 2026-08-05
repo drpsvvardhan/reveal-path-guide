@@ -1635,7 +1635,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           },
       dose_policy_context: dosePolicyContext,
       routing_mode: dosePolicyContext.routingMode,
-      violations: [],
+      violations: biotwinViolations,
       dose_patterns_matched: dosePolicyContext.userDoseTokens,
       original_output: capturedResponse,
       replaced_with: finalOutput,
