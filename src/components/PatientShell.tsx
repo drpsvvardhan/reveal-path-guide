@@ -72,6 +72,7 @@ const PatientShell: React.FC = () => {
 
   return (
     <NavigationProvider onNavigate={handleNavigate}>
+    <BioTwinProvider>
     <div className="flex h-screen overflow-hidden flex-col safe-area-px">
       <ViewAsSessionBanner />
       <div className="flex flex-1 overflow-hidden">
@@ -205,6 +206,7 @@ const PatientShell: React.FC = () => {
         defaultTargetUserId={viewAsTarget}
       />
     </div>
+    </BioTwinProvider>
     </NavigationProvider>
   );
 };
