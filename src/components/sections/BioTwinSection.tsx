@@ -126,12 +126,12 @@ const Empty: React.FC<{ label: string }> = ({ label }) => (
 const BioTwinSection: React.FC = () => {
   const { report, statements, loading } = useBioTwin();
   const { isAdmin, isViewingAs } = useViewAs();
-  const { navigate } = useNavigation();
+  const { navigateTo } = useNavigation();
   const clinicianView = isAdmin || isViewingAs;
 
   if (loading) {
     return (
-      <PatientSectionLayout title="Your BioTwin" subtitle="Reading your imported report…">
+      <PatientSectionLayout title="Your BioTwin" intro="Reading your imported report.">
         <div className="h-24 animate-pulse rounded-lg bg-muted/40" />
       </PatientSectionLayout>
     );
@@ -141,7 +141,7 @@ const BioTwinSection: React.FC = () => {
     return (
       <PatientSectionLayout
         title="Your BioTwin"
-        subtitle="No clinical evidence report has been imported yet."
+        intro="No clinical evidence report has been imported yet."
       >
         <div className="space-y-4 min-w-0">
           <p className="font-sans text-sm text-muted-foreground max-w-prose break-words">
@@ -180,7 +180,7 @@ const BioTwinSection: React.FC = () => {
   return (
     <PatientSectionLayout
       title="Your BioTwin"
-      subtitle={`Imported report · version ${report.version}${
+      intro={`Imported report · version ${report.version}${
         report.generated_date ? ` · ${report.generated_date}` : ""
       }`}
     >
@@ -378,7 +378,7 @@ const BioTwinSection: React.FC = () => {
         >
           <button
             type="button"
-            onClick={() => navigate("ask")}
+            onClick={() => navigateTo("ask")}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-border px-4 font-sans text-sm hover:bg-muted/50"
           >
             <MessageCircle className="h-4 w-4 shrink-0" />
