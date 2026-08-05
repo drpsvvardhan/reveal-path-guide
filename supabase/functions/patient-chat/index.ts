@@ -65,6 +65,14 @@ import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
+import {
+  buildBiotwinPacket,
+  renderBiotwinPacketForPrompt,
+  validateBiotwinOutput,
+  biotwinReplacementMessage,
+  EMPTY_BIOTWIN_PACKET,
+  type BiotwinPacket,
+} from "../_shared/biotwin/packet.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1375,6 +1383,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
       documents
     );
 
+    // ------------------------------------------------------------------------
+    // BioTwin source window.
+    //
+    // This does NOT replace the chat runtime. It appends a bounded, governed
+    // evidence packet built from the person's active BioTwin clinical evidence
+    // report (if any). Release control, holds, contradictions, measurement
+    // requirements and clinician-review status travel with it, and the report's
+    // own prohibitions are enforced on the way out in Step 2b below.
+    // ------------------------------------------------------------------------
+    let biotwinPacket: BiotwinPacket = EMPTY_BIOTWIN_PACKET;
+    try {
+      const { data: biotwinReport } = await supabaseAdmin
+        .from("biotwin_reports")
+        .select(
+          "id, twin_id, version, generated_date, release_control, executive_synthesis, holds, clinician_review_required, patient_release_permitted"
+        )
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (biotwinReport) {
+        const { data: biotwinStatements } = await supabaseAdmin
+          .from("biotwin_statements")
+          .select(
+            "id, source_id, section, statement_kind, truth_status, title, body, bounds, measurements, timepoint, clinical_authority, requires_measurement, holds"
+          )
+          .eq("report_id", biotwinReport.id)
+          .order("ordinal", { ascending: true });
+
+        biotwinPacket = buildBiotwinPacket(
+          // deno-lint-ignore no-explicit-any
+          biotwinReport as any,
+          // deno-lint-ignore no-explicit-any
+          (biotwinStatements ?? []) as any
+        );
+      }
+    } catch (e) {
+      console.error("BioTwin packet load failed (chat continues without it):", e);
+    }
+
+    const finalSystemPrompt = biotwinPacket.has_report
+      ? `${systemPrompt}\n\n${renderBiotwinPacketForPrompt(biotwinPacket)}`
+      : systemPrompt;
+
     // Route all chat traffic through the Lovable AI gateway.
     // This preserves compatibility with older published clients that still
     // send legacy Claude model names while avoiding direct-provider failures.
@@ -1413,7 +1465,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           model: normalizedModel,
           stream: false,
           messages: [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: finalSystemPrompt },
             ...messages,
           ],
         }),
@@ -1491,7 +1543,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         capturedResponse,
         roleResult.violations,
         lastUserMessage,
-        systemPrompt,
+        finalSystemPrompt,
         normalizedModel,
       );
 
@@ -1536,6 +1588,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ----- Step 3: emergency intent without dose token (independent path) -----
+    // ----- Step 2b: BioTwin governance gate -----
+    // The imported report outranks generic narrative: its prohibited headlines
+    // and its medication / PGx / CGM holds are enforced on the final output.
+    let biotwinViolations: unknown[] = [];
+    if (
+      biotwinPacket.has_report &&
+      (status === "passed" || status === "regenerated_successfully")
+    ) {
+      const biotwinResult = validateBiotwinOutput(finalOutput, biotwinPacket);
+      if (!biotwinResult.valid) {
+        biotwinViolations = biotwinResult.violations;
+        finalOutput = biotwinReplacementMessage(biotwinPacket);
+        status = "replaced_with_fallback";
+        replacementTemplateUsed = "biotwin_governance_violation";
+      }
+    }
+
     if (
       status === "passed" &&
       dosePolicyContext.emergencyIntentPresent &&
@@ -1566,7 +1635,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           },
       dose_policy_context: dosePolicyContext,
       routing_mode: dosePolicyContext.routingMode,
-      violations: [],
+      violations: biotwinViolations,
       dose_patterns_matched: dosePolicyContext.userDoseTokens,
       original_output: capturedResponse,
       replaced_with: finalOutput,

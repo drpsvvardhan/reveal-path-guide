@@ -29,6 +29,8 @@ import QueueSection from "@/components/sections/QueueSection";
 import NoticedSection from "@/components/sections/NoticedSection";
 import IntakeResultsSection from "@/components/sections/IntakeResultsSection";
 import SimulatorSection from "@/components/sections/SimulatorSection";
+import BioTwinSection from "@/components/sections/BioTwinSection";
+import { BioTwinProvider } from "@/context/BioTwinContext";
 import { navItems } from "@/components/navigation/navItems";
 
 const sections: Record<string, React.FC> = {
@@ -40,6 +42,7 @@ const sections: Record<string, React.FC> = {
   actions: ActionSection,
   simulator: SimulatorSection,
   records: RecordsSection,
+  biotwin: BioTwinSection,
   ask: AskSection,
   queue: QueueSection,
   terrain: IntakeResultsSection,
@@ -69,6 +72,7 @@ const PatientShell: React.FC = () => {
 
   return (
     <NavigationProvider onNavigate={handleNavigate}>
+    <BioTwinProvider>
     <div className="flex h-screen overflow-hidden flex-col safe-area-px">
       <ViewAsSessionBanner />
       <div className="flex flex-1 overflow-hidden">
@@ -202,6 +206,7 @@ const PatientShell: React.FC = () => {
         defaultTargetUserId={viewAsTarget}
       />
     </div>
+    </BioTwinProvider>
     </NavigationProvider>
   );
 };

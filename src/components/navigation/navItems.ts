@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Map, Activity, Scale, Brain, RefreshCw,
-  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users, FolderOpen, MessageSquare, Sparkles, Layers, FlaskConical
+  ListChecks, MessageCircle, ShieldCheck, GitBranch, Users, FolderOpen, MessageSquare, Sparkles, Layers, FlaskConical, Dna
 } from "lucide-react";
 
 export interface NavItem {
@@ -22,6 +22,7 @@ export const navItems: NavItem[] = [
   { id: "actions", label: "What to do", shortLabel: "Actions", icon: ListChecks },
   { id: "simulator", label: "Biological Simulator", shortLabel: "Simulate", icon: FlaskConical },
   { id: "records", label: "Medical Records", shortLabel: "Records", icon: FolderOpen },
+  { id: "biotwin", label: "Your BioTwin", shortLabel: "BioTwin", icon: Dna },
   { id: "ask", label: "Ask anything", shortLabel: "Ask", icon: MessageCircle },
   { id: "queue", label: "My questions", shortLabel: "Questions", icon: MessageSquare },
   { id: "confidence", label: "How sure are we", shortLabel: "Certainty", icon: ShieldCheck },
