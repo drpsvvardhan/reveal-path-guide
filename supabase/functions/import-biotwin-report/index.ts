@@ -67,15 +67,15 @@ Deno.serve(async (req) => {
   // ---- detect ---------------------------------------------------------------
   const raw = payload.report;
   const detected = detectBiotwinReport(raw);
-  if (!detected.ok) {
+  if (!detected.accepted) {
     return json(
       {
         imported: false,
-        refusal_code: detected.refusal_code,
+        refusal_code: detected.refusal_code ?? "rejected",
         diagnostics: [
           {
             level: "error",
-            code: detected.refusal_code,
+            code: detected.refusal_code ?? "rejected",
             message: detected.message,
           },
         ],
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       422,
     );
   }
-  const report = detected.report;
+  const report = raw as Record<string, unknown>;
 
   // ---- structural validation (deterministic, no extraction) ----------------
   const structural = validateBiotwinStructure(report);
