@@ -1,120 +1,104 @@
+# BioTwin Clinical Evidence Report — deterministic adapter + governed UI projection
 
-# Precision Perturbation Engine v2 — Vertical Slice
+Reuse the existing governed runtime. Nothing about auth, uploads, witness governance, patient-chat, authority gates, validation or audit is rebuilt or replaced. Everything below is additive.
 
-Additive upgrade on top of today's Simulator. No deploy/publish. No removal of AAE/EAE/PME gates or `patient_safe` filtering. Reveal design language preserved.
+## What the attached report actually is
 
-## 1. Data model (reversible migration)
+A fully structured, self-governing clinical evidence document (840 lines) with these top-level sections: `schema`, `subject`, `provenance`, `release_control`, `executive_synthesis`, `clinical_state` (4 truth buckets), `repaired_driver_hierarchy`, `measurement_and_action_plan`, `medication_status`, `genomics_and_pgx`, `omics_readiness`, `register_governance`, `contradiction_reclassification`, `coupling_and_score_governance`, `technical_integrity`, `semantic_repair_ledger`, `clinical_report_projection` (allowed/prohibited headline statements), `external_evidence`, `final_attestation`.
 
-New tables (all with GRANT + RLS + `service_role` grants):
+It carries its own truth status, its own release gates and its own prohibited statements. It must be adapted, never interpreted by an LLM.
 
-- **`simulator_experiment_protocols`** — one row per experiment, joined 1:1 to `simulator_experiments.id`.
-  - `protocol_version` (int), `hypothesis_question` (text)
-  - `perturbation_category` (enum text: food|sleep|movement|stress|timing|recovery)
-  - `intervention` jsonb: `{ dose, intensity, duration_min, timing, frequency }`
-  - `primary_outcome` jsonb: `{ source, name, unit, direction: "increase"|"decrease"|"stabilize", cadence: "daily"|"per_session"|"weekly" }`
-  - `secondary_outcomes` jsonb[], `hold_stable` text[], `allowed_cointerventions` text[]
-  - `run_in_days`, `intervention_days`, `washout_days` (nullable), `crossover` jsonb (nullable)
-  - `min_observations_per_phase`, `min_adherence_pct`
-  - `stop_criteria` text[], `contraindications` text[], `clinician_review_required` bool
-  - `expected_direction` text (never magnitude)
-  - `admission_verdict`, `admission_reasons` jsonb, `evidence_refs` jsonb
-  - timestamps
+## Verified current-state facts this plan relies on
 
-- **`simulator_daily_observations`** — immutable append-only per-day rows.
-  - `experiment_id`, `user_id`, `phase` (run_in|intervention|washout|crossover_a|crossover_b)
-  - `observed_on` date, `logged_at` timestamptz
-  - `intervention_performed` bool, `actual_dose` jsonb, `actual_time` time, `actual_duration_min` int
-  - `primary_value` numeric, `secondary_values` jsonb
-  - `sleep_hours` numeric, `sleep_quality` int, `energy` int, `recovery` int, `symptom` int
-  - `confounders` jsonb `{ illness, travel, alcohol, unusual_stress, diet_deviation, med_change, other }`
-  - `note` text
+- `witness_objects` enforces: `source_window`+`signal` FK into `witness_signal_registry`, depth/role consistency (depth 0 = direct measures only), `domain_of_access <> 'clinical_compression'`, non-empty limitations, testimony/confidence_basis length floors.
+- `witness_signal_registry` currently holds exactly one seed, `p1a_initial`, covering `cie`, `lab`, `inbody`, `fibroscan`.
+- The `witness_source_window` enum already contains an unused `emr` value, so no enum change (and therefore no irreversible migration) is needed.
+- `contextLoader.loadPatientContext` filters witnesses to seed `p1a_initial`, so a new seed cannot contaminate current terrain reasoning.
+- Routes: `/manifest-preview`, `/share/:token`, `/clinical/:token` are unauthenticated; `/`, `/account`, `/admin/*` are gated by `ProtectedRoute` / `AdminRoute`.
 
-- **`simulator_experiment_comparisons`** — deterministic comparator output.
-  - `experiment_id`, `phase_a`, `phase_b` (e.g. run_in vs intervention)
-  - `n_a`, `n_b`, `median_a`, `median_b`, `abs_change`, `pct_change`, `direction_consistency_pct`, `overlap_ratio`, `adherence_pct`, `missingness_pct`, `confounder_burden`
-  - `result` text (SIGNAL_DETECTED | POSSIBLE_SIGNAL | NO_DETECTABLE_SIGNAL | NOT_INTERPRETABLE | STOPPED_FOR_SAFETY)
-  - `reasons` jsonb, `human_summary` text (LLM-explained, not LLM-decided)
-  - `computed_at`
+## Architecture
 
-Additive columns:
-- `simulator_experiments`: `phase text` (draft|run_in|intervention|washout|crossover|ready_to_compare|completed|stopped|not_interpretable), `phase_started_at`, `run_in_started_at`, `intervention_started_at`, `stopped_reason`.
-- `simulator_learnings`: `status text` (provisional|replicated|refuted|inconclusive|superseded), `cycle_count int default 1`, `replicated_by_experiment_id uuid`.
-- `simulator_what_if_cards`: `protocol_template jsonb`, `primary_outcome jsonb`, `perturbation_category text`.
+```text
+report.json ──> import-biotwin-report (edge, JWT verified in code)
+                   │ 1. detect + validate schema (deterministic, zod)
+                   │ 2. sha256 → idempotency / version chain
+                   │ 3. adapt → statements (no LLM)
+                   ├──> biotwin_reports        (governed source, raw JSON preserved)
+                   ├──> biotwin_statements     (evidence objects, truth status kept)
+                   └──> witness_objects        (ONLY confirmed numeric measurements,
+                                                seed 'biotwin_v1', source_window 'emr')
 
-## 2. Edge functions
+patient-chat ──> existing loadPatientContext  (unchanged)
+             └──> NEW loadBiotwinPacket       (bounded, adds holds + prohibited list)
 
-- **`simulate-what-if` (edit)** — abstain when no patient-bound, measurable, interpretable hypothesis exists (return zero cards + `abstain_reason`). Every emitted card carries `protocol_template`, `primary_outcome`, `perturbation_category`. Medication/supplement/fasting/high-risk exercise → `patient_safe=false`.
-- **`design-experiment-protocol` (new)** — validates a proposed protocol, checks patient-bound outcome availability, runs AAE/EAE admission, writes `simulator_experiment_protocols` + creates `simulator_experiments` in `phase=draft`. Returns missing-field list on failure.
-- **`start-experiment-phase` (new)** — transitions phases (draft→run_in→intervention→…). Enforces phase-min days and observation floors.
-- **`compare-experiment-phases` (new, deterministic)** — pure TS comparator over `simulator_daily_observations`. No LLM in the decision. Writes `simulator_experiment_comparisons`, updates phase to `completed|not_interpretable|stopped`. Result rules:
-  - `adherence_pct < min_adherence_pct` OR `n_intervention < min_observations` OR `confounder_burden ≥ 30%` → **NOT_INTERPRETABLE**
-  - non-overlapping medians in desired direction, direction_consistency ≥ 70%, ≥ min obs both phases → **SIGNAL_DETECTED**
-  - direction matches but overlap high or consistency 50–70% → **POSSIBLE_SIGNAL**
-  - direction consistency < 50% or |pct_change| small with heavy overlap → **NO_DETECTABLE_SIGNAL**
-  - any stop-criteria hit → **STOPPED_FOR_SAFETY**
-  - Optional LLM `explain-comparison` may narrate the result but cannot alter it.
-- **`checkpoint-comparator` (existing)** — untouched; remains the slow lab evidence layer.
+UI ──> new authenticated "Your BioTwin" section (11 panels), never on public routes
+```
 
-## 3. Frontend (Simulator section only)
+## Database migration (additive, rollback = drop two tables + one seed)
 
-- `SimulatorContext`: add `protocols`, `dailyObservations`, `comparisons`; new actions `designProtocol`, `logDailyObservation`, `advancePhase`, `comparePhases`, `markProvisional`, `replicateExperiment`.
-- Replace `WhatIfCard` primary CTA "Run this experiment" → **"Design this experiment"**.
-- New `ProtocolBuilderModal` — stepper: Hypothesis → Perturbation → Primary/Secondary outcomes → Run-in/Intervention/Washout → Adherence & stop criteria → Review & confirm. Blocks confirm when required fields or bound outcomes missing.
-- New `PhasedTimelineStrip` on `ExperimentCard` — pill row for DRAFT→RUN_IN→INTERVENTION→(WASHOUT)→READY_TO_COMPARE→COMPLETED/STOPPED/NOT_INTERPRETABLE.
-- New `DailyCheckInCard` — appears in Simulator section for any active experiment with a check-in due today. Only shows protocol-required fields.
-- New `ComparisonResultPanel` — replaces the current single-value verdict UI. Shows medians, overlap, direction consistency, adherence, missingness, confounders, and a human-language uncertainty line.
-- Graduation gate: `Graduate` disabled until `cycle_count ≥ 2` (replication) OR clinician approval recorded via existing admin view-as authorization.
-- Admin/view-as clinician surface: full protocol, admission verdict + reasons, blocked/unbound cards list, contraindications, stop criteria, adherence, deterministic comparison details. Uses existing role check — no new bypass.
-- UI copy replaced with "What are we trying to learn about you?", "What changed?", "Was the experiment interpretable?", "What did we learn — and how certain are we?".
+1. `public.biotwin_reports` — `user_id`, `upload_id` (nullable FK to `patient_lab_uploads`), `twin_id`, `schema_name`, `schema_version`, `report_type`, `semantic_repair_version`, `generated_date`, `content_sha256`, `version`, `status` (`active` | `superseded` | `rejected`), `release_control` jsonb, `executive_synthesis` jsonb, `attestation` jsonb, `raw_report` jsonb, `import_diagnostics` jsonb, timestamps. Unique `(user_id, content_sha256)` for idempotent re-import; partial unique index for one `active` row per user; trigger supersedes the prior active row on insert (same pattern as `terrain_renders`).
+2. `public.biotwin_statements` — `report_id`, `user_id`, `source_id` (stable), `section`, `statement_kind`, `truth_status` (`confirmed` | `candidate` | `unknown` | `retired` | `prohibited`), `title`, `body`, `bounds` jsonb, `timepoint`, `clinical_authority` (`patient_facing` | `clinician_only` | `research_only` | `prohibited`), `requires_measurement` jsonb, `holds` text[], `provenance` jsonb, `ordinal`. Unique `(report_id, source_id)`.
+3. GRANTs on both: `SELECT, INSERT, UPDATE, DELETE` to `authenticated`, `ALL` to `service_role`, **no anon grant**. RLS on; policies = own rows (`auth.uid() = user_id`), plus admin read via `has_role(auth.uid(),'admin')` and the existing `has_valid_view_as_session` pattern.
+4. Seed `witness_signal_registry` rows under `registry_seed_version = 'biotwin_v1'`, `source_window = 'emr'`, one row per admitted confirmed-measurement signal, with `domain_of_access` chosen from existing allowed values (never `clinical_compression`). Rollback: delete that seed's rows.
 
-## 4. Demo experiment
+## Adapter (deterministic, no LLM)
 
-Dev-only seeded protocol (behind an `import.meta.env.DEV` guard, not auto-prescribed):
-> "Does morning vs late-afternoon resistance training improve this individual's session performance and next-day recovery without worsening sleep?"
+New `supabase/functions/_shared/biotwin/`:
 
-5-day run-in, 14-day alternating AM/PM intervention. Primary: session RPE-adjusted work (manual entry). Secondary: next-day recovery, sleep quality. Confounders per schema.
+- `detect.ts` — accepts only `schema.name === "Vizzhy BioTwin Clinical Evidence Report"` **and** `schema.report_type === "FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT"`; anything else is refused with a typed reason (never routed to generic extraction).
+- `schema.ts` — zod schema for every consumed section, permissive on unknown extra keys, strict on the governance-critical ones (`release_control`, `clinical_state`, `clinical_report_projection`, `final_attestation`).
+- `adapter.ts` — pure function `adaptBiotwinReport(json) → { report, statements[], diagnostics[] }`. Field mapping:
+  - `clinical_state.confirmed_measurements_and_bounded_findings` → `truth_status: confirmed`
+  - `clinical_state.candidate_or_unverified_signals` → `candidate`
+  - `clinical_state.open_screening_findings` → `unknown`
+  - `clinical_state.not_established_or_not_supported` → `retired`
+  - `clinical_report_projection.prohibited_headline_statements` → `prohibited` (authority `prohibited`)
+  - `repaired_driver_hierarchy` → `driver` statements keyed by `rank`, carrying `state`, `why_it_matters`, `what_would_change_management`
+  - `measurement_and_action_plan` → `action` statements with `priority`, `timeframe`, `minimum_fields`, `specific_items`, `truth_transition` → `requires_measurement`
+  - `medication_status` → `medication` statements; `historical_or_unresolved_items` and the lipid/glucose therapy lines become holds
+  - `genomics_and_pgx` (incl. `pgx.hard_gates_permitted`, `patient_specific_use`) → `genomic` / `pgx` statements; a PGx hold is set whenever hard gates are not permitted
+  - `omics_readiness.layers` → `omics_layer` statements
+  - `contradiction_reclassification` → `contradiction` statements keyed by the file's own `source_id`
+  - `semantic_repair_ledger` → `repair` statements keyed by `repair_id`
+  - `external_evidence` → `external_evidence` statements keyed by `evidence_id`
+  - `provenance`, `technical_integrity`, `coupling_and_score_governance` → per-statement `provenance` plus report-level diagnostics
+  - `source_id` comes from the file when present, otherwise is derived deterministically as `sha256(section + ordinal + normalized title)` so re-import is stable.
+- `witnessProjection.ts` — projects only statements that are confirmed **and** carry a numeric value, unit and timepoint into depth-0 witnesses through the existing `rae_insert_witness_object` RPC. Everything else stays statement-only; no bucket is flattened into another.
+- `packet.ts` — `buildBiotwinPacket(userId)` returns a bounded packet (hard caps per section) containing `release_control`, allowed/prohibited headline statements, driver hierarchy, holds (medication / PGx / CGM), contradictions, outstanding measurement requirements and clinician-review status.
 
-## 5. Verification (no deploy)
+New edge function `import-biotwin-report`: validates the JWT in code, resolves `user_id` server-side (never from the body; admin may target another user only through an active view-as session), runs the adapter, writes report + statements + witnesses, and returns human-readable diagnostics (accepted counts per bucket, skipped items with reasons, version/idempotency verdict).
 
-- `tsgo` type-check, `bunx vitest run` on new comparator (`supabase/functions/compare-experiment-phases/comparator.test.ts`) with fixtures for each of the 5 result states.
-- Playwright headless (localhost) flow on demo user: card → design protocol → start run-in → seed 5 daily obs → advance to intervention → seed 10 daily obs → compare → provisional learning row appears → graduation still blocked.
-- Second fixture: low adherence + heavy confounders → asserts `NOT_INTERPRETABLE`, not `NO_DETECTABLE_SIGNAL`.
-- SQL check: a card with `patient_safe=false` never appears in the patient query.
+## Precedence and safety
 
-## Files touched (net)
+- The imported report is authoritative. `release_control` and `clinical_report_projection` gate what may be shown or said; CIE-derived scores, hard-coded thresholds, `sampleManifest`, and generated narratives can never override it.
+- The `patient-chat` change is narrow: attach the BioTwin packet as a distinct source window alongside the existing witness context, add precedence + hold rules to the system prompt, and extend the existing validator so prohibited headline statements, medication/PGx/CGM holds and "measurement required" claims are refused the same way dose claims already are. The existing `patient_chat_validation_log` audit row records BioTwin violations.
+- If `release_control.patient_facing_release` is not released, patient mode shows the report's own status line and the clinician panels stay admin-only.
 
-New:
-- `supabase/migrations/<ts>_ppe_v2_slice.sql`
-- `supabase/functions/design-experiment-protocol/index.ts`
-- `supabase/functions/start-experiment-phase/index.ts`
-- `supabase/functions/compare-experiment-phases/index.ts` (+ `comparator.ts`, `comparator.test.ts`)
-- `src/components/simulator/ProtocolBuilderModal.tsx`
-- `src/components/simulator/PhasedTimelineStrip.tsx`
-- `src/components/simulator/DailyCheckInCard.tsx`
-- `src/components/simulator/ComparisonResultPanel.tsx`
-- `src/components/simulator/ClinicianReviewPanel.tsx`
-- `src/lib/ppe/comparator.ts` (shared client-side types)
-- `scripts/seed-ppe-demo.ts`
+## UI projection — "Your BioTwin"
 
-Edited:
-- `supabase/functions/simulate-what-if/index.ts` (abstain + protocol_template)
-- `src/context/SimulatorContext.tsx`
-- `src/components/simulator/WhatIfCard.tsx`
-- `src/components/simulator/ExperimentCard.tsx`
-- `src/components/sections/SimulatorSection.tsx`
+New nav item plus `src/components/sections/biotwin/` with one component per panel: Executive synthesis · Known / candidate / unknown state · Repaired driver hierarchy · Measurement & action plan · Medication status · Genomics & PGx · Omics readiness · Contradictions & repair ledger · Evidence & provenance · Ask your twin. A new `BioTwinContext` fetches the active report + statements for the resolved user (auth or view-as). The section only appears when an active report exists, so nothing changes for users without one.
 
-Untouched: AAE / EAE / PME modules, patient-chat, terrain, CIE, action plan, care map, RAE.
+Exposure guarantees: no BioTwin data in `sampleManifest`, `ManifestPreview`, `SharedQueue`, `ClinicalShare`, or the `get_shared_*` functions; no anon grants; the clinician bearer-token share flow is left untouched.
 
-## Non-goals for this slice
+## Tests and fixtures
 
-- No population recommendations.
-- No LLM decides efficacy.
-- No auto-prescribed morning-vs-afternoon RT; demo only.
-- No changes to existing lab checkpoint comparator.
-- No deploy or publish.
+- `tests/fixtures/biotwin/` — the attached report with subject identity replaced by a synthetic person, plus: a wrong-`schema.name` file, a wrong-`report_type` file, a missing-`release_control` file, and a second version of the valid file for the re-import path.
+- Vitest: adapter mapping (bucket → truth status, no cross-bucket flattening), stable `source_id` derivation, packet bounding, prohibited-headline enforcement, hold derivation.
 
-## Assumptions to confirm
+## Acceptance tests
 
-- The additive-migration approach (separate protocol/observations/comparisons tables) is preferred over stuffing JSONB into `simulator_experiments`. Say the word if you'd rather keep it single-table.
-- Daily check-in lives inside the Simulator section (not on Journey/Today). Confirm if you want a Today-bar nudge as well.
-- "Clinician approval" for graduation uses existing admin view-as role — no new signing surface in this slice.
+1. Valid report imports; statement counts per bucket match the JSON exactly; no LLM call is made during import.
+2. A file with either wrong `schema.name` or wrong `report_type` is refused with a readable diagnostic and writes no rows.
+3. Re-importing the identical file creates no duplicates; a modified report supersedes the prior version and leaves exactly one active row.
+4. Prohibited headline statements never appear in UI or chat output; an attempt is logged in `patient_chat_validation_log`.
+5. Chat answers preserve `release_control`, medication/PGx/CGM holds, contradictions, measurement requirements and clinician-review status; contradicting CIE scores or narrative text do not win.
+6. Only confirmed numeric measurements exist as witnesses; candidate/unknown/retired/prohibited statements have no witness rows.
+7. `/manifest-preview`, `/share/:token`, `/clinical/:token` return zero BioTwin data for a user who has an imported report; the anon role has no grant on either table.
+8. Migration rollback (drop the two tables + delete the `biotwin_v1` seed) leaves the existing app fully functional.
+9. Nothing is published or deployed as part of this work.
+
+## Technical notes
+
+- No enum values are added, so the migration is fully reversible.
+- `p1a_initial` stays the active seed for existing terrain reasoning; `biotwin_v1` is read only by the BioTwin path.
+- The adapter is schema-driven and contains no patient-specific identifiers, so any future subject using this schema works unchanged.
