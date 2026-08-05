@@ -97,10 +97,11 @@ Deno.test("report holds and review state are carried through", () => {
 
 // ---- chat packet -----------------------------------------------------------
 
-function packetFromFixture(mode: "patient" | "clinician") {
+function packetFromFixture() {
   const adapted = adaptBiotwinReport(fixture);
   const reportRow = {
     id: "00000000-0000-0000-0000-000000000001",
+    twin_id: adapted.report.twin_id,
     version: 1,
     generated_date: adapted.report.generated_date,
     release_control: adapted.report.release_control,
@@ -125,44 +126,41 @@ function packetFromFixture(mode: "patient" | "clinician") {
     holds: s.holds,
   }));
   // deno-lint-ignore no-explicit-any
-  return buildBiotwinPacket(reportRow as any, statementRows as any, mode);
+  return buildBiotwinPacket(reportRow as any, statementRows as any);
 }
 
-Deno.test("patient packet excludes clinician-only and prohibited statements", () => {
-  const packet = packetFromFixture("patient");
-  const authorities = new Set([
-    ...packet.confirmed.map((s) => s.clinical_authority),
-    ...packet.candidate.map((s) => s.clinical_authority),
-    ...packet.unknown.map((s) => s.clinical_authority),
-  ]);
-  assertEquals(authorities.has("prohibited"), false);
-  assert(packet.prohibited_statements.length > 0, "prohibitions must still be enforced");
-});
-
-Deno.test("clinician packet retains candidate and unknown state", () => {
-  const packet = packetFromFixture("clinician");
+Deno.test("packet keeps the truth buckets separate and carries prohibitions", () => {
+  const packet = packetFromFixture();
+  assert(packet.has_report);
+  assert(packet.confirmed.length > 0);
   assert(packet.candidate.length > 0);
   assert(packet.unknown.length > 0);
+  assert(packet.retired.length > 0);
+  assert(packet.prohibited_headlines.length > 0, "prohibitions must still be enforced");
+  // Prohibited statements are never smuggled into a renderable bucket.
+  const renderable = [...packet.confirmed, ...packet.candidate, ...packet.unknown];
+  assertEquals(renderable.some((s) => s.clinical_authority === "prohibited"), false);
 });
 
 Deno.test("output validation blocks a prohibited claim", () => {
-  const packet = packetFromFixture("patient");
+  const packet = packetFromFixture();
   const res = validateBiotwinOutput("You have insulin resistance, so start treatment.", packet);
-  assertEquals(res.status, "blocked");
-  assert(res.violations.length > 0);
+  assertEquals(res.valid, false);
+  assert(res.violations.some((v) => v.kind === "prohibited_headline"));
 });
 
 Deno.test("output validation blocks a medication dose change under hold", () => {
-  const packet = packetFromFixture("patient");
+  const packet = packetFromFixture();
   const res = validateBiotwinOutput("You should increase your statin dose to 40 mg.", packet);
-  assertEquals(res.status, "blocked");
+  assertEquals(res.valid, false);
+  assert(res.violations.some((v) => v.kind === "hold_violation"));
 });
 
 Deno.test("output validation passes bounded, non-prescriptive prose", () => {
-  const packet = packetFromFixture("patient");
+  const packet = packetFromFixture();
   const res = validateBiotwinOutput(
     "Your report confirms an elevated atherogenic particle burden from a single fasting panel. The inflammation reading is unresolved and needs one repeat measurement before it means anything.",
     packet,
   );
-  assertEquals(res.status, "pass");
+  assertEquals(res.valid, true);
 });
