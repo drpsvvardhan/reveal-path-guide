@@ -1,0 +1,200 @@
+{
+  "schema": {
+    "name": "Vizzhy BioTwin Clinical Evidence Report",
+    "version": "1.0",
+    "report_type": "FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT",
+    "semantic_repair_version": "sr-2.1"
+  },
+  "subject": {
+    "twin_id": "TWIN-SYNTH-0001",
+    "generated_date": "2026-01-15",
+    "age_band": "40-49",
+    "sex": "female"
+  },
+  "release_control": {
+    "overall_status": "RELEASE_WITH_CLINICIAN_REVIEW",
+    "patient_facing_release": "PERMITTED_FOR_CONFIRMED_FINDINGS_ONLY",
+    "medication_or_treatment_decision": "HOLD_PENDING_CLINICIAN_REVIEW",
+    "pharmacogenomic_action": "HOLD_PENDING_CONFIRMATORY_GENOTYPE",
+    "continuous_glucose_interpretation": "HOLD_INSUFFICIENT_WEAR_WINDOW"
+  },
+  "clinical_report_projection": {
+    "allowed_headline_statements": [
+      "Atherogenic lipid burden is confirmed and is the first thing worth acting on.",
+      "Inflammation is mildly elevated and needs one repeat measurement before interpretation."
+    ],
+    "prohibited_headline_statements": [
+      "You have insulin resistance.",
+      "You should start or change a statin dose.",
+      "Your genetics mean you cannot metabolise this drug."
+    ]
+  },
+  "executive_synthesis": {
+    "headline": "Confirmed atherogenic lipid burden with an unresolved inflammatory signal.",
+    "what_is_certain": "Lipid particle burden is measured and bounded.",
+    "what_is_not_certain": "Glycaemic and inflammatory state are single-timepoint only.",
+    "what_happens_next": "Two repeat measurements convert candidate signals into decisions."
+  },
+  "clinical_state": {
+    "confirmed_measurements_and_bounded_findings": [
+      {
+        "finding_id": "CS-CONF-001",
+        "status": "CONFIRMED",
+        "domain": "lipids",
+        "title": "Elevated atherogenic particle burden",
+        "correct_interpretation": "ApoB and LDL-C are concordantly elevated on a single fasting panel.",
+        "important_bounds": [
+          "Single fasting panel; no method bridging across laboratories.",
+          "No imaging correlate is available."
+        ],
+        "measurements": [
+          { "name": "ApoB", "value": 118, "unit": "mg/dL", "collected": "2026-01-04" },
+          { "name": "LDL-C", "value": 152, "unit": "mg/dL", "collected": "2026-01-04" },
+          { "name": "Lp(a)", "value": 41, "unit": "nmol/L", "collected": "2026-01-04" }
+        ],
+        "decision_relevance": "PRIMARY",
+        "source_evidence_ids": ["LAB-2026-01-04"]
+      },
+      {
+        "finding_id": "CS-CONF-002",
+        "status": "CONFIRMED",
+        "domain": "thyroid",
+        "title": "Thyroid axis within bounded range",
+        "correct_interpretation": "TSH is within range on a single morning draw.",
+        "important_bounds": ["Diurnal variation not characterised."],
+        "measurements": [
+          { "name": "TSH", "value": 2.1, "unit": "uIU/mL", "collected": "2026-01-04" },
+          { "name": "Reverse T3", "value": 19, "unit": "ng/dL", "collected": "2026-01-04" }
+        ],
+        "source_evidence_ids": ["LAB-2026-01-04"]
+      }
+    ],
+    "candidate_or_unverified_signals": [
+      {
+        "finding_id": "CS-CAND-001",
+        "status": "CANDIDATE",
+        "domain": "glycaemia",
+        "title": "Possible post-prandial glucose excursions",
+        "correct_interpretation": "Suggested by a partial CGM wear window that does not meet the minimum interpretive threshold.",
+        "unresolved_validity_items": [
+          "CGM wear window below the minimum required days.",
+          "No paired meal log."
+        ],
+        "do_not_do_yet": "Do not label this as insulin resistance.",
+        "next_truth_test": "14 consecutive days of CGM wear with a paired meal log.",
+        "urgency_note": "Not urgent.",
+        "source_evidence_ids": ["CGM-2026-01"]
+      }
+    ],
+    "open_screening_findings": [
+      {
+        "finding_id": "CS-OPEN-001",
+        "status": "UNKNOWN",
+        "domain": "inflammation",
+        "title": "Mildly elevated hs-CRP of unknown cause",
+        "correct_interpretation": "One elevated value cannot distinguish transient from persistent inflammation.",
+        "measurement": { "name": "hs-CRP", "value": 3.4, "unit": "mg/L", "collected": "2026-01-04" },
+        "next_truth_test": "Repeat hs-CRP in four weeks, away from acute illness.",
+        "source_evidence_ids": ["LAB-2026-01-04"]
+      }
+    ],
+    "not_established_or_not_supported": [
+      {
+        "finding_id": "CS-RET-001",
+        "claim": "Metabolic syndrome",
+        "verdict": "NOT_SUPPORTED",
+        "replacement": "Isolated atherogenic lipid burden without confirmed glycaemic dysregulation."
+      }
+    ]
+  },
+  "repaired_driver_hierarchy": [
+    {
+      "rank": 1,
+      "driver": "Atherogenic particle burden",
+      "state": "CONFIRMED",
+      "why_it_matters": "It is the measured, modifiable contributor with the clearest downstream consequence.",
+      "what_would_change_management": "A repeat concordant panel, or an imaging correlate."
+    },
+    {
+      "rank": 2,
+      "driver": "Unresolved inflammatory signal",
+      "state": "UNKNOWN",
+      "why_it_matters": "It changes how aggressively the lipid burden is treated if it persists.",
+      "what_would_change_management": "A second hs-CRP away from acute illness."
+    }
+  ],
+  "measurement_and_action_plan": [
+    {
+      "priority": 1,
+      "action": "Repeat hs-CRP in four weeks",
+      "truth_transition": "Moves inflammation from unknown to confirmed or excluded.",
+      "minimum_fields": ["collection date", "value", "unit"],
+      "timeframe": "4 weeks"
+    },
+    {
+      "priority": 2,
+      "action": "Complete a 14-day CGM wear window with a meal log",
+      "truth_transition": "Moves the glycaemic signal from candidate to confirmed or excluded.",
+      "specific_items": ["14 consecutive wear days", "paired meal log"],
+      "timeframe": "6 weeks"
+    }
+  ],
+  "medication_status": {
+    "decision_status": "HOLD_PENDING_CLINICIAN_REVIEW",
+    "current_medications": [
+      { "name": "Medication A", "status": "ACTIVE", "reconciliation": "UNVERIFIED" }
+    ],
+    "prohibited_actions": [
+      "Do not initiate, stop or change any dose based on this report."
+    ]
+  },
+  "genomics_and_pgx": {
+    "decision_status": "HOLD_PENDING_CONFIRMATORY_GENOTYPE",
+    "variants": [
+      {
+        "gene": "GENE1",
+        "call": "intermediate",
+        "confidence": "LOW",
+        "interpretation": "Array-derived call without confirmatory genotyping.",
+        "prohibited_actions": ["Do not use for dose selection."]
+      }
+    ]
+  },
+  "omics_readiness": {
+    "proteomics": { "status": "NOT_COLLECTED", "readiness": "not_ready" },
+    "metabolomics": { "status": "PARTIAL", "readiness": "not_decision_grade" },
+    "microbiome": { "status": "NOT_COLLECTED", "readiness": "not_ready" }
+  },
+  "contradiction_reclassification": [
+    {
+      "contradiction": "An earlier summary asserted insulin resistance while glycaemic evidence was incomplete.",
+      "resolution": "Reclassified as a candidate signal pending a full CGM wear window.",
+      "status": "RESOLVED_BY_RECLASSIFICATION"
+    }
+  ],
+  "semantic_repair_ledger": [
+    {
+      "original_statement": "Patient has metabolic syndrome.",
+      "repaired_statement": "Isolated atherogenic lipid burden; glycaemic criteria not met on available evidence.",
+      "repair_reason": "Unsupported compression of an incomplete evidence set."
+    }
+  ],
+  "external_evidence": [
+    {
+      "claim": "ApoB tracks atherogenic particle number better than LDL-C alone.",
+      "evidence_grade": "HIGH",
+      "applicability": "GENERAL_POPULATION"
+    }
+  ],
+  "provenance": {
+    "sources": [
+      { "source_id": "LAB-2026-01-04", "kind": "laboratory_panel", "collected": "2026-01-04" },
+      { "source_id": "CGM-2026-01", "kind": "continuous_glucose_monitor", "window": "partial" }
+    ]
+  },
+  "final_attestation": {
+    "clinician_review_required": true,
+    "attested_by": "Reviewing clinician role",
+    "attestation_status": "PENDING_REVIEW"
+  }
+}
