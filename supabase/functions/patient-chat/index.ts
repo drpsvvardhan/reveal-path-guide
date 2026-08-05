@@ -65,6 +65,14 @@ import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
+import {
+  buildBiotwinPacket,
+  renderBiotwinPacketForPrompt,
+  validateBiotwinOutput,
+  biotwinReplacementMessage,
+  EMPTY_BIOTWIN_PACKET,
+  type BiotwinPacket,
+} from "../_shared/biotwin/packet.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
