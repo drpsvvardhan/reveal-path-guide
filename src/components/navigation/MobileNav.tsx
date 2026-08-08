@@ -4,9 +4,11 @@ import { navItems } from "./navItems";
 interface Props {
   activeSection: string;
   onNavigate: (id: string) => void;
+  /** Release 0 cohort gate: the Ask My Twin home item shows only when enabled. */
+  homeEnabled?: boolean;
 }
 
-const MobileNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
+const MobileNav: React.FC<Props> = ({ activeSection, onNavigate, homeEnabled = false }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,7 +19,9 @@ const MobileNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
       <div ref={scrollRef} className="flex overflow-x-auto scrollbar-hide py-1 px-2 gap-1">
-        {navItems.map((item) => {
+        {navItems
+          .filter((item) => homeEnabled || item.id !== "home")
+          .map((item) => {
           const Icon = item.icon;
           const active = activeSection === item.id;
           return (

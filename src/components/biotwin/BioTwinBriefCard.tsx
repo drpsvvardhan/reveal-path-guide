@@ -100,7 +100,9 @@ const BioTwinBriefCard: React.FC<BioTwinBriefCardProps> = ({
             {brief.freshness.twin_updated
               ? `Twin updated ${brief.freshness.twin_updated}`
               : "Twin date unknown"}
-            {latestEvidenceDate ? ` · Evidence through ${latestEvidenceDate}` : ""}
+            {latestEvidenceDate
+              ? ` · Evidence available through ${latestEvidenceDate}`
+              : ""}
             {brief.freshness.twin_version != null
               ? ` · v${brief.freshness.twin_version}`
               : ""}

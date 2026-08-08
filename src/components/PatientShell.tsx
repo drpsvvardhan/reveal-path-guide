@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
@@ -33,6 +33,7 @@ import BioTwinSection from "@/components/sections/BioTwinSection";
 import AskMyTwinHome from "@/components/sections/AskMyTwinHome";
 import { BioTwinProvider } from "@/context/BioTwinContext";
 import { navItems } from "@/components/navigation/navItems";
+import { useAskMyTwinFlag } from "@/hooks/useAskMyTwinFlag";
 
 const sections: Record<string, React.FC> = {
   home: AskMyTwinHome,
@@ -58,18 +59,35 @@ const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
   const { signOut, user } = useAuth();
   const { isAdmin, isViewingAs, allProfiles, resetViewAs, effectiveUserId } = useViewAs();
-  const [activeSection, setActiveSection] = useState("home");
+  // Release 0 cohort gate. Fails closed: everyone starts on the existing
+  // journey experience; cohort members are moved to the Ask My Twin home
+  // once their flag loads (and only if they have not navigated yet).
+  const { enabled: homeEnabled, loaded: flagLoaded } = useAskMyTwinFlag(
+    effectiveUserId ?? user?.id ?? null
+  );
+  const [activeSection, setActiveSection] = useState("journey");
+  const userNavigatedRef = useRef(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [viewAsDialogOpen, setViewAsDialogOpen] = useState(false);
   const [viewAsTarget, setViewAsTarget] = useState<string | undefined>(undefined);
   const mainRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (flagLoaded && homeEnabled && !userNavigatedRef.current) {
+      setActiveSection("home");
+    }
+  }, [flagLoaded, homeEnabled]);
+
   const handleNavigate = (id: string) => {
+    userNavigatedRef.current = true;
     setActiveSection(id);
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const ActiveComponent = sections[activeSection] ?? AskMyTwinHome;
+  const ActiveComponent =
+    activeSection === "home" && !homeEnabled
+      ? JourneySection
+      : sections[activeSection] ?? JourneySection;
   const activeNav = navItems.find((n) => n.id === activeSection);
 
   return (
@@ -78,7 +96,11 @@ const PatientShell: React.FC = () => {
     <div className="flex h-screen overflow-hidden flex-col safe-area-px">
       <ViewAsSessionBanner />
       <div className="flex flex-1 overflow-hidden">
-      <DesktopNav activeSection={activeSection} onNavigate={handleNavigate} />
+      <DesktopNav
+        activeSection={activeSection}
+        onNavigate={handleNavigate}
+        homeEnabled={homeEnabled}
+      />
 
       <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
 
@@ -199,7 +221,11 @@ const PatientShell: React.FC = () => {
         </AnimatePresence>
       </main>
 
-      <MobileNav activeSection={activeSection} onNavigate={handleNavigate} />
+      <MobileNav
+        activeSection={activeSection}
+        onNavigate={handleNavigate}
+        homeEnabled={homeEnabled}
+      />
       <ManifestSwitcher />
       </div>
       <EnterViewAsDialog

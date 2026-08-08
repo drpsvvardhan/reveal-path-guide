@@ -42,11 +42,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
  * Registry seed version scope. The contextLoader reads only witnesses at
- * this seed version. When a new seed ships (e.g. `p1a_inbody_extension_v1`),
- * update this constant and redeploy — OR extract to env variable if
- * multi-seed concurrent operation is ever required.
+ * this seed version. The constant lives in witnessFreshness.ts — the single
+ * semantic source shared with the patient UI — so runtime freshness and
+ * display freshness can never diverge. When a new seed ships, update it
+ * there, once.
  */
-const ACTIVE_REGISTRY_SEED_VERSION = "p1a_initial";
+import {
+  ACTIVE_REGISTRY_SEED_VERSION,
+  deriveLatestBiologicalTimestamp,
+} from "./witnessFreshness.ts";
 
 /**
  * Cap on total witness rows read per user to protect against pathological
@@ -404,15 +408,7 @@ export async function loadPatientContext(
     witness_provenance: {
       registry_seed_version: ACTIVE_REGISTRY_SEED_VERSION,
       total_witnesses: witnesses.length,
-      latest_biological_timestamp: witnesses.reduce<string | null>(
-        (latest, w) => {
-          if (!w.biological_timestamp) return latest;
-          const day = shortDate(w.biological_timestamp);
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return latest;
-          return latest === null || day > latest ? day : latest;
-        },
-        null
-      ),
+      latest_biological_timestamp: deriveLatestBiologicalTimestamp(witnesses),
       depth_0_count: witnesses.filter((w) => w.compression_depth === 0).length,
       depth_1_count: witnesses.filter((w) => w.compression_depth === 1).length,
       depth_2_count: witnesses.filter((w) => w.compression_depth === 2).length,

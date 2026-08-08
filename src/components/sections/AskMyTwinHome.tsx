@@ -18,6 +18,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { projectBrief } from "@/lib/biotwin/brief";
 import { buildSuggestedQuestions } from "@/lib/biotwin/suggestedQuestions";
 import { setPendingAskQuestion } from "@/lib/askIntent";
+import {
+  ACTIVE_REGISTRY_SEED_VERSION,
+  deriveLatestBiologicalTimestamp,
+} from "@shared/witnessFreshness";
 import BioTwinBriefCard from "@/components/biotwin/BioTwinBriefCard";
 
 function greetingForHour(hour: number): string {
@@ -42,9 +46,11 @@ const AskMyTwinHome: React.FC = () => {
   );
   const suggestions = useMemo(() => buildSuggestedQuestions(brief), [brief]);
 
-  // Evidence freshness clock — best-effort read of the newest admitted
-  // witness timestamp (RLS: own rows only). If the read is not permitted
-  // or empty, the clock is simply omitted; it is never fabricated.
+  // Evidence freshness clock — same governed definition the Answer Receipt
+  // uses (witnessFreshness.ts: active registry seed + shared derivation),
+  // so runtime freshness and display freshness cannot diverge. RLS scopes
+  // to own rows. If the read fails or is empty, the clock is omitted; it
+  // is never fabricated.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -52,14 +58,14 @@ const AskMyTwinHome: React.FC = () => {
         const { data, error } = await supabase
           .from("witness_objects")
           .select("biological_timestamp")
+          .eq("registry_seed_version", ACTIVE_REGISTRY_SEED_VERSION)
           .order("biological_timestamp", { ascending: false })
           .limit(1);
-        if (cancelled || error || !data || data.length === 0) return;
-        const ts = (data[0] as { biological_timestamp: string | null })
-          .biological_timestamp;
-        if (ts && /^\d{4}-\d{2}-\d{2}/.test(ts)) {
-          setLatestEvidenceDate(ts.slice(0, 10));
-        }
+        if (cancelled || error || !data) return;
+        const latest = deriveLatestBiologicalTimestamp(
+          data as Array<{ biological_timestamp: string | null }>
+        );
+        if (latest) setLatestEvidenceDate(latest);
       } catch {
         /* omit the clock rather than fabricate it */
       }
@@ -91,9 +97,11 @@ const AskMyTwinHome: React.FC = () => {
         </h1>
         <p className="mt-1 font-sans text-xs text-muted-foreground">
           {brief.freshness.twin_updated
-            ? `Your Twin is current through ${brief.freshness.twin_updated}`
+            ? `Twin updated ${brief.freshness.twin_updated}`
             : "Your Twin has not been released yet"}
-          {latestEvidenceDate ? ` · New data through ${latestEvidenceDate}` : ""}
+          {latestEvidenceDate
+            ? ` · Evidence available through ${latestEvidenceDate}`
+            : ""}
         </p>
       </div>
 

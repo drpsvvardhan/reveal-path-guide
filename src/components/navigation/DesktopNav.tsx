@@ -5,6 +5,8 @@ import { navItems, NavItem } from "./navItems";
 interface Props {
   activeSection: string;
   onNavigate: (id: string) => void;
+  /** Release 0 cohort gate: the Ask My Twin home item shows only when enabled. */
+  homeEnabled?: boolean;
 }
 
 const NavButton: React.FC<{
@@ -28,8 +30,10 @@ const NavButton: React.FC<{
   );
 };
 
-const DesktopNav: React.FC<Props> = ({ activeSection, onNavigate }) => {
-  const primary = navItems.filter((i) => i.group === "primary");
+const DesktopNav: React.FC<Props> = ({ activeSection, onNavigate, homeEnabled = false }) => {
+  const primary = navItems.filter(
+    (i) => i.group === "primary" && (homeEnabled || i.id !== "home")
+  );
   const explore = navItems.filter((i) => i.group === "explore");
   const exploreActive = explore.some((i) => i.id === activeSection);
   // Hidden, not deleted: the deeper panels stay one click away, open
