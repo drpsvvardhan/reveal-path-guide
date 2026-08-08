@@ -84,6 +84,11 @@ import {
   type AllowedGroundingContext,
 } from "../_shared/groundingMarkers.ts";
 import {
+  resolveContextTokenBudget,
+  checkContextBudget,
+  CONTEXT_BUDGET_FALLBACK_MESSAGE,
+} from "../_shared/contextBudget.ts";
+import {
   loadPatientContext,
   type PatientTerrainContext,
 } from "../_shared/contextLoader.ts";
@@ -1549,6 +1554,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? await sha256Hex(canonicalStringify(biotwinPacket))
       : null;
 
+    const lastUserMessage =
+      [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+
     // Route all chat traffic through the Lovable AI gateway.
     // This preserves compatibility with older published clients that still
     // send legacy Claude model names while avoiding direct-provider failures.
@@ -1557,6 +1565,103 @@ Deno.serve(async (req: Request): Promise<Response> => {
       !requestedModel || requestedModel.startsWith("claude")
         ? "google/gemini-3-flash-preview"
         : requestedModel;
+
+    // ------------------------------------------------------------------------
+    // Context budget guard.
+    //
+    // The full-context prompt path is acceptable for Release 0; silent
+    // truncation is not. If the assembled context exceeds the configured
+    // budget, refuse loudly with a receipted fallback instead of letting a
+    // provider quietly drop tail context — that would break exactly the
+    // grounding guarantees the Answer Receipt certifies.
+    // ------------------------------------------------------------------------
+    const contextTokenBudget = resolveContextTokenBudget(
+      Deno.env.get("CONTEXT_TOKEN_BUDGET")
+    );
+    const estimatedContextTokens = estimateTokens(contextSerialized);
+    const budgetCheck = checkContextBudget(
+      estimatedContextTokens,
+      contextTokenBudget
+    );
+    if (!budgetCheck.withinBudget) {
+      console.error("[patient-chat] CONTEXT_BUDGET_EXCEEDED", {
+        userId,
+        estimatedTokens: budgetCheck.estimatedTokens,
+        budget: budgetCheck.budget,
+        contextBytes,
+        witnessCount: contextWitnessIds.length,
+        clusterCount: contextClusterIds.length,
+        statementCount: contextStatementIds.length,
+      });
+
+      const budgetReceipt: AnswerReceiptFields = {
+        answer_id: answerId,
+        conversation_id: conversationId ?? null,
+        question_timestamp: questionTimestamp,
+        biotwin_report_id: biotwinPacket.has_report
+          ? biotwinPacket.report_id
+          : null,
+        twin_id: receiptTwinId,
+        twin_version: receiptTwinVersion,
+        report_generated_at: biotwinPacket.has_report
+          ? biotwinPacket.generated_date
+          : null,
+        biotwin_packet_sha256: biotwinPacketSha256,
+        context_packet_sha256: contextPacketSha256,
+        twin_state_as_of: twinStateAsOf,
+        latest_witness_as_of: latestWitnessAsOf,
+        model_provider: "lovable_gateway",
+        model_name: normalizedModel,
+        runtime_version: RUNTIME_VERSION,
+        prompt_template_version: PROMPT_TEMPLATE_VERSION,
+        authority_policy_version: AUTHORITY_POLICY_VERSION,
+        dose_policy_version: DOSE_POLICY_VERSION,
+        biotwin_validator_version: BIOTWIN_VALIDATOR_VERSION,
+        input_tokens: estimatedContextTokens,
+        output_tokens: 0,
+        tokens_estimated: true,
+        context_bytes: contextBytes,
+        latency_ms: null,
+        witness_count_available: contextWitnessIds.length,
+        cluster_count_available: contextClusterIds.length,
+        biotwin_statement_count_available: contextStatementIds.length,
+        marker_coverage: null,
+        emergency_routed: false,
+        fallback_used: true,
+        doctor_question_generated: false,
+      };
+
+      await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
+        replaced_with: CONTEXT_BUDGET_FALLBACK_MESSAGE,
+        replacement_template_used: "context_budget_exceeded",
+        last_user_message: lastUserMessage,
+        cluster_count: activeClusters?.length ?? 0,
+        receipt: budgetReceipt,
+      });
+
+      return new Response(
+        JSON.stringify({
+          role: "assistant",
+          content: CONTEXT_BUDGET_FALLBACK_MESSAGE,
+          grounding: { used_refs: [], marker_coverage: null },
+          validation: {
+            status: "replaced_with_fallback",
+            routing_mode: null,
+            replacement_template_used: "context_budget_exceeded",
+          },
+          receipt: {
+            answer_id: answerId,
+            twin_version: receiptTwinVersion,
+            twin_state_as_of: twinStateAsOf,
+            latest_witness_as_of: latestWitnessAsOf,
+          },
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // ------------------------------------------------------------------------
     // Phase 6b.2: Server-buffered admission gate.
@@ -1624,6 +1729,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const llmLatencyMs = Date.now() - llmStartedAt;
     const capturedResponse: string = llmJson?.choices?.[0]?.message?.content ?? "";
 
+
     // Token accounting: prefer the gateway's usage block; fall back to an
     // estimate, flagged as estimated so analytics never mistake it for a
     // measurement.
@@ -1646,9 +1752,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
         { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-
-    const lastUserMessage =
-      [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
     // Computed once from the user's message; the routing decision depends
     // only on the user's query, not on the model output.
