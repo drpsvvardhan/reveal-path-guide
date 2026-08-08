@@ -14,6 +14,9 @@ import { ArrowRight, MessageSquare, Dna, FolderOpen } from "lucide-react";
 import { useManifest } from "@/context/ManifestContext";
 import { useBioTwin } from "@/context/BioTwinContext";
 import { useNavigation } from "@/context/NavigationContext";
+import { useAuth } from "@/context/AuthContext";
+import { useViewAs } from "@/context/ViewAsContext";
+import IntentPassportCard from "@/components/home/IntentPassportCard";
 import { supabase } from "@/integrations/supabase/client";
 import { projectBrief } from "@/lib/biotwin/brief";
 import { buildSuggestedQuestions } from "@/lib/biotwin/suggestedQuestions";
@@ -35,6 +38,8 @@ const AskMyTwinHome: React.FC = () => {
   const { manifest } = useManifest();
   const { report, statements, loading: twinLoading } = useBioTwin();
   const { navigateTo } = useNavigation();
+  const { user } = useAuth();
+  const { effectiveUserId, isViewingAs } = useViewAs();
   const [question, setQuestion] = useState("");
   const [latestEvidenceDate, setLatestEvidenceDate] = useState<string | null>(
     null
@@ -149,12 +154,21 @@ const AskMyTwinHome: React.FC = () => {
         ))}
       </div>
 
-      {/* Biological Intelligence Brief — orientation, not navigation */}
+      {/* Two priority maps, both visible, neither erasing the other:
+          what the Twin is watching (biological priority, governed) and
+          what matters to the person (their own words, zero truth
+          authority). */}
       {twinLoading ? (
         <div className="h-24 animate-pulse rounded-lg bg-muted/40" />
       ) : (
         <BioTwinBriefCard brief={brief} latestEvidenceDate={latestEvidenceDate} />
       )}
+
+      <IntentPassportCard
+        effectiveUserId={effectiveUserId ?? user?.id ?? null}
+        canEdit={!isViewingAs}
+        onAsk={ask}
+      />
 
       {/* Secondary navigation */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
