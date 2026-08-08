@@ -52,6 +52,7 @@ import {
   validateInterpreterRole,
   replacementTemplateForViolation,
   buildCorrectiveRegenFeedback,
+  AUTHORITY_POLICY_VERSION,
   type AuthorityViolation,
 } from "../_shared/clinicalAuthorityPolicy.ts";
 import {
@@ -59,8 +60,18 @@ import {
   validateDoseTokens,
   buildEmergencyRoutingMessage,
   NO_DOSE_FALLBACK,
+  DOSE_POLICY_VERSION,
   type DosePolicyContext,
 } from "../_shared/dosePolicy.ts";
+import {
+  RUNTIME_VERSION,
+  PROMPT_TEMPLATE_VERSION,
+  canonicalStringify,
+  sha256Hex,
+  estimateTokens,
+  latestWitnessDate,
+  type AnswerReceiptFields,
+} from "../_shared/receipt.ts";
 import {
   loadPatientContext,
   type PatientTerrainContext,
@@ -71,6 +82,7 @@ import {
   validateBiotwinOutput,
   biotwinReplacementMessage,
   EMPTY_BIOTWIN_PACKET,
+  BIOTWIN_VALIDATOR_VERSION,
   type BiotwinPacket,
 } from "../_shared/biotwin/packet.ts";
 
@@ -980,12 +992,21 @@ async function logValidation(
     replacement_template_used?: string | null;
     regeneration_attempted?: boolean;
     regeneration_succeeded?: boolean | null;
+    /**
+     * Answer Receipt v1 scalar fields (docs/ASK_MY_TWIN_CONSTITUTION.md).
+     * Written on every row so each admitted answer is reconstructible:
+     * what Twin existed, what evidence was available, which model proposed
+     * the answer, which validators admitted it, and under which policy
+     * versions. Absent only if the request failed before assembly.
+     */
+    receipt?: AnswerReceiptFields;
   },
 ) {
   try {
     await supabase.from("patient_chat_validation_log").insert({
       user_id: userId,
       status,
+      ...(payload.receipt ?? {}),
       violations: payload.violations ?? [],
       dose_patterns_matched: payload.dose_patterns_matched ?? [],
       original_output: payload.original_output ?? null,
@@ -1045,7 +1066,8 @@ function extractQueuedQuestions(
 async function queueExtractedQuestions(
   userId: string,
   questions: { question: string; rationale: string }[],
-  sourceUserMessage: string
+  sourceUserMessage: string,
+  sourceAnswerId: string | null = null
 ): Promise<void> {
   if (questions.length === 0) return;
   const supabaseAdmin = createClient(
@@ -1074,6 +1096,9 @@ async function queueExtractedQuestions(
     status: "queued",
     priority: startPriority + idx,
     source_user_message: sourceUserMessage,
+    // Receipt linkage: patient question → admitted answer → evidence →
+    // Twin version. Null only for legacy callers.
+    source_answer_id: sourceAnswerId,
   }));
 
   const { error } = await supabaseAdmin
@@ -1157,13 +1182,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
       documents,
       model,
       userId,
+      conversationId,
     }: {
       messages: { role: "user" | "assistant"; content: string }[];
       manifest: any;
       documents?: { name: string; type: string; content?: string }[];
       model?: string;
       userId?: string;
+      /** chat_conversations.id — binds the Answer Receipt to its conversation. */
+      conversationId?: string;
     } = body;
+
+    // Receipt clock: when the question entered the runtime.
+    const questionTimestamp = new Date().toISOString();
 
     if (!manifest) {
       return new Response(
@@ -1393,6 +1424,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // own prohibitions are enforced on the way out in Step 2b below.
     // ------------------------------------------------------------------------
     let biotwinPacket: BiotwinPacket = EMPTY_BIOTWIN_PACKET;
+    // Twin metadata for the Answer Receipt. The packet does not carry
+    // twin_id, so it is captured here from the report row.
+    let receiptTwinId: string | null = null;
+    let receiptTwinVersion: string | null = null;
     try {
       const { data: biotwinReport } = await supabaseAdmin
         .from("biotwin_reports")
@@ -1418,6 +1453,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
           // deno-lint-ignore no-explicit-any
           (biotwinStatements ?? []) as any
         );
+        receiptTwinId = (biotwinReport as any).twin_id ?? null;
+        receiptTwinVersion =
+          (biotwinReport as any).version != null
+            ? String((biotwinReport as any).version)
+            : null;
       }
     } catch (e) {
       console.error("BioTwin packet load failed (chat continues without it):", e);
@@ -1426,6 +1466,59 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const finalSystemPrompt = biotwinPacket.has_report
       ? `${systemPrompt}\n\n${renderBiotwinPacketForPrompt(biotwinPacket)}`
       : systemPrompt;
+
+    // ------------------------------------------------------------------------
+    // Answer Receipt v1 — context assembly.
+    //
+    // Availability is bound by context_packet_sha256 (a hash over exactly
+    // what the model will see: system prompt + message history, canonically
+    // serialized) plus per-class counts. Available evidence is NOT recorded
+    // as per-reference rows — only evidence the admitted answer actually
+    // cites gets rows in answer_evidence_refs (the evidence-marker commit).
+    // ------------------------------------------------------------------------
+    const answerId = crypto.randomUUID();
+
+    const contextWitnessIds: string[] = [
+      ...witnessContext.labs.observations.map((o) => o.observation_id),
+      ...witnessContext.inbody.observations.map((o) => o.observation_id),
+      ...witnessContext.fibroscan.observations.map((o) => o.observation_id),
+    ];
+    const contextClusterIds: string[] = activeClusters.map((c: any) =>
+      String(c.id)
+    );
+    const contextStatementIds: string[] = biotwinPacket.has_report
+      ? Array.from(
+          new Set(
+            [
+              ...biotwinPacket.confirmed,
+              ...biotwinPacket.candidate,
+              ...biotwinPacket.unknown,
+              ...biotwinPacket.retired,
+              ...biotwinPacket.drivers,
+              ...biotwinPacket.actions,
+              ...biotwinPacket.contradictions,
+            ].map((s) => s.source_id)
+          )
+        )
+      : [];
+
+    // Two freshness clocks — never one ambiguous cutoff.
+    const twinStateAsOf = biotwinPacket.has_report
+      ? biotwinPacket.generated_date
+      : null;
+    const latestWitnessAsOf = latestWitnessDate([
+      ...witnessContext.labs.observations.map((o) => o.collection_date),
+      ...witnessContext.inbody.observations.map((o) => o.collection_date),
+      ...witnessContext.fibroscan.observations.map((o) => o.collection_date),
+    ]);
+
+    const contextSerialized =
+      finalSystemPrompt + "\n␞\n" + canonicalStringify(messages);
+    const contextBytes = new TextEncoder().encode(contextSerialized).length;
+    const contextPacketSha256 = await sha256Hex(contextSerialized);
+    const biotwinPacketSha256 = biotwinPacket.has_report
+      ? await sha256Hex(canonicalStringify(biotwinPacket))
+      : null;
 
     // Route all chat traffic through the Lovable AI gateway.
     // This preserves compatibility with older published clients that still
@@ -1453,6 +1546,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    const llmStartedAt = Date.now();
     const llmResponse = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -1498,7 +1592,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const llmJson = await llmResponse.json();
+    const llmLatencyMs = Date.now() - llmStartedAt;
     const capturedResponse: string = llmJson?.choices?.[0]?.message?.content ?? "";
+
+    // Token accounting: prefer the gateway's usage block; fall back to an
+    // estimate, flagged as estimated so analytics never mistake it for a
+    // measurement.
+    const usage = llmJson?.usage ?? {};
+    const gatewayInputTokens =
+      typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
+    const gatewayOutputTokens =
+      typeof usage.completion_tokens === "number"
+        ? usage.completion_tokens
+        : null;
+    const tokensEstimated =
+      gatewayInputTokens === null || gatewayOutputTokens === null;
+    const inputTokens = gatewayInputTokens ?? estimateTokens(contextSerialized);
+    const outputTokens = gatewayOutputTokens ?? estimateTokens(capturedResponse);
 
     if (!capturedResponse) {
       console.error("[patient-chat] LLM returned empty content");
@@ -1619,14 +1729,68 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const questions = extractQueuedQuestions(finalOutput);
     if (questions.length > 0) {
       try {
-        await queueExtractedQuestions(userId, questions, lastUserMessage);
+        await queueExtractedQuestions(
+          userId,
+          questions,
+          lastUserMessage,
+          answerId
+        );
       } catch (e) {
         console.error("Question queue insert failed:", e);
       }
     }
 
-    // ----- Step 5: audit log (always log original + final for diagnostics) -----
+    // ----- Step 5: audit log + Answer Receipt -----
+    const receipt: AnswerReceiptFields = {
+      answer_id: answerId,
+      conversation_id: conversationId ?? null,
+      question_timestamp: questionTimestamp,
+
+      biotwin_report_id: biotwinPacket.has_report
+        ? biotwinPacket.report_id
+        : null,
+      twin_id: receiptTwinId,
+      twin_version: receiptTwinVersion,
+      report_generated_at: biotwinPacket.has_report
+        ? biotwinPacket.generated_date
+        : null,
+      biotwin_packet_sha256: biotwinPacketSha256,
+      context_packet_sha256: contextPacketSha256,
+
+      twin_state_as_of: twinStateAsOf,
+      latest_witness_as_of: latestWitnessAsOf,
+
+      model_provider: "lovable_gateway",
+      model_name: normalizedModel,
+      runtime_version: RUNTIME_VERSION,
+      prompt_template_version: PROMPT_TEMPLATE_VERSION,
+      authority_policy_version: AUTHORITY_POLICY_VERSION,
+      dose_policy_version: DOSE_POLICY_VERSION,
+      biotwin_validator_version: BIOTWIN_VALIDATOR_VERSION,
+
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      tokens_estimated: tokensEstimated,
+      context_bytes: contextBytes,
+      latency_ms: llmLatencyMs,
+
+      witness_count_available: contextWitnessIds.length,
+      cluster_count_available: contextClusterIds.length,
+      biotwin_statement_count_available: contextStatementIds.length,
+
+      // Filled by the evidence-marker commit; null means "not yet measured",
+      // never "no grounding".
+      marker_coverage: null,
+
+      emergency_routed: status === "replaced_with_emergency_routing",
+      fallback_used:
+        status === "replaced_with_fallback" ||
+        status === "regenerated_then_replaced",
+      doctor_question_generated: questions.length > 0,
+    };
+
     await logValidation(supabaseAdmin, userId, status, {
+      receipt,
       role_violation: roleResult.valid
         ? null
         : {
@@ -1655,6 +1819,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status,
           routing_mode: dosePolicyContext.routingMode,
           replacement_template_used: replacementTemplateUsed,
+        },
+        // Patient-visible receipt summary. The full receipt lives on the
+        // validation-log row keyed by answer_id; the client uses this for
+        // the freshness chip ("Twin updated … · Evidence through …").
+        receipt: {
+          answer_id: answerId,
+          twin_version: receiptTwinVersion,
+          twin_state_as_of: twinStateAsOf,
+          latest_witness_as_of: latestWitnessAsOf,
         },
       }),
       {

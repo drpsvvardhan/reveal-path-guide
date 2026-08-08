@@ -9,6 +9,10 @@
 // authority transfer. Dose policy (dosePolicy.ts) sits underneath this
 // as a special case.
 
+// Stamped into every Answer Receipt. Bump on any change to the forbidden
+// patterns, violation kinds, or replacement templates in this module.
+export const AUTHORITY_POLICY_VERSION = "1.0.0";
+
 export type AuthorityViolationKind =
   | "dosing_directive"
   | "protocol_directive"

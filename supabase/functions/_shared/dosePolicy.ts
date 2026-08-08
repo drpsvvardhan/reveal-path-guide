@@ -4,6 +4,10 @@
 // Per CodexOS adjudication: do not encode toxicology thresholds as
 // doctrine. The trigger is intent-shaped, not dose-shaped.
 
+// Stamped into every Answer Receipt. Bump on any change to the patterns,
+// routing modes, or fallback text in this module.
+export const DOSE_POLICY_VERSION = "1.0.0";
+
 export interface DosePolicyContext {
   userMentionedDose: boolean;
   userDoseTokens: string[];
