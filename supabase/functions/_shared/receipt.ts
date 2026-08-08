@@ -144,6 +144,11 @@ export interface AnswerReceiptFields {
 
   marker_coverage: number | null;
 
+  /** Deterministic intent classification of the user's question (telemetry
+   *  only — never affects what the runtime may say). */
+  query_intent: string;
+  query_intent_rule: string | null;
+
   emergency_routed: boolean;
   fallback_used: boolean;
   doctor_question_generated: boolean;

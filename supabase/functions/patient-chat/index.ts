@@ -88,6 +88,7 @@ import {
   checkContextBudget,
   CONTEXT_BUDGET_FALLBACK_MESSAGE,
 } from "../_shared/contextBudget.ts";
+import { classifyQueryIntent } from "../_shared/queryIntent.ts";
 import {
   loadPatientContext,
   type PatientTerrainContext,
@@ -1570,6 +1571,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const lastUserMessage =
       [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
+    // Telemetry only: deterministic, no LLM, never affects the answer.
+    const queryIntent = classifyQueryIntent(lastUserMessage);
+
     // Route all chat traffic through the Lovable AI gateway.
     // This preserves compatibility with older published clients that still
     // send legacy Claude model names while avoiding direct-provider failures.
@@ -1642,6 +1646,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         biotwin_statement_count_available: contextStatementIds.length,
         context_ref_manifest: contextRefManifest,
         marker_coverage: null,
+        query_intent: queryIntent.intent,
+        query_intent_rule: queryIntent.matched_rule,
         emergency_routed: false,
         fallback_used: true,
         doctor_question_generated: false,
@@ -2083,6 +2089,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       // null means "no From-your-data content in this answer", never
       // "ungrounded".
       marker_coverage: markerCoverage,
+
+      query_intent: queryIntent.intent,
+      query_intent_rule: queryIntent.matched_rule,
 
       emergency_routed: status === "replaced_with_emergency_routing",
       fallback_used:

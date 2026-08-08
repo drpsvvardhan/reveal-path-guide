@@ -132,6 +132,8 @@ describe("receipt shape (integrity hardening)", () => {
         statement: ["BST-233"],
       },
       marker_coverage: null,
+      query_intent: "VALUE",
+      query_intent_rule: "value",
       emergency_routed: false,
       fallback_used: false,
       doctor_question_generated: false,
