@@ -22,9 +22,9 @@ import { projectBrief } from "@/lib/biotwin/brief";
 import { buildSuggestedQuestions } from "@/lib/biotwin/suggestedQuestions";
 import { setPendingAskQuestion } from "@/lib/askIntent";
 import {
-  ACTIVE_REGISTRY_SEED_VERSION,
-  deriveLatestBiologicalTimestamp,
-} from "@shared/witnessFreshness";
+  fetchLatestEvidenceDate,
+  type FreshnessQueryClient,
+} from "@/lib/evidenceFreshness";
 import BioTwinBriefCard from "@/components/biotwin/BioTwinBriefCard";
 
 function greetingForHour(hour: number): string {
@@ -52,25 +52,22 @@ const AskMyTwinHome: React.FC = () => {
   const suggestions = useMemo(() => buildSuggestedQuestions(brief), [brief]);
 
   // Evidence freshness clock — same governed definition the Answer Receipt
-  // uses (witnessFreshness.ts: active registry seed + shared derivation),
-  // so runtime freshness and display freshness cannot diverge. RLS scopes
-  // to own rows. If the read fails or is empty, the clock is omitted; it
-  // is never fabricated.
+  // uses, scoped explicitly to the effective user (admins hold read-all on
+  // witness_objects, so view-as must never surface another patient's
+  // date). Recomputes when the view-as target switches. If the read fails
+  // or is empty, the clock is omitted; it is never fabricated.
+  const targetUserId = effectiveUserId ?? user?.id ?? null;
   useEffect(() => {
+    if (!targetUserId) return;
     let cancelled = false;
+    setLatestEvidenceDate(null);
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from("witness_objects")
-          .select("biological_timestamp")
-          .eq("registry_seed_version", ACTIVE_REGISTRY_SEED_VERSION)
-          .order("biological_timestamp", { ascending: false })
-          .limit(1);
-        if (cancelled || error || !data) return;
-        const latest = deriveLatestBiologicalTimestamp(
-          data as Array<{ biological_timestamp: string | null }>
+        const latest = await fetchLatestEvidenceDate(
+          supabase as unknown as FreshnessQueryClient,
+          targetUserId
         );
-        if (latest) setLatestEvidenceDate(latest);
+        if (!cancelled && latest) setLatestEvidenceDate(latest);
       } catch {
         /* omit the clock rather than fabricate it */
       }
@@ -78,7 +75,7 @@ const AskMyTwinHome: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [targetUserId]);
 
   const ask = (q: string) => {
     const trimmed = q.trim();
@@ -165,7 +162,7 @@ const AskMyTwinHome: React.FC = () => {
       )}
 
       <IntentPassportCard
-        effectiveUserId={effectiveUserId ?? user?.id ?? null}
+        effectiveUserId={targetUserId}
         canEdit={!isViewingAs}
         onAsk={ask}
       />

@@ -15,6 +15,42 @@ export interface AskMyTwinFlagState {
   loaded: boolean;
 }
 
+/** Minimal query surface, so tests can pass a fake client. */
+export interface FlagQueryClient {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (
+        col: string,
+        val: string
+      ) => {
+        maybeSingle: () => Promise<{
+          data: { ask_my_twin_release0_enabled?: boolean } | null;
+          error: unknown;
+        }>;
+      };
+    };
+  };
+}
+
+/**
+ * The flag lives on profiles keyed by user_id (the auth UUID) — NOT
+ * profiles.id, which is an independent gen_random_uuid() primary key.
+ * effectiveUserId from the view-as context is an auth user ID, so the
+ * lookup must filter on user_id or the flag silently fails closed for
+ * every enabled patient.
+ */
+export async function fetchAskMyTwinFlag(
+  client: FlagQueryClient,
+  authUserId: string
+): Promise<boolean> {
+  const { data, error } = await client
+    .from("profiles")
+    .select("ask_my_twin_release0_enabled")
+    .eq("user_id", authUserId)
+    .maybeSingle();
+  return !error && data?.ask_my_twin_release0_enabled === true;
+}
+
 export function useAskMyTwinFlag(userId: string | null | undefined): AskMyTwinFlagState {
   const [state, setState] = useState<AskMyTwinFlagState>({
     enabled: false,
@@ -29,19 +65,11 @@ export function useAskMyTwinFlag(userId: string | null | undefined): AskMyTwinFl
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("ask_my_twin_release0_enabled")
-          .eq("id", userId)
-          .maybeSingle();
-        if (cancelled) return;
-        setState({
-          enabled:
-            !error &&
-            (data as { ask_my_twin_release0_enabled?: boolean } | null)
-              ?.ask_my_twin_release0_enabled === true,
-          loaded: true,
-        });
+        const enabled = await fetchAskMyTwinFlag(
+          supabase as unknown as FlagQueryClient,
+          userId
+        );
+        if (!cancelled) setState({ enabled, loaded: true });
       } catch {
         if (!cancelled) setState({ enabled: false, loaded: true });
       }
