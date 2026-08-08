@@ -171,6 +171,211 @@ export type Database = {
         }
         Relationships: []
       }
+      answer_evidence_refs: {
+        Row: {
+          answer_id: string
+          created_at: string
+          id: string
+          ref_id: string
+          ref_type: string
+          usage: string
+          user_id: string
+        }
+        Insert: {
+          answer_id: string
+          created_at?: string
+          id?: string
+          ref_id: string
+          ref_type: string
+          usage?: string
+          user_id: string
+        }
+        Update: {
+          answer_id?: string
+          created_at?: string
+          id?: string
+          ref_id?: string
+          ref_type?: string
+          usage?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "answer_evidence_refs_answer_fk"
+            columns: ["answer_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "patient_chat_validation_log"
+            referencedColumns: ["answer_id", "user_id"]
+          },
+        ]
+      }
+      biotwin_reports: {
+        Row: {
+          adapter_version: string
+          attestation: Json
+          clinician_review_required: boolean
+          content_sha256: string
+          created_at: string
+          executive_synthesis: Json
+          generated_date: string | null
+          holds: string[]
+          id: string
+          import_diagnostics: Json
+          patient_release_permitted: boolean
+          raw_report: Json
+          release_control: Json
+          report_type: string
+          schema_name: string
+          schema_version: string | null
+          semantic_repair_version: string | null
+          status: string
+          twin_id: string | null
+          updated_at: string
+          upload_id: string | null
+          user_id: string
+          version: number
+        }
+        Insert: {
+          adapter_version: string
+          attestation?: Json
+          clinician_review_required?: boolean
+          content_sha256: string
+          created_at?: string
+          executive_synthesis?: Json
+          generated_date?: string | null
+          holds?: string[]
+          id?: string
+          import_diagnostics?: Json
+          patient_release_permitted?: boolean
+          raw_report: Json
+          release_control?: Json
+          report_type: string
+          schema_name: string
+          schema_version?: string | null
+          semantic_repair_version?: string | null
+          status?: string
+          twin_id?: string | null
+          updated_at?: string
+          upload_id?: string | null
+          user_id: string
+          version?: number
+        }
+        Update: {
+          adapter_version?: string
+          attestation?: Json
+          clinician_review_required?: boolean
+          content_sha256?: string
+          created_at?: string
+          executive_synthesis?: Json
+          generated_date?: string | null
+          holds?: string[]
+          id?: string
+          import_diagnostics?: Json
+          patient_release_permitted?: boolean
+          raw_report?: Json
+          release_control?: Json
+          report_type?: string
+          schema_name?: string
+          schema_version?: string | null
+          semantic_repair_version?: string | null
+          status?: string
+          twin_id?: string | null
+          updated_at?: string
+          upload_id?: string | null
+          user_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biotwin_reports_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "patient_lab_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      biotwin_statements: {
+        Row: {
+          body: string | null
+          bounds: string[]
+          clinical_authority: string
+          created_at: string
+          holds: string[]
+          id: string
+          measurements: Json
+          ordinal: number
+          provenance: Json
+          report_id: string
+          requires_measurement: Json | null
+          section: string
+          source_id: string
+          statement_kind: string
+          timepoint: string | null
+          title: string
+          truth_status: string
+          user_id: string
+          witness_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          bounds?: string[]
+          clinical_authority: string
+          created_at?: string
+          holds?: string[]
+          id?: string
+          measurements?: Json
+          ordinal: number
+          provenance?: Json
+          report_id: string
+          requires_measurement?: Json | null
+          section: string
+          source_id: string
+          statement_kind: string
+          timepoint?: string | null
+          title: string
+          truth_status: string
+          user_id: string
+          witness_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          bounds?: string[]
+          clinical_authority?: string
+          created_at?: string
+          holds?: string[]
+          id?: string
+          measurements?: Json
+          ordinal?: number
+          provenance?: Json
+          report_id?: string
+          requires_measurement?: Json | null
+          section?: string
+          source_id?: string
+          statement_kind?: string
+          timepoint?: string | null
+          title?: string
+          truth_status?: string
+          user_id?: string
+          witness_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biotwin_statements_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "biotwin_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "biotwin_statements_witness_id_fkey"
+            columns: ["witness_id"]
+            isOneToOne: false
+            referencedRelation: "witness_objects"
+            referencedColumns: ["witness_id"]
+          },
+        ]
+      }
       celf_exports: {
         Row: {
           bundle: Json
@@ -1047,64 +1252,205 @@ export type Database = {
       }
       patient_chat_validation_log: {
         Row: {
+          answer_id: string
+          authority_policy_version: string | null
+          biotwin_packet_sha256: string | null
+          biotwin_report_id: string | null
+          biotwin_statement_count_available: number | null
+          biotwin_validator_version: string | null
           cluster_count: number | null
+          cluster_count_available: number | null
+          context_bytes: number | null
+          context_packet_sha256: string | null
+          context_ref_manifest: Json | null
+          conversation_id: string | null
           created_at: string
+          doctor_question_generated: boolean | null
           dose_patterns_matched: string[]
           dose_policy_context: Json | null
+          dose_policy_version: string | null
+          emergency_routed: boolean | null
+          fallback_used: boolean | null
+          grounding_witness_count: number | null
           id: string
+          input_tokens: number | null
           last_user_message: string | null
+          latency_ms: number | null
+          latest_witness_as_of: string | null
+          marker_coverage: number | null
           message_role: string
+          model_name: string | null
+          model_provider: string | null
           original_output: string | null
+          output_tokens: number | null
+          prompt_template_version: string | null
+          query_intent: string | null
+          query_intent_rule: string | null
+          question_timestamp: string | null
           regeneration_attempted: boolean
           regeneration_succeeded: boolean | null
           replaced_with: string | null
           replacement_template_used: string | null
+          report_generated_at: string | null
           role_violation: Json | null
           routing_mode: string | null
+          runtime_version: string | null
           sentences_checked: number | null
           status: string
+          tokens_estimated: boolean | null
+          twin_id: string | null
+          twin_state_as_of: string | null
+          twin_version: string | null
           user_id: string
           violations: Json
+          witness_count_available: number | null
         }
         Insert: {
+          answer_id?: string
+          authority_policy_version?: string | null
+          biotwin_packet_sha256?: string | null
+          biotwin_report_id?: string | null
+          biotwin_statement_count_available?: number | null
+          biotwin_validator_version?: string | null
           cluster_count?: number | null
+          cluster_count_available?: number | null
+          context_bytes?: number | null
+          context_packet_sha256?: string | null
+          context_ref_manifest?: Json | null
+          conversation_id?: string | null
           created_at?: string
+          doctor_question_generated?: boolean | null
           dose_patterns_matched?: string[]
           dose_policy_context?: Json | null
+          dose_policy_version?: string | null
+          emergency_routed?: boolean | null
+          fallback_used?: boolean | null
+          grounding_witness_count?: number | null
           id?: string
+          input_tokens?: number | null
           last_user_message?: string | null
+          latency_ms?: number | null
+          latest_witness_as_of?: string | null
+          marker_coverage?: number | null
           message_role?: string
+          model_name?: string | null
+          model_provider?: string | null
           original_output?: string | null
+          output_tokens?: number | null
+          prompt_template_version?: string | null
+          query_intent?: string | null
+          query_intent_rule?: string | null
+          question_timestamp?: string | null
           regeneration_attempted?: boolean
           regeneration_succeeded?: boolean | null
           replaced_with?: string | null
           replacement_template_used?: string | null
+          report_generated_at?: string | null
           role_violation?: Json | null
           routing_mode?: string | null
+          runtime_version?: string | null
           sentences_checked?: number | null
           status: string
+          tokens_estimated?: boolean | null
+          twin_id?: string | null
+          twin_state_as_of?: string | null
+          twin_version?: string | null
           user_id: string
           violations?: Json
+          witness_count_available?: number | null
         }
         Update: {
+          answer_id?: string
+          authority_policy_version?: string | null
+          biotwin_packet_sha256?: string | null
+          biotwin_report_id?: string | null
+          biotwin_statement_count_available?: number | null
+          biotwin_validator_version?: string | null
           cluster_count?: number | null
+          cluster_count_available?: number | null
+          context_bytes?: number | null
+          context_packet_sha256?: string | null
+          context_ref_manifest?: Json | null
+          conversation_id?: string | null
           created_at?: string
+          doctor_question_generated?: boolean | null
           dose_patterns_matched?: string[]
           dose_policy_context?: Json | null
+          dose_policy_version?: string | null
+          emergency_routed?: boolean | null
+          fallback_used?: boolean | null
+          grounding_witness_count?: number | null
           id?: string
+          input_tokens?: number | null
           last_user_message?: string | null
+          latency_ms?: number | null
+          latest_witness_as_of?: string | null
+          marker_coverage?: number | null
           message_role?: string
+          model_name?: string | null
+          model_provider?: string | null
           original_output?: string | null
+          output_tokens?: number | null
+          prompt_template_version?: string | null
+          query_intent?: string | null
+          query_intent_rule?: string | null
+          question_timestamp?: string | null
           regeneration_attempted?: boolean
           regeneration_succeeded?: boolean | null
           replaced_with?: string | null
           replacement_template_used?: string | null
+          report_generated_at?: string | null
           role_violation?: Json | null
           routing_mode?: string | null
+          runtime_version?: string | null
           sentences_checked?: number | null
           status?: string
+          tokens_estimated?: boolean | null
+          twin_id?: string | null
+          twin_state_as_of?: string | null
+          twin_version?: string | null
           user_id?: string
           violations?: Json
+          witness_count_available?: number | null
+        }
+        Relationships: []
+      }
+      patient_intent_profiles: {
+        Row: {
+          created_at: string
+          doctors_missing: string | null
+          id: string
+          ninety_day_change: string | null
+          think_about_most: string | null
+          unexplained_result: string | null
+          updated_at: string
+          user_id: string
+          version: number
+          want_to_understand: string | null
+        }
+        Insert: {
+          created_at?: string
+          doctors_missing?: string | null
+          id?: string
+          ninety_day_change?: string | null
+          think_about_most?: string | null
+          unexplained_result?: string | null
+          updated_at?: string
+          user_id: string
+          version?: number
+          want_to_understand?: string | null
+        }
+        Update: {
+          created_at?: string
+          doctors_missing?: string | null
+          id?: string
+          ninety_day_change?: string | null
+          think_about_most?: string | null
+          unexplained_result?: string | null
+          updated_at?: string
+          user_id?: string
+          version?: number
+          want_to_understand?: string | null
         }
         Relationships: []
       }
@@ -1356,6 +1702,7 @@ export type Database = {
           question: string
           rationale: string | null
           source: string
+          source_answer_id: string | null
           source_user_message: string | null
           status: string
           updated_at: string
@@ -1369,6 +1716,7 @@ export type Database = {
           question: string
           rationale?: string | null
           source?: string
+          source_answer_id?: string | null
           source_user_message?: string | null
           status?: string
           updated_at?: string
@@ -1382,16 +1730,26 @@ export type Database = {
           question?: string
           rationale?: string | null
           source?: string
+          source_answer_id?: string | null
           source_user_message?: string | null
           status?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "patient_question_queue_source_answer_fk"
+            columns: ["source_answer_id"]
+            isOneToOne: false
+            referencedRelation: "patient_chat_validation_log"
+            referencedColumns: ["answer_id"]
+          },
+        ]
       }
       profiles: {
         Row: {
           age: number | null
+          ask_my_twin_release0_enabled: boolean
           consumer_action_plan_mode: string
           created_at: string
           display_name: string | null
@@ -1412,6 +1770,7 @@ export type Database = {
         }
         Insert: {
           age?: number | null
+          ask_my_twin_release0_enabled?: boolean
           consumer_action_plan_mode?: string
           created_at?: string
           display_name?: string | null
@@ -1432,6 +1791,7 @@ export type Database = {
         }
         Update: {
           age?: number | null
+          ask_my_twin_release0_enabled?: boolean
           consumer_action_plan_mode?: string
           created_at?: string
           display_name?: string | null
