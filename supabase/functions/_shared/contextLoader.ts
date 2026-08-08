@@ -167,6 +167,14 @@ export interface PatientTerrainContext {
   witness_provenance: {
     registry_seed_version: string;
     total_witnesses: number;
+    /**
+     * Newest biological_timestamp (short date) across ALL admitted witness
+     * rows loaded for this patient — every witness class, not just the
+     * lab/InBody/FibroScan partitions. This is the receipt's
+     * latest_witness_as_of freshness clock. Null when no witness carries a
+     * timestamp; never fabricated.
+     */
+    latest_biological_timestamp: string | null;
     depth_0_count: number;
     depth_1_count: number;
     depth_2_count: number;
@@ -396,6 +404,15 @@ export async function loadPatientContext(
     witness_provenance: {
       registry_seed_version: ACTIVE_REGISTRY_SEED_VERSION,
       total_witnesses: witnesses.length,
+      latest_biological_timestamp: witnesses.reduce<string | null>(
+        (latest, w) => {
+          if (!w.biological_timestamp) return latest;
+          const day = shortDate(w.biological_timestamp);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return latest;
+          return latest === null || day > latest ? day : latest;
+        },
+        null
+      ),
       depth_0_count: witnesses.filter((w) => w.compression_depth === 0).length,
       depth_1_count: witnesses.filter((w) => w.compression_depth === 1).length,
       depth_2_count: witnesses.filter((w) => w.compression_depth === 2).length,

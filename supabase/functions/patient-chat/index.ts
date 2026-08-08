@@ -1536,15 +1536,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
         )
       : [];
 
-    // Two freshness clocks — never one ambiguous cutoff.
+    // Two freshness clocks — never one ambiguous cutoff. The witness clock
+    // spans ALL admitted witness classes (CIE/self-report included), not
+    // just the partitions printed into the grounding block; falls back to
+    // the grounding partitions only if the provenance clock is absent.
     const twinStateAsOf = biotwinPacket.has_report
       ? biotwinPacket.generated_date
       : null;
-    const latestWitnessAsOf = latestWitnessDate([
-      ...witnessContext.labs.observations.map((o) => o.collection_date),
-      ...witnessContext.inbody.observations.map((o) => o.collection_date),
-      ...witnessContext.fibroscan.observations.map((o) => o.collection_date),
-    ]);
+    const latestWitnessAsOf =
+      witnessContext.witness_provenance.latest_biological_timestamp ??
+      latestWitnessDate([
+        ...witnessContext.labs.observations.map((o) => o.collection_date),
+        ...witnessContext.inbody.observations.map((o) => o.collection_date),
+        ...witnessContext.fibroscan.observations.map((o) => o.collection_date),
+      ]);
+
+    // Exactly what was available — the compact manifest that makes the
+    // receipt replayable without hundreds of AVAILABLE child rows.
+    const contextRefManifest = {
+      witness: contextWitnessIds,
+      cluster: contextClusterIds,
+      statement: contextStatementIds,
+    };
 
     const contextSerialized =
       finalSystemPrompt + "\n␞\n" + canonicalStringify(messages);
@@ -1622,9 +1635,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         tokens_estimated: true,
         context_bytes: contextBytes,
         latency_ms: null,
-        witness_count_available: contextWitnessIds.length,
+        witness_count_available:
+          witnessContext.witness_provenance.total_witnesses,
+        grounding_witness_count: contextWitnessIds.length,
         cluster_count_available: contextClusterIds.length,
         biotwin_statement_count_available: contextStatementIds.length,
+        context_ref_manifest: contextRefManifest,
         marker_coverage: null,
         emergency_routed: false,
         fallback_used: true,
@@ -2057,9 +2073,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       context_bytes: contextBytes,
       latency_ms: llmLatencyMs,
 
-      witness_count_available: contextWitnessIds.length,
+      witness_count_available:
+        witnessContext.witness_provenance.total_witnesses,
+      grounding_witness_count: contextWitnessIds.length,
       cluster_count_available: contextClusterIds.length,
       biotwin_statement_count_available: contextStatementIds.length,
+      context_ref_manifest: contextRefManifest,
 
       // null means "no From-your-data content in this answer", never
       // "ungrounded".

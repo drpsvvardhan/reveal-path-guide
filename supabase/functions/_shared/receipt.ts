@@ -123,9 +123,24 @@ export interface AnswerReceiptFields {
   context_bytes: number;
   latency_ms: number | null;
 
+  /** ALL admitted witnesses loaded for the patient (every witness class). */
   witness_count_available: number;
+  /** The subset whose IDs are printed into the grounding block (citable). */
+  grounding_witness_count: number;
   cluster_count_available: number;
   biotwin_statement_count_available: number;
+
+  /**
+   * Exactly what was available: the ID sets the model could have cited.
+   * Together with context_packet_sha256 (exactly what the model saw) and
+   * answer_evidence_refs (exactly what the answer used), this makes the
+   * receipt epistemic replay even if the witness store changes later.
+   */
+  context_ref_manifest: {
+    witness: string[];
+    cluster: string[];
+    statement: string[];
+  };
 
   marker_coverage: number | null;
 

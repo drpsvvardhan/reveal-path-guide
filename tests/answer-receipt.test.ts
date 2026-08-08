@@ -18,6 +18,7 @@ import {
   latestWitnessDate,
   RUNTIME_VERSION,
   PROMPT_TEMPLATE_VERSION,
+  type AnswerReceiptFields,
 } from "../supabase/functions/_shared/receipt.ts";
 import { AUTHORITY_POLICY_VERSION } from "../supabase/functions/_shared/clinicalAuthorityPolicy.ts";
 import { DOSE_POLICY_VERSION } from "../supabase/functions/_shared/dosePolicy.ts";
@@ -87,6 +88,64 @@ describe("estimateTokens", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("abcde")).toBe(2);
     expect(estimateTokens("")).toBe(0);
+  });
+});
+
+describe("receipt shape (integrity hardening)", () => {
+  // Compile-level contract: the receipt distinguishes ALL available
+  // witnesses from the citable grounding subset, and carries the compact
+  // available-context manifest. context_ref_manifest = exactly what was
+  // available; context_packet_sha256 = exactly what the model saw;
+  // answer_evidence_refs = exactly what the answer used.
+  it("carries the manifest and both witness counts", () => {
+    const receipt: AnswerReceiptFields = {
+      answer_id: "00000000-0000-0000-0000-000000000000",
+      conversation_id: null,
+      question_timestamp: null,
+      biotwin_report_id: null,
+      twin_id: null,
+      twin_version: null,
+      report_generated_at: null,
+      biotwin_packet_sha256: null,
+      context_packet_sha256: "abc",
+      twin_state_as_of: "2026-08-02",
+      latest_witness_as_of: "2026-08-07",
+      model_provider: "lovable_gateway",
+      model_name: "test",
+      runtime_version: RUNTIME_VERSION,
+      prompt_template_version: PROMPT_TEMPLATE_VERSION,
+      authority_policy_version: "1.0.0",
+      dose_policy_version: "1.0.0",
+      biotwin_validator_version: "1.0.0",
+      input_tokens: 1,
+      output_tokens: 1,
+      tokens_estimated: true,
+      context_bytes: 1,
+      latency_ms: null,
+      witness_count_available: 184,
+      grounding_witness_count: 120,
+      cluster_count_available: 3,
+      biotwin_statement_count_available: 40,
+      context_ref_manifest: {
+        witness: ["WIT-1"],
+        cluster: ["CL-A"],
+        statement: ["BST-233"],
+      },
+      marker_coverage: null,
+      emergency_routed: false,
+      fallback_used: false,
+      doctor_question_generated: false,
+    };
+    // The all-witness count may exceed the citable grounding subset —
+    // that asymmetry is the point of the semantics fix.
+    expect(receipt.witness_count_available).toBeGreaterThanOrEqual(
+      receipt.grounding_witness_count
+    );
+    expect(Object.keys(receipt.context_ref_manifest).sort()).toEqual([
+      "cluster",
+      "statement",
+      "witness",
+    ]);
   });
 });
 
