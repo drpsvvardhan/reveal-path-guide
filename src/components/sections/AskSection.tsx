@@ -14,6 +14,7 @@ import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
 import { useClusters } from "@/hooks/useClusters";
 import { supabase } from "@/integrations/supabase/client";
+import { consumePendingAskQuestion } from "@/lib/askIntent";
 import {
   stripClusterMarkers,
   parseProseAndCitations,
@@ -433,6 +434,15 @@ const AskSection: React.FC = () => {
   const handleChipTap = useCallback((question: string) => {
     sendMessage(question);
   }, [sendMessage]);
+
+  // A question handed over from the Ask My Twin home. Consume-once: the
+  // store clears on read, so remounts cannot double-send. Held until the
+  // session identity is resolved so the send cannot race auth loading.
+  useEffect(() => {
+    if (!resolvedUserId) return;
+    const pending = consumePendingAskQuestion();
+    if (pending) sendMessage(pending);
+  }, [resolvedUserId, sendMessage]);
 
   const handleRegenerate = useCallback(() => {
     // Find last user message, drop everything after it, re-send

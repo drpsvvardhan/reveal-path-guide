@@ -30,10 +30,12 @@ import NoticedSection from "@/components/sections/NoticedSection";
 import IntakeResultsSection from "@/components/sections/IntakeResultsSection";
 import SimulatorSection from "@/components/sections/SimulatorSection";
 import BioTwinSection from "@/components/sections/BioTwinSection";
+import AskMyTwinHome from "@/components/sections/AskMyTwinHome";
 import { BioTwinProvider } from "@/context/BioTwinContext";
 import { navItems } from "@/components/navigation/navItems";
 
 const sections: Record<string, React.FC> = {
+  home: AskMyTwinHome,
   journey: JourneySection,
   thesis: ThesisSection,
   "helping-feeding": HelpingFeedingSection,
@@ -56,7 +58,7 @@ const PatientShell: React.FC = () => {
   const { manifest } = useManifest();
   const { signOut, user } = useAuth();
   const { isAdmin, isViewingAs, allProfiles, resetViewAs, effectiveUserId } = useViewAs();
-  const [activeSection, setActiveSection] = useState("journey");
+  const [activeSection, setActiveSection] = useState("home");
   const [profileOpen, setProfileOpen] = useState(false);
   const [viewAsDialogOpen, setViewAsDialogOpen] = useState(false);
   const [viewAsTarget, setViewAsTarget] = useState<string | undefined>(undefined);
@@ -67,7 +69,7 @@ const PatientShell: React.FC = () => {
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const ActiveComponent = sections[activeSection] ?? JourneySection;
+  const ActiveComponent = sections[activeSection] ?? AskMyTwinHome;
   const activeNav = navItems.find((n) => n.id === activeSection);
 
   return (
@@ -87,7 +89,7 @@ const PatientShell: React.FC = () => {
                 {manifest.patient.firstName}{manifest.patient.age ? `, ${manifest.patient.age}` : ""}{manifest.patient.sex ? ` · ${manifest.patient.sex}` : ""}
               </p>
               <h2 className="font-serif text-base md:text-lg">
-                {activeNav?.label ?? "Journey"}
+                {activeNav?.label ?? "Ask My Twin"}
               </h2>
             </div>
             <div className="relative">
