@@ -71,7 +71,18 @@ import {
   estimateTokens,
   latestWitnessDate,
   type AnswerReceiptFields,
+  type UsedEvidenceRef,
 } from "../_shared/receipt.ts";
+import {
+  parseGroundingMarkers,
+  validateGroundingMarkers,
+  stripGroundingMarkers,
+  computeMarkerCoverage,
+  dedupeMarkers,
+  buildGroundingRegenFeedback,
+  GROUNDING_FALLBACK_MESSAGE,
+  type AllowedGroundingContext,
+} from "../_shared/groundingMarkers.ts";
 import {
   loadPatientContext,
   type PatientTerrainContext,
@@ -477,6 +488,16 @@ Every **From your data** claim you make must be traceable to one of:
 If a claim would require evidence the witness layer does not have, you must say the data does not support the claim and route to the physician. You do **not** fill gaps with plausible-sounding inference. The patient has trusted this system with their biology; the correct response to insufficient evidence is honest uncertainty, not fluency.
 
 If the patient asks about a specific marker's trajectory and that marker is not present in the witness-derived evidence block, state explicitly that the governed evidence does not include that measurement for this patient. Do not fabricate values. Do not smooth over gaps.
+
+#### Grounding markers (internal — stripped before the patient sees the response)
+
+At the end of each sentence inside a **From your data** block, append the marker(s) identifying the exact evidence that sentence rests on, copying the identifier verbatim from the evidence blocks in this prompt:
+
+- \`{witness:<witness_id>}\` — a value from the Witness-derived longitudinal evidence block (use the witness_id shown with each point)
+- \`{statement:<id>}\` — a claim from the BioTwin source window (use the [id:...] shown with each statement)
+- \`{contradiction:<id>}\` — a contradiction held open in the BioTwin source window (use its [id:...])
+
+These are in addition to the \`{cluster:<id>}\` markers required by the cluster framework. The markers are machine-checked against the governed context and stripped before display. **Never invent an identifier** — citing an ID that does not appear in this prompt causes the entire answer to be rejected. If a sentence rests on no specific evidence, it does not belong in a **From your data** block.
 
 ---
 
@@ -1121,7 +1142,7 @@ async function queueExtractedQuestions(
 // not a guarantee — the validator remains law.
 async function attemptCorrectiveRegeneration(
   originalOutput: string,
-  violations: AuthorityViolation[],
+  feedback: string,
   userMessage: string,
   systemPrompt: string,
   model: string,
@@ -1129,8 +1150,6 @@ async function attemptCorrectiveRegeneration(
 ): Promise<string | null> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (!lovableKey) return null;
-
-  const feedback = buildCorrectiveRegenFeedback(violations);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -1168,6 +1187,16 @@ async function attemptCorrectiveRegeneration(
     clearTimeout(timer);
   }
 }
+
+// Fallback when the model twice overstates the strength of the underlying
+// evidence (tier vocabulary licenses). Deliberately quote-free so the
+// doctor-question extractor does not queue anything from a fallback.
+const TIER_VOCABULARY_FALLBACK = `**What this means:**
+**From medical knowledge:** I drafted an answer for you, but it stated your findings more strongly than the underlying evidence supports, so I'm not going to show it. That check exists so that the confidence of every sentence you read matches the confidence of your actual data.
+
+**What you can do:**
+- Ask the question again — a fresh answer often calibrates correctly.
+- If it repeats, the honest answer may be that your data currently supports a weaker statement than the one you asked about.`;
 
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -1651,7 +1680,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       regenerationAttempted = true;
       const regenerated = await attemptCorrectiveRegeneration(
         capturedResponse,
-        roleResult.violations,
+        buildCorrectiveRegenFeedback(roleResult.violations),
         lastUserMessage,
         finalSystemPrompt,
         normalizedModel,
@@ -1679,6 +1708,72 @@ Deno.serve(async (req: Request): Promise<Response> => {
       finalOutput = replacementTemplateForViolation(roleResult.violations);
       status = "replaced_with_fallback";
       replacementTemplateUsed = "role_violation";
+    }
+
+    // ----- Step 1b: cluster tier-vocabulary check (moved inside the gate) -----
+    // Until this commit, tier vocabulary validation (forbidden verbs,
+    // required hedging per confidence tier) ran client-side in AskSection —
+    // AFTER the answer had already crossed to the browser. That violated
+    // "invalid output never crosses". It now runs inside the buffered gate:
+    // one corrective regeneration, then fallback.
+    let tierViolations: unknown[] = [];
+    if (status === "passed" || status === "regenerated_successfully") {
+      const clusterTierMap = new Map<string, ClusterTier>();
+      for (const c of activeClusters as any[]) {
+        clusterTierMap.set(String(c.id), c.confidence_tier as ClusterTier);
+      }
+      const runTierValidation = (text: string) => {
+        const { sentenceToClusterMap } = parseProseAndCitations(text);
+        return validateProseAgainstClustersWithAudience(
+          text,
+          clusterTierMap,
+          sentenceToClusterMap,
+          "patient",
+        );
+      };
+
+      const tierResult = runTierValidation(finalOutput);
+      if (!tierResult.valid) {
+        regenerationAttempted = true;
+        const feedback = [
+          "Your previous response violated the tier vocabulary licenses:",
+          ...tierResult.violations.map(
+            (v) =>
+              `- [${v.rule_violated}] "${v.matched_phrase}" in: ${v.sentence}`,
+          ),
+          "",
+          "Regenerate the response. Respect each cited cluster's vocabulary",
+          "license (allowed/forbidden verbs, required hedging) and never use",
+          "globally forbidden vocabulary.",
+        ].join("\n");
+
+        const regenerated = await attemptCorrectiveRegeneration(
+          finalOutput,
+          feedback,
+          lastUserMessage,
+          finalSystemPrompt,
+          normalizedModel,
+        );
+
+        let repaired = false;
+        if (regenerated) {
+          const reTier = runTierValidation(regenerated);
+          const reRole = validateInterpreterRole(regenerated);
+          if (reTier.valid && reRole.valid) {
+            finalOutput = regenerated;
+            status = "regenerated_successfully";
+            regenerationSucceeded = true;
+            repaired = true;
+          }
+        }
+        if (!repaired) {
+          tierViolations = tierResult.violations;
+          regenerationSucceeded = false;
+          finalOutput = TIER_VOCABULARY_FALLBACK;
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "tier_vocabulary_violation";
+        }
+      }
     }
 
     // ----- Step 2: dose policy check (special case) -----
@@ -1724,6 +1819,91 @@ Deno.serve(async (req: Request): Promise<Response> => {
       status = "replaced_with_emergency_routing";
       replacementTemplateUsed = "emergency_routing";
     }
+
+    // ----- Step 3b: evidence-use grounding markers -----
+    // The receipt doctrine: available evidence is not used evidence.
+    // Markers are parsed from the admitted output, validated against the
+    // authorized context (fabricated provenance never crosses — one
+    // corrective regeneration, then fallback), recorded as USED refs, and
+    // stripped before the patient sees the response. Missing markers are
+    // measured (marker_coverage), not blocked, during beta.
+    let markerCoverage: number | null = null;
+    let usedRefs: UsedEvidenceRef[] = [];
+    let groundingViolations: unknown[] = [];
+    if (status === "passed" || status === "regenerated_successfully") {
+      const allowedGrounding: AllowedGroundingContext = {
+        witness: new Set(contextWitnessIds),
+        cluster: new Set([...contextClusterIds, "none"]),
+        statement: new Set(contextStatementIds),
+        contradiction: new Set(
+          biotwinPacket.contradictions.map((s) => s.source_id)
+        ),
+      };
+
+      let markers = parseGroundingMarkers(finalOutput);
+      let groundingResult = validateGroundingMarkers(markers, allowedGrounding);
+
+      if (!groundingResult.valid) {
+        regenerationAttempted = true;
+        const regenerated = await attemptCorrectiveRegeneration(
+          finalOutput,
+          buildGroundingRegenFeedback(groundingResult.fabricated),
+          lastUserMessage,
+          finalSystemPrompt,
+          normalizedModel,
+        );
+
+        let repaired = false;
+        if (regenerated) {
+          const reMarkers = parseGroundingMarkers(regenerated);
+          const reGrounding = validateGroundingMarkers(
+            reMarkers,
+            allowedGrounding
+          );
+          const reRole = validateInterpreterRole(regenerated);
+          const reDose = validateDoseTokens(regenerated, dosePolicyContext);
+          const reBiotwin = biotwinPacket.has_report
+            ? validateBiotwinOutput(regenerated, biotwinPacket)
+            : { valid: true, violations: [] };
+          if (
+            reGrounding.valid &&
+            reRole.valid &&
+            reDose.valid &&
+            reBiotwin.valid
+          ) {
+            finalOutput = regenerated;
+            status = "regenerated_successfully";
+            regenerationSucceeded = true;
+            markers = reMarkers;
+            repaired = true;
+          }
+        }
+        if (!repaired) {
+          groundingViolations = groundingResult.fabricated;
+          regenerationSucceeded = false;
+          finalOutput = GROUNDING_FALLBACK_MESSAGE;
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "fabricated_grounding";
+          markers = [];
+        }
+      }
+
+      if (status === "passed" || status === "regenerated_successfully") {
+        markerCoverage = computeMarkerCoverage(finalOutput);
+        usedRefs = dedupeMarkers(markers)
+          .filter((m) => !(m.type === "cluster" && m.id === "none"))
+          .map((m) => ({
+            ref_type:
+              m.type === "statement" ? "biotwin_statement" : m.type,
+            ref_id: m.id,
+          }));
+      }
+    }
+
+    // Markers never reach the patient, under any status. (Also strips
+    // legacy {cluster:...} markers server-side — the client's strip is now
+    // a harmless no-op.)
+    finalOutput = stripGroundingMarkers(finalOutput);
 
     // ----- Step 4: doctor-question extraction (against final output only) -----
     const questions = extractQueuedQuestions(finalOutput);
@@ -1778,9 +1958,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       cluster_count_available: contextClusterIds.length,
       biotwin_statement_count_available: contextStatementIds.length,
 
-      // Filled by the evidence-marker commit; null means "not yet measured",
-      // never "no grounding".
-      marker_coverage: null,
+      // null means "no From-your-data content in this answer", never
+      // "ungrounded".
+      marker_coverage: markerCoverage,
 
       emergency_routed: status === "replaced_with_emergency_routing",
       fallback_used:
@@ -1799,7 +1979,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
           },
       dose_policy_context: dosePolicyContext,
       routing_mode: dosePolicyContext.routingMode,
-      violations: biotwinViolations,
+      violations: [
+        ...biotwinViolations,
+        ...tierViolations,
+        ...groundingViolations,
+      ],
       dose_patterns_matched: dosePolicyContext.userDoseTokens,
       original_output: capturedResponse,
       replaced_with: finalOutput,
@@ -1811,10 +1995,41 @@ Deno.serve(async (req: Request): Promise<Response> => {
       last_user_message: lastUserMessage,
     });
 
+    // Evidence actually used — child rows on the receipt. Best-effort:
+    // failure never breaks the chat response, but is loudly logged because
+    // a receipt without its USED refs is a degraded receipt.
+    if (usedRefs.length > 0) {
+      try {
+        const { error: refsError } = await supabaseAdmin
+          .from("answer_evidence_refs")
+          .insert(
+            usedRefs.map((r) => ({
+              answer_id: answerId,
+              user_id: userId,
+              ref_type: r.ref_type,
+              ref_id: r.ref_id,
+              usage: "USED",
+            }))
+          );
+        if (refsError) {
+          console.error(
+            "[patient-chat] answer_evidence_refs insert failed:",
+            refsError
+          );
+        }
+      } catch (e) {
+        console.error("[patient-chat] answer_evidence_refs insert threw:", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         role: "assistant",
         content: finalOutput,
+        grounding: {
+          used_refs: usedRefs,
+          marker_coverage: markerCoverage,
+        },
         validation: {
           status,
           routing_mode: dosePolicyContext.routingMode,

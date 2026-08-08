@@ -167,7 +167,11 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
     if (rows.length === 0) return;
     lines.push(`${label}:`);
     rows.forEach((r) => {
-      lines.push(`- ${r.title}${r.body ? ` — ${r.body}` : ""}`);
+      // [id:...] is the statement's source_id — the identifier the model
+      // must copy into {statement:<id>} / {contradiction:<id>} grounding
+      // markers. Without it printed here, statement citations would be
+      // unverifiable guesses.
+      lines.push(`- [id:${r.source_id}] ${r.title}${r.body ? ` — ${r.body}` : ""}`);
       (r.bounds ?? []).forEach((b) => lines.push(`    bound: ${b}`));
     });
   };

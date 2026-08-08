@@ -333,6 +333,8 @@ const AskSection: React.FC = () => {
           documents: documents.map((d) => ({ name: d.name, type: d.type, content: d.content })),
           model: "google/gemini-3-flash-preview",
           userId: resolvedUserId,
+          // Binds the server-side Answer Receipt to this conversation.
+          conversationId: convId ?? undefined,
         }),
       });
 
