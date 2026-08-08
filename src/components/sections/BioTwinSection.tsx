@@ -19,6 +19,8 @@ import { useViewAs } from "@/context/ViewAsContext";
 import { useNavigation } from "@/context/NavigationContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import BioTwinImportCard from "@/components/biotwin/BioTwinImportCard";
+import BioTwinBriefCard from "@/components/biotwin/BioTwinBriefCard";
+import { projectBrief } from "@/lib/biotwin/brief";
 import {
   readString,
   statementsBy,
@@ -189,6 +191,10 @@ const BioTwinSection: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-5 min-w-0"
       >
+        {/* Biological Intelligence Brief — deterministic orientation layer.
+            Every string is the report's own words or a version fact. */}
+        <BioTwinBriefCard brief={projectBrief(report, statements)} />
+
         {/* Release control — the report's own governance, shown first. */}
         {(report.clinician_review_required || (report.holds ?? []).length > 0) && (
           <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50/60 p-4 min-w-0">

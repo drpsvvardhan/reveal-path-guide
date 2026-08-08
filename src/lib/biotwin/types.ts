@@ -42,6 +42,13 @@ export interface BiotwinStatement {
   holds: string[] | null;
   witness_id: string | null;
   ordinal: number;
+  /**
+   * Adapter-preserved source metadata. For driver statements this carries
+   * the source report's own governed ranking ({ rank, state }) from
+   * repaired_driver_hierarchy — the ONLY ranking the UI may use. Ordinal is
+   * storage order, not importance.
+   */
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface BiotwinReport {
