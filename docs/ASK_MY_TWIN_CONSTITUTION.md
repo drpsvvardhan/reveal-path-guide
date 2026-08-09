@@ -110,6 +110,76 @@ agents, tools, or prettier UX — invalid output never crosses.
 
 ---
 
+## Quality doctrine (ratified after the first live smoke, Aug 9)
+
+The product equation:
+
+```
+BioIntelligence = frontier-model intelligence
+                + personal biological state
+                + longitudinal memory
+                + epistemic discipline
+```
+
+**The last term must be additive.** The moment epistemic discipline
+subtracts fluency, synthesis, curiosity, or usefulness, it has been
+implemented incorrectly. Governance appears as precision, never as tone.
+
+> A patient should almost never be able to tell that a governance runtime
+> exists. They should only notice that their Twin is unusually hard to fool.
+
+Rules, all measurable from receipts:
+
+1. **Fluency parity with a raw frontier model is a launch gate**, not a
+   maturity milestone. If pasting the Twin JSON into a consumer LLM is a
+   better experience than Ask My Twin, the product has failed regardless
+   of the receipt system.
+2. **A fallback template on a benign informational question is a defect,
+   not a safety success.** Benign fallback rate targets ~0%; every
+   fallback is triaged like an incident (which gate, what matched, what
+   the model originally wrote — all on the receipt).
+3. **Police assertions, not topics.** The forbidden act is asserting a
+   retired or prohibited proposition as currently true. The Twin must be
+   able to discuss, negate, explain, compare, and historicize its scars
+   naturally — that wording is required, never a violation.
+4. **Regeneration before replacement; span repair before regeneration**
+   (goal state): repair the offending claim span using the report's own
+   replacement wording rather than discarding twelve good paragraphs
+   because sentence eight overreached.
+5. **A passing gate does not prove an intelligent answer.** Blandness is
+   the failure mode no validator catches. The anti-blandness metric is
+   grounding density — USED evidence refs and marker coverage per answer:
+   boilerplate cites nothing.
+
+### The BioIntelligence Quality Gate
+
+Every significant runtime release runs the same Twin and question set,
+blind-scored, across arms:
+
+- **A.** raw frontier model + full Twin JSON
+- **B.** frontier model + our bounded packet (isolates compression loss)
+- **C.** our model + packet, gates disabled (isolates prompt/gate cost)
+- **D.** full Vizzhy runtime
+
+Score: specificity · synthesis · usefulness · fluency · epistemic
+correctness. Count separately: invented values, resurrected scars, false
+diagnoses, unsupported causal attribution, prohibited medication/dose
+decisions, cross-person contamination.
+
+Release condition: `usefulness(D) >= usefulness(A)` subject to
+`critical_errors(D) << critical_errors(A)`. The arm deltas assign any
+deficit to its layer: A−B = packet compression, B/C differences = model
+capability and prompt defensiveness, C−D = gate suppression.
+
+Known quantified risks feeding this gate (Aug 9 baseline): the assembled
+prompt carries on the order of 170+ prohibition-shaped imperatives plus up
+to 40 verbatim prohibited statements (self-censorship pressure that no
+fallback counter detects), and PACKET_CAPS discards silently beyond
+12/bucket, 6 drivers, 8 actions, 8 contradictions, 4 bounds/statement
+(compression loss no model can recover).
+
+---
+
 ## CI rule for this workstream
 
 New code typechecks; new tests pass; the existing relevant test suite passes;
