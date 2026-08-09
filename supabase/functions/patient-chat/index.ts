@@ -2051,16 +2051,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let markerCoverage: number | null = null;
     let usedRefs: UsedEvidenceRef[] = [];
     let groundingViolations: unknown[] = [];
+    const allowedGrounding: AllowedGroundingContext = {
+      witness: new Set(contextWitnessIds),
+      cluster: new Set([...contextClusterIds, "none"]),
+      statement: new Set(contextStatementIds),
+      contradiction: new Set(
+        biotwinPacket.contradictions.map((s) => s.source_id)
+      ),
+    };
     if (status === "passed" || status === "regenerated_successfully") {
-      const allowedGrounding: AllowedGroundingContext = {
-        witness: new Set(contextWitnessIds),
-        cluster: new Set([...contextClusterIds, "none"]),
-        statement: new Set(contextStatementIds),
-        contradiction: new Set(
-          biotwinPacket.contradictions.map((s) => s.source_id)
-        ),
-      };
-
       let markers = parseGroundingMarkers(finalOutput);
       let groundingResult = validateGroundingMarkers(markers, allowedGrounding);
 
@@ -2102,7 +2101,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           groundingViolations = groundingResult.fabricated;
           regenerationSucceeded = false;
-          finalOutput = GROUNDING_FALLBACK_MESSAGE;
+          finalOutput = safeFallback(
+            GROUNDING_FALLBACK_MESSAGE,
+            "fabricated_grounding",
+          );
           status = "replaced_with_fallback";
           replacementTemplateUsed = "fabricated_grounding";
           markers = [];
@@ -2116,6 +2118,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
           .map((m) => ({
             ref_type:
               m.type === "statement" ? "biotwin_statement" : m.type,
+            ref_id: m.id,
+          }));
+      }
+    }
+
+    // The deterministic fallback carries the packet's own statement and
+    // contradiction ids. Those are real used evidence — record them so the
+    // receipt does not report a grounded answer as ungrounded.
+    if (biotwinFallbackUsed) {
+      const fbMarkers = parseGroundingMarkers(finalOutput);
+      const fbValidation = validateGroundingMarkers(fbMarkers, allowedGrounding);
+      if (fbValidation.valid) {
+        markerCoverage = computeMarkerCoverage(finalOutput);
+        usedRefs = dedupeMarkers(fbMarkers)
+          .filter((m) => !(m.type === "cluster" && m.id === "none"))
+          .map((m) => ({
+            ref_type: m.type === "statement" ? "biotwin_statement" : m.type,
             ref_id: m.id,
           }));
       }
