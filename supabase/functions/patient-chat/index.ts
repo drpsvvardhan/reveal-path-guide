@@ -1800,6 +1800,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const dosePolicyContext: DosePolicyContext =
       computeDosePolicyContext(lastUserMessage);
 
+    // ----- Safety fallback doctrine: lose fluency, never intelligence -----
+    // When a released Twin exists, a failed admission must NOT deliver a
+    // content-free refusal. It delivers the report's own ranked drivers,
+    // open questions and held-open tensions — deterministically, no LLM.
+    let biotwinFallbackUsed = false;
+    let biotwinFallbackOmitted: string[] = [];
+    let biotwinFallbackReason: string | null = null;
+    const safeFallback = (generic: string, reason: string): string => {
+      if (!biotwinPacket.has_report) return generic;
+      const res = buildBiotwinFallback(
+        biotwinPacket,
+        lastUserMessage,
+        (text) =>
+          validateDoseTokens(text, dosePolicyContext).valid &&
+          validateInterpreterRole(text).valid,
+      );
+      if (!res.substantive) return generic;
+      biotwinFallbackUsed = true;
+      biotwinFallbackOmitted = res.omittedBlocks;
+      biotwinFallbackReason = reason;
+      return res.content;
+    };
+
     // ----- Step 1: clinical authority check (constitutional) -----
     const roleResult = validateInterpreterRole(capturedResponse);
 
@@ -1839,18 +1862,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
           regenerationSucceeded = true;
         } else {
           regenerationSucceeded = false;
-          finalOutput = replacementTemplateForViolation(reValidate.violations);
+          finalOutput = safeFallback(
+            replacementTemplateForViolation(reValidate.violations),
+            "role_violation_after_regen",
+          );
           status = "regenerated_then_replaced";
           replacementTemplateUsed = "role_violation_after_regen";
         }
       } else {
         regenerationSucceeded = false;
-        finalOutput = replacementTemplateForViolation(roleResult.violations);
+        finalOutput = safeFallback(
+          replacementTemplateForViolation(roleResult.violations),
+          "role_violation",
+        );
         status = "replaced_with_fallback";
         replacementTemplateUsed = "role_violation";
       }
     } else if (!roleResult.valid) {
-      finalOutput = replacementTemplateForViolation(roleResult.violations);
+      finalOutput = safeFallback(
+        replacementTemplateForViolation(roleResult.violations),
+        "role_violation",
+      );
       status = "replaced_with_fallback";
       replacementTemplateUsed = "role_violation";
     }
