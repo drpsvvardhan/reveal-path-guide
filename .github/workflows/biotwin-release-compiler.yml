@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/_shared/biotwin/releaseCompiler.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.ts'
       - 'supabase/functions/_shared/biotwin/releaseCompiler.test.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts'
       - 'supabase/functions/_shared/biotwin/__fixtures__/peter_v18_founder_release_decision.json'
       - 'supabase/functions/compile-biotwin-release/**'
       - 'schemas/biotwin/**'
@@ -14,7 +16,9 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/_shared/biotwin/releaseCompiler.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.ts'
       - 'supabase/functions/_shared/biotwin/releaseCompiler.test.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts'
       - 'supabase/functions/_shared/biotwin/__fixtures__/peter_v18_founder_release_decision.json'
       - 'supabase/functions/compile-biotwin-release/**'
       - 'schemas/biotwin/**'
@@ -29,5 +33,8 @@ jobs:
         uses: denoland/setup-deno@v1
         with:
           deno-version: v2.7.13
-      - name: Run Peter Golden Fixture
-        run: deno test --allow-read supabase/functions/_shared/biotwin/releaseCompiler.test.ts
+      - name: Run Peter Golden Fixture and governed gate regressions
+        run: |
+          deno test --allow-read \
+            supabase/functions/_shared/biotwin/releaseCompiler.test.ts \
+            supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts
