@@ -1558,6 +1558,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               ...biotwinPacket.drivers,
               ...biotwinPacket.actions,
               ...biotwinPacket.contradictions,
+              ...biotwinPacket.evidence,
             ].map((s) => s.source_id)
           )
         )

@@ -26,6 +26,7 @@ export type BiotwinClinicalAuthority =
   | "prohibited";
 
 export type BiotwinStatementKind =
+  | "measured_evidence"
   | "confirmed_measurement"
   | "candidate_signal"
   | "open_screening"

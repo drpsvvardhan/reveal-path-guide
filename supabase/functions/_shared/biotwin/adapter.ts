@@ -193,6 +193,30 @@ export function adaptBiotwinReport(input: Record<string, unknown>): BiotwinAdapt
 
   // ---- clinical_state: four truth buckets, kept distinct -----------------
 
+  // ---- Evidence Plane: measured evidence, released by default ------------
+  // Patient observations (CGM summaries, food log, sensors). Confirmed,
+  // patient-facing, no claim authority required — interpretation of them
+  // still lives in the governed claim buckets above.
+  for (const raw of arr(input.measured_evidence)) {
+    if (!isObject(raw)) continue;
+    statements.push(
+      makeStatement({
+        section: "measured_evidence",
+        kind: "measured_evidence",
+        truth: "confirmed",
+        authority: "patient_facing",
+        title: str(raw.title) ?? "Measured evidence",
+        body: str(raw.summary),
+        bounds: [
+          "Measured evidence released by default. It reports what was observed; any interpretation beyond the values themselves remains governed by the released claims.",
+        ],
+        provenance: { source_root: str(raw.source_root) },
+        declaredId: str(raw.evidence_id),
+        ordinal: next(),
+      })
+    );
+  }
+
   const cs = isObject(input.clinical_state) ? input.clinical_state : {};
 
   for (const raw of arr(cs.confirmed_measurements_and_bounded_findings)) {

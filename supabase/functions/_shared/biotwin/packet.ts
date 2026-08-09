@@ -26,6 +26,7 @@ export const PACKET_CAPS = {
   prohibited: 40,
   allowed: 12,
   contradictions: 8,
+  evidence: 12,
   bounds_per_statement: 4,
 } as const;
 
@@ -73,6 +74,7 @@ export interface BiotwinPacket {
   drivers: BiotwinStatementRow[];
   actions: BiotwinStatementRow[];
   contradictions: BiotwinStatementRow[];
+  evidence: BiotwinStatementRow[];
   allowed_headlines: string[];
   prohibited_headlines: string[];
 }
@@ -94,6 +96,7 @@ export const EMPTY_BIOTWIN_PACKET: BiotwinPacket = {
   drivers: [],
   actions: [],
   contradictions: [],
+  evidence: [],
   allowed_headlines: [],
   prohibited_headlines: [],
 };
@@ -134,6 +137,7 @@ export function buildBiotwinPacket(
     drivers: byKind("driver", PACKET_CAPS.drivers),
     actions: byKind("action", PACKET_CAPS.actions),
     contradictions: byKind("contradiction", PACKET_CAPS.contradictions),
+    evidence: byKind("measured_evidence", PACKET_CAPS.evidence),
     allowed_headlines: statements
       .filter((s) => s.statement_kind === "allowed_headline")
       .slice(0, PACKET_CAPS.allowed)
@@ -221,6 +225,10 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
   listOf("DRIVER HIERARCHY", packet.drivers);
   listOf("MEASUREMENT AND ACTION PLAN", packet.actions);
   listOf("CONTRADICTIONS HELD OPEN", packet.contradictions);
+  listOf(
+    "MEASURED EVIDENCE (the person's own observations — released by default; cite freely, interpret only within the released claims)",
+    packet.evidence
+  );
 
   if (packet.allowed_headlines.length > 0) {
     lines.push("");

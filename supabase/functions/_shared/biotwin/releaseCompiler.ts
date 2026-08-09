@@ -5,7 +5,7 @@ export const RUNTIME_TWIN_ARTIFACT_TYPE = "RUNTIME_TWIN_FINAL";
 export const RUNTIME_TWIN_V18_PREFIX = "v18.";
 export const RELEASE_DECISION_SCHEMA = "Vizzhy Founding Cohort Release Decision";
 export const RELEASE_DECISION_VERSION = "1.0";
-export const RELEASE_COMPILER_VERSION = "biotwin_release_compiler_v1";
+export const RELEASE_COMPILER_VERSION = "biotwin_release_compiler_v2_evidence_plane";
 export const OUTPUT_SCHEMA_NAME = "Vizzhy BioTwin Clinical Evidence Report";
 export const OUTPUT_REPORT_TYPE = "FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT";
 
@@ -141,6 +141,97 @@ function hasProhibitedLeak(text: string, prohibitions: string[]): string | null 
     if (np.length >= 4 && n.includes(np)) return p;
   }
   return null;
+}
+
+
+// ---------------------------------------------------------------------------
+// Evidence Plane (compiler v2)
+// ---------------------------------------------------------------------------
+// "May this interpretation be released?" and "May the patient access their
+// own measured data?" are different questions. v1 conflated them: evidence
+// attached to an unreleased claim vanished (Peter's 4,301-reading CGM,
+// food log). The Evidence Plane releases legitimate patient observations
+// BY DEFAULT — summaries and scalars only, never raw series — unless the
+// decision explicitly quarantines a root. Interpretation still earns
+// authority through the claim machinery; evidence is visible by default.
+export const EVIDENCE_ROOTS = [
+  "sensor_cgm",
+  "sensor_sleep",
+  "sensor_hrv",
+  "sensors",
+  "food_log",
+  "food_behavior_log",
+  "behavior_log",
+  "body_composition",
+  "vitals",
+  "activity",
+] as const;
+
+const EVIDENCE_MAX_LINES_PER_ROOT = 40;
+const EVIDENCE_MAX_INLINE_ARRAY = 8;
+const EVIDENCE_MAX_STRING = 240;
+
+function flattenEvidenceObject(
+  obj: JsonObject,
+  prefix: string,
+  lines: string[],
+  depth: number,
+): void {
+  for (const key of Object.keys(obj).sort()) {
+    if (lines.length >= EVIDENCE_MAX_LINES_PER_ROOT) return;
+    const value = obj[key];
+    const label = prefix ? `${prefix}.${key}` : key;
+    if (typeof value === "number" || typeof value === "boolean") {
+      lines.push(`${label}: ${value}`);
+    } else if (typeof value === "string") {
+      if (value.trim() !== "") {
+        lines.push(`${label}: ${value.slice(0, EVIDENCE_MAX_STRING)}`);
+      }
+    } else if (Array.isArray(value)) {
+      const scalars = value.every(
+        (v) => typeof v === "string" || typeof v === "number" || typeof v === "boolean",
+      );
+      if (scalars && value.length <= EVIDENCE_MAX_INLINE_ARRAY) {
+        lines.push(`${label}: ${value.join(", ")}`);
+      } else {
+        // Raw series (e.g. 4,301 CGM readings) stay in the Twin. The
+        // release records their existence so the runtime can say so.
+        lines.push(`${label}: [${value.length} entries — raw series retained in the Twin, not inlined]`);
+      }
+    } else if (isObject(value) && depth < 2) {
+      flattenEvidenceObject(value as JsonObject, label, lines, depth + 1);
+    }
+  }
+}
+
+export function harvestMeasuredEvidence(
+  twin: JsonObject,
+  quarantined: Set<string>,
+  warn: (code: string, message: string, path?: string) => void,
+): JsonObject[] {
+  const out: JsonObject[] = [];
+  for (const root of EVIDENCE_ROOTS) {
+    const value = twin[root];
+    if (!isObject(value)) continue;
+    if (quarantined.has(root)) {
+      warn(
+        "evidence_quarantined",
+        `Evidence root "${root}" exists in the Twin but is quarantined by the release decision. The runtime will report this stream as unavailable.`,
+        root,
+      );
+      continue;
+    }
+    const lines: string[] = [];
+    flattenEvidenceObject(value as JsonObject, "", lines, 0);
+    if (lines.length === 0) continue;
+    out.push({
+      evidence_id: `EVID-${root.toUpperCase().replace(/[^A-Z0-9]/g, "-")}`,
+      source_root: root,
+      title: `Measured evidence — ${root.replace(/_/g, " ")}`,
+      summary: lines.join("\n"),
+    });
+  }
+  return out;
 }
 
 export function compileRuntimeTwinV18(
@@ -334,6 +425,22 @@ export function compileRuntimeTwinV18(
   const nextTests = [...candidate, ...unknown].map((x) => str(x.next_truth_test)).filter((x): x is string => !!x).slice(0, 3);
 
   const sourceReleaseClass = isObject(observations!.releaseClass) ? observations!.releaseClass as JsonObject : {};
+  const quarantinedEvidence = new Set(
+    Array.isArray((decision as JsonObject).quarantined_evidence)
+      ? ((decision as JsonObject).quarantined_evidence as unknown[]).filter(
+          (v): v is string => typeof v === "string",
+        )
+      : [],
+  );
+  const measuredEvidence = harvestMeasuredEvidence(twin as JsonObject, quarantinedEvidence, warn);
+  if (measuredEvidence.length > 0) {
+    diagnostics.push({
+      level: "info",
+      code: "evidence_released",
+      message: `Evidence Plane: ${measuredEvidence.length} measured evidence stream(s) released by default: ${measuredEvidence.map((e) => String((e as JsonObject).source_root)).join(", ")}.`,
+    });
+  }
+
   const report: JsonObject = {
     schema: {
       name: OUTPUT_SCHEMA_NAME,
@@ -368,6 +475,7 @@ export function compileRuntimeTwinV18(
       what_is_not_certain: uncertainTitles.length ? uncertainTitles.join("; ") : "No additional uncertainty was released.",
       what_happens_next: nextTests.length ? nextTests.join("; ") : "Continue clinician-directed follow-up and provenance hardening.",
     },
+    measured_evidence: measuredEvidence,
     clinical_state: {
       confirmed_measurements_and_bounded_findings: confirmed,
       candidate_or_unverified_signals: candidate,
