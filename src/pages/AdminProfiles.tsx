@@ -86,11 +86,16 @@ const AdminProfiles: React.FC = () => {
           <ArrowLeft className="h-3.5 w-3.5" /> Back to app
         </Link>
 
-        <div className="mb-6">
-          <h1 className="font-serif text-3xl mb-1">All profiles</h1>
-          <p className="text-sm text-muted-foreground font-sans">
-            Admin view of every account on the platform.
-          </p>
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-serif text-3xl mb-1">All profiles</h1>
+            <p className="text-sm text-muted-foreground font-sans">
+              Admin view of every account on the platform.
+            </p>
+          </div>
+          <Button asChild variant="outline" className="min-h-[44px] font-sans text-xs">
+            <Link to="/admin/accounts">Create account · install Twin</Link>
+          </Button>
         </div>
 
         <div className="flex items-center justify-between gap-4 mb-4">
