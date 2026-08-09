@@ -1,5 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { LogOut } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface OnboardingLayoutProps {
   stepNumber: number;
@@ -22,6 +24,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   children,
   footer,
 }) => {
+  const { signOut } = useAuth();
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar with brand and progress */}
@@ -47,6 +50,15 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
                 />
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="ml-1 flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-[11px] font-sans uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sign out</span>
+            </button>
           </div>
         </div>
       </header>
