@@ -11,11 +11,10 @@
 
 import { authenticateRequest } from "../_shared/auth.ts";
 import {
-  compileRuntimeTwinV18,
   RELEASE_COMPILER_VERSION,
-  type ReleaseDecision,
   type JsonObject,
 } from "../_shared/biotwin/releaseCompiler.ts";
+import { compileRuntimeTwinV18Governed } from "../_shared/biotwin/releaseCompilerGuard.ts";
 import {
   detectBiotwinReport,
   validateBiotwinStructure,
@@ -73,7 +72,11 @@ Deno.serve(async (req) => {
   }
 
   const actualSha = await sha256Hex(rawTwin);
-  const decisionSha = ((releaseDecision as JsonObject).subject as JsonObject | undefined)?.source_twin_sha256;
+  const releaseDecisionObject = releaseDecision as JsonObject;
+  const decisionSubject = typeof releaseDecisionObject.subject === "object" && releaseDecisionObject.subject !== null && !Array.isArray(releaseDecisionObject.subject)
+    ? releaseDecisionObject.subject as JsonObject
+    : null;
+  const decisionSha = decisionSubject?.source_twin_sha256;
   if (typeof decisionSha !== "string" || decisionSha !== actualSha) {
     return json({
       error: "source_sha_mismatch",
@@ -94,7 +97,7 @@ Deno.serve(async (req) => {
     return json({ error: "runtime_twin_invalid_json" }, 422);
   }
 
-  const compiled = compileRuntimeTwinV18(runtimeTwin, releaseDecision as ReleaseDecision);
+  const compiled = compileRuntimeTwinV18Governed(runtimeTwin, releaseDecision);
   if (!compiled.ok || !compiled.report) {
     return json({
       compiled: false,
