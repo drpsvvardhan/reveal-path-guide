@@ -11,10 +11,12 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-// 1.1.0: sentence-level, negation-aware prohibition matching; exact-phrase
-//        for short prohibitions; medication-status hold requires an actual
-//        medication object (Aug 9 live-smoke false-positive fix).
-export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
+// 1.2.0: merged matcher — sentence-level, negation/retirement-aware
+//        assertion detection (branch 1.1.0) combined with generic-token
+//        filtering, distinctive-token paraphrase criteria and scoped hold
+//        regexes (main 1.1.1). Both sides fixed the Aug 9 live-smoke
+//        false-positive class; this version carries the union.
+export const BIOTWIN_VALIDATOR_VERSION = "1.2.0";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -149,9 +151,9 @@ export function buildBiotwinPacket(
 
 const HOLD_TEXT: Record<string, string> = {
   medication_hold:
-    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping or changing one.",
+    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping, dosing or changing one. SCOPE: this restricts medication claims and medication decisions ONLY. It does not restrict explaining ApoB, tobacco exposure, an iron finding, a vascular hypothesis or any other biological finding.",
   pgx_hold:
-    "Pharmacogenomic results may not be used for this person. Never use a PGx result to justify a drug or dose statement.",
+    "Pharmacogenomic results may not be used to make a drug or dose decision for this person. SCOPE: this restricts drug/dose conclusions drawn from PGx ONLY. It does not restrict explaining any other released finding.",
   cgm_hold:
     "The continuous glucose signal is unconfirmed. Never call it hypoglycaemia or any diagnosis; describe it as unconfirmed sensor readings requiring verification.",
   clinician_review_hold:
@@ -159,7 +161,7 @@ const HOLD_TEXT: Record<string, string> = {
   patient_release_hold:
     "The report is not yet released for patient-facing conclusions. Report only what it explicitly permits and route conclusions to the clinician.",
   decision_grade_hold:
-    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result.",
+    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result. SCOPE: this restricts the decision-grade claim ONLY. Explanatory discussion of bounded released findings, including proteomic abundance signals described as bounded hypotheses, remains permitted.",
 };
 
 export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
@@ -185,6 +187,15 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
     "PRECEDENCE: this imported report overrides CIE-derived scores, cluster narratives, " +
       "generated manifests and any threshold heuristics. Where they disagree, the report wins. " +
       "Never restate a claim the report retired."
+  );
+  lines.push("");
+  lines.push(
+    "EXPLANATORY LICENCE: explain freely within the released Twin. Ranking or explaining " +
+      "what deserves attention is informational, not a treatment decision. Holds restrict the " +
+      "specific prohibited action or claim, not unrelated biological explanation. Never refuse " +
+      "a question merely because some other domain is on hold. If asked what matters most or " +
+      "what to pay attention to, answer with the released driver hierarchy in rank order, " +
+      "clearly separating what is measured from what is held open as hypothesis."
   );
   lines.push(`Report version ${packet.version ?? "?"}, generated ${packet.generated_date ?? "unknown"}.`);
   lines.push("");
@@ -252,15 +263,25 @@ function contentTokens(s: string): string[] {
 const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   medication_hold: [
     /\b(start|stop|begin|discontinue|increase|decrease|titrate|switch)\s+(your\s+)?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|drug|dose)/i,
-    // Asserting current medication status under a reconciliation hold.
-    // Requires an actual medication object after taking/on — a bare
-    // "you are on" also matches "you are on the right track", which is
-    // exactly the false positive that suppressed benign answers in the
-    // first live smoke (Aug 9).
-    /\byou (are|aren'?t|are not) (currently )?(taking|on)\s+(?:a |an |the |any |your |this |that )?(?:statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|medications|medicine|medicines|drug|drugs|dose|doses|supplement|supplements|pill|pills|prescription|prescriptions)\b/i,
+    // Scope: a *medication* claim, not any sentence containing "you are
+    // on" — "you are on the right track" is encouragement, not
+    // prescribing, and suppressed benign answers in the Aug 9 smoke.
+    // Requires an actual medication object (union of both fixes: named
+    // agents, generic terms, and drug-name suffix heuristics).
+    /\byou (are|aren'?t|are not) (currently )?(taking|on)\s+(?:a |an |the |any |your |this |that )?(?:statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|medications|medicine|medicines|drug|drugs|dose|doses|therapy|treatment|supplement|supplements|pill|pills|prescription|prescriptions|[a-z]+(?:statin|formin|pril|sartan|olol|prazole|tidine))\b/i,
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
+  // Narrow: block only POSITIVE decision-grade claims. Negated or bounded
+  // wording ("is not decision-grade", "bounded hypotheses, not decision-grade
+  // evidence") must remain permitted, and ordinary uses of "decision" or
+  // "grade" must never trip this.
+  decision_grade_hold: [
+    // Requires an affirmative copula immediately before the claim, so every
+    // negated form ("is not decision-grade", "are not decision grade",
+    // "bounded hypotheses, not decision-grade evidence") is permitted.
+    /\b(?:is|are|remains|represents)\s+(?:a\s+|an\s+|your\s+|the\s+|this\s+)?decision[-\s]?grade\b/i,
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -308,6 +329,20 @@ function sentenceAsserts(paddedSentence: string): boolean {
 }
 
 /**
+ * Words too generic to make a prohibited headline identifiable on their own.
+ * Bag-of-words overlap over vocabulary like "biological", "age", "single"
+ * used to fire on perfectly admissible answers — that was the defect that
+ * turned an attention question into a generic refusal.
+ */
+const GENERIC_TOKENS = new Set([
+  "biological","biology","age","single","level","levels","value","values","result","results",
+  "risk","high","higher","low","lower","elevated","data","report","patient","status","state",
+  "measure","measured","measurement","signal","signals","marker","markers","panel","score",
+  "range","normal","current","currently","time","years","year","study","test","tests",
+]);
+
+
+/**
  * Deterministic admission check of model output against the report's own
  * governance. Returns every violation found; the caller decides the template.
  */
@@ -325,22 +360,41 @@ export function validateBiotwinOutput(
 
   for (const prohibited of packet.prohibited_headlines) {
     const normProhibited = normalizeForMatch(prohibited);
-    if (normProhibited === "") continue;
+    if (!normProhibited) continue;
     const paddedProhibited = ` ${normProhibited} `;
     const tokens = contentTokens(prohibited);
+    const distinctive = tokens.filter((t) => !GENERIC_TOKENS.has(t));
 
+    // Combined matcher (validator 1.2.0): main's exact-phrase and
+    // distinctive-token paraphrase criteria, evaluated INSIDE the branch's
+    // sentence-level, negation-aware frame. A sentence carrying
+    // negation/retirement language is stating the claim's absence — the
+    // required scar wording — and never counts as assertion; tokens
+    // scattered across different sentences never combine.
     let asserted = false;
     for (const sentence of sentences) {
       if (!sentenceAsserts(sentence.padded)) continue;
+      // (a) exact scar wording within one asserting sentence — keeps
+      // "5.01 h", "chronic short sleep", "APOE-driven ApoB axis" from
+      // ever crossing.
       if (sentence.padded.includes(paddedProhibited)) {
         asserted = true;
         break;
       }
-      if (tokens.length >= 4) {
+      // (b) paraphrase: only headlines long enough to be identifiable,
+      // word-boundary scored, and only when EVERY distinctive
+      // (non-generic) token co-occurs in the same sentence.
+      if (tokens.length >= 4 && distinctive.length >= 2) {
         const hits = tokens.filter((t) =>
           sentence.padded.includes(` ${t} `)
         ).length;
-        if (hits / tokens.length >= 0.85) {
+        const distinctiveHits = distinctive.filter((t) =>
+          sentence.padded.includes(` ${t} `)
+        ).length;
+        if (
+          hits / tokens.length >= 0.9 &&
+          distinctiveHits === distinctive.length
+        ) {
           asserted = true;
           break;
         }
@@ -380,7 +434,7 @@ export function biotwinReplacementMessage(packet: BiotwinPacket): string {
     ? " Your report is also still awaiting review by your treating clinician."
     : "";
   return `**What this means:**
-Part of the answer I drafted stated something more strongly than your clinical evidence report permits, so I'm not showing it.${review} That check exists so that nothing you read here outruns your own evidence.
+Your clinical evidence report does not currently contain a patient-released statement that can answer this safely, so I'm not showing the answer I drafted.${review} That check exists so that nothing you read here outruns your own evidence.
 
 **What you can do:**
 - Ask me what your report confirms — that is always answerable.

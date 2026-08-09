@@ -20,12 +20,12 @@
 // ---------------------------------------------------------------------------
 // RUNTIME_VERSION identifies the patient-chat pipeline shape (gate order,
 // receipt semantics). Bump on any change to what the pipeline does.
-export const RUNTIME_VERSION = "r0.1.0";
+export const RUNTIME_VERSION = "r0.1.1";
 
 // PROMPT_TEMPLATE_VERSION identifies the system-prompt template in
 // buildPatientSystemPrompt. Bump on any wording/structure change so old
 // receipts remain attributable to the exact template that produced them.
-export const PROMPT_TEMPLATE_VERSION = "pt-2026-08-08.1";
+export const PROMPT_TEMPLATE_VERSION = "pt-2026-08-09.1";
 
 // ---------------------------------------------------------------------------
 // Canonical serialization (stable key order, recursive)
