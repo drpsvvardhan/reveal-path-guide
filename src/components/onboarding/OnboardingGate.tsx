@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
@@ -18,7 +19,36 @@ const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const { isViewingAs } = useViewAs();
   const { profile, isDemoMode, isLoading } = useManifest();
-  const { currentStep } = useOnboarding();
+  const { currentStep, completeOnboarding } = useOnboarding();
+
+  // An uploaded/imported BioTwin already contains the intake + lab work.
+  // Those patients must never be pushed back through the 75-question deck.
+  const [twinCheck, setTwinCheck] = useState<"checking" | "none" | "present">("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user || isDemoMode || isViewingAs) {
+      setTwinCheck("none");
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase
+        .from("biotwin_reports")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1);
+      if (cancelled) return;
+      setTwinCheck(!error && data && data.length > 0 ? "present" : "none");
+    })();
+    return () => { cancelled = true; };
+  }, [user, isDemoMode, isViewingAs]);
+
+  // Persist the skip so the gate resolves instantly next time.
+  useEffect(() => {
+    if (twinCheck === "present" && profile && profile.onboarding_step !== "done") {
+      completeOnboarding();
+    }
+  }, [twinCheck, profile, completeOnboarding]);
 
   if (authLoading || isLoading) {
     return (
@@ -31,6 +61,14 @@ const OnboardingGate: React.FC<OnboardingGateProps> = ({ children }) => {
   if (isDemoMode || !user || isViewingAs) return <>{children}</>;
   if (!profile) return <>{children}</>;
   if (profile.onboarding_step === "done") return <>{children}</>;
+  if (twinCheck === "present") return <>{children}</>;
+  if (twinCheck === "checking") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-sm text-muted-foreground italic font-serif">Loading your twin…</div>
+      </div>
+    );
+  }
 
   switch (currentStep) {
     case "welcome":
