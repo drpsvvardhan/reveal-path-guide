@@ -11,7 +11,7 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-export const BIOTWIN_VALIDATOR_VERSION = "1.0.0";
+export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
