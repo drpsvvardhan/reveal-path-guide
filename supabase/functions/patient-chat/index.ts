@@ -102,6 +102,10 @@ import {
   BIOTWIN_VALIDATOR_VERSION,
   type BiotwinPacket,
 } from "../_shared/biotwin/packet.ts";
+import {
+  buildBiotwinFallback,
+  isAttentionQuestion,
+} from "../_shared/biotwin/attentionFallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
