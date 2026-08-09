@@ -192,6 +192,11 @@ export function buildBiotwinFallback(
   if (!packet.has_report) {
     return { content: "", omittedBlocks: [], substantive: false };
   }
+  // The one true exception: an unreleased Twin may only produce a
+  // status-only response. Everything else must be substantive.
+  if (!packet.patient_release_permitted) {
+    return { content: "", omittedBlocks: [], substantive: false };
+  }
 
   const admissible = (text: string) =>
     validateBiotwinOutput(text, packet).valid &&
@@ -220,9 +225,48 @@ export function buildBiotwinFallback(
     content = trimmed.map((b) => b.text).join("\n\n");
     omitted.push("measurement");
     if (!admissible(content)) {
+      // Last resort: the safest individual released statement(s), never a
+      // content-free refusal.
+      const safest = safestStatements(packet, admissible);
+      if (safest) {
+        return {
+          content: safest,
+          omittedBlocks: [...omitted, ...evidenceBlocks.map((b) => b.id)],
+          substantive: true,
+        };
+      }
       return { content: "", omittedBlocks: omitted, substantive: false };
     }
   }
 
   return { content, omittedBlocks: omitted, substantive: true };
 }
+
+/**
+ * Degraded floor: the highest-ranked individually admissible released
+ * statements, rendered one per line with their own grounding markers.
+ */
+function safestStatements(
+  packet: BiotwinPacket,
+  admissible: (text: string) => boolean,
+): string | null {
+  const candidates = [
+    ...packet.drivers,
+    ...packet.confirmed,
+    ...packet.candidate,
+    ...packet.unknown,
+  ];
+  const lines: string[] = [];
+  for (const row of candidates) {
+    const text = `- ${line(row, "statement")}`;
+    if (admissible(text)) lines.push(text);
+    if (lines.length >= 3) break;
+  }
+  if (lines.length === 0) return null;
+  const content =
+    "**What your report establishes:**\n\n" + lines.join("\n");
+  return admissible(content) ? content : lines[0];
+}
+
+/** Named per the bugfix contract; same deterministic implementation. */
+export const buildUsefulBiotwinFallback = buildBiotwinFallback;
