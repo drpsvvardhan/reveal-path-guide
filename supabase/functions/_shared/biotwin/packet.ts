@@ -146,9 +146,9 @@ export function buildBiotwinPacket(
 
 const HOLD_TEXT: Record<string, string> = {
   medication_hold:
-    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping or changing one.",
+    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping, dosing or changing one. SCOPE: this restricts medication claims and medication decisions ONLY. It does not restrict explaining ApoB, tobacco exposure, an iron finding, a vascular hypothesis or any other biological finding.",
   pgx_hold:
-    "Pharmacogenomic results may not be used for this person. Never use a PGx result to justify a drug or dose statement.",
+    "Pharmacogenomic results may not be used to make a drug or dose decision for this person. SCOPE: this restricts drug/dose conclusions drawn from PGx ONLY. It does not restrict explaining any other released finding.",
   cgm_hold:
     "The continuous glucose signal is unconfirmed. Never call it hypoglycaemia or any diagnosis; describe it as unconfirmed sensor readings requiring verification.",
   clinician_review_hold:
@@ -156,7 +156,7 @@ const HOLD_TEXT: Record<string, string> = {
   patient_release_hold:
     "The report is not yet released for patient-facing conclusions. Report only what it explicitly permits and route conclusions to the clinician.",
   decision_grade_hold:
-    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result.",
+    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result. SCOPE: this restricts the decision-grade claim ONLY. Explanatory discussion of bounded released findings, including proteomic abundance signals described as bounded hypotheses, remains permitted.",
 };
 
 export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
@@ -182,6 +182,15 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
     "PRECEDENCE: this imported report overrides CIE-derived scores, cluster narratives, " +
       "generated manifests and any threshold heuristics. Where they disagree, the report wins. " +
       "Never restate a claim the report retired."
+  );
+  lines.push("");
+  lines.push(
+    "EXPLANATORY LICENCE: explain freely within the released Twin. Ranking or explaining " +
+      "what deserves attention is informational, not a treatment decision. Holds restrict the " +
+      "specific prohibited action or claim, not unrelated biological explanation. Never refuse " +
+      "a question merely because some other domain is on hold. If asked what matters most or " +
+      "what to pay attention to, answer with the released driver hierarchy in rank order, " +
+      "clearly separating what is measured from what is held open as hypothesis."
   );
   lines.push(`Report version ${packet.version ?? "?"}, generated ${packet.generated_date ?? "unknown"}.`);
   lines.push("");
