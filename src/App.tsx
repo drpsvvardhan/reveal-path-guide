@@ -12,6 +12,7 @@ import SharedQueue from "./pages/SharedQueue.tsx";
 import ClinicalShare from "./pages/ClinicalShare.tsx";
 import AdminReviewQueue from "./pages/AdminReviewQueue.tsx";
 import AdminProfiles from "./pages/AdminProfiles.tsx";
+import AdminAccounts from "./pages/AdminAccounts.tsx";
 import Account from "./pages/Account.tsx";
 import ManifestPreview from "./pages/ManifestPreview.tsx";
 import { Loader2 } from "lucide-react";
@@ -80,6 +81,7 @@ const App = () => (
               <Route path="/clinical/:token" element={<ClinicalShare />} />
               <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
               <Route path="/admin/profiles" element={<AdminRoute><AdminProfiles /></AdminRoute>} />
+              <Route path="/admin/accounts" element={<AdminRoute><AdminAccounts /></AdminRoute>} />
               <Route path="/manifest-preview" element={<ManifestPreview />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
