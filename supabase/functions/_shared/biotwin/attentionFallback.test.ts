@@ -556,3 +556,69 @@ Deno.test("version stamps are current", async () => {
   assertEquals(RUNTIME_VERSION, "r0.1.1");
   assertEquals(PROMPT_TEMPLATE_VERSION, "pt-2026-08-09.1");
 });
+
+// ---------------------------------------------------------------------------
+// Classification regression (found by read-only Peter production replay):
+// "Measured atherogenic particle burden (...) of unquantified etiology" is a
+// MEASUREMENT. Only the etiology is unquantified.
+// ---------------------------------------------------------------------------
+
+const PETER_APOB_TITLE =
+  "Measured atherogenic particle burden (ApoB 124 mg/dL on 2026-02-20 and 118 mg/dL on 2026-04-02 statin OFF; LDL-P 1574 nmol/L) of unquantified etiology";
+const PETER_TOBACCO_TITLE =
+  "Active tobacco and vape exposure (documented cumulative estimate: approximately 10-21.3 pack-years; 21.3 represents the current upper-bound reconstruction; cigarette-to-vape 2024)";
+const PETER_VASCULAR_TITLE =
+  "Vascular-injury-associated protein hypothesis (abundance signals of unmeasured activity)";
+const PETER_IRON_TITLE =
+  "One abnormal iron study of unestablished persistence and etiology (serum iron 266 mcg/dL, saturation 78%, ferritin 61 within range)";
+
+function peterDriverPacket() {
+  return buildBiotwinPacket(report, [
+    row({ source_id: "drv-apob", statement_kind: "driver", truth_status: "confirmed", title: PETER_APOB_TITLE, ordinal: 1 }),
+    row({ source_id: "drv-tobacco", statement_kind: "driver", truth_status: "confirmed", title: PETER_TOBACCO_TITLE, ordinal: 2 }),
+    row({ source_id: "drv-vascular", statement_kind: "driver", truth_status: "confirmed", title: PETER_VASCULAR_TITLE, ordinal: 3 }),
+    row({ source_id: "drv-iron", statement_kind: "driver", truth_status: "confirmed", title: PETER_IRON_TITLE, ordinal: 4 }),
+  ]);
+}
+
+function sectionOf(text: string, heading: string): string {
+  const start = text.indexOf(heading);
+  if (start < 0) return "";
+  const rest = text.slice(start + heading.length);
+  const next = rest.search(/\n\*\*/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+Deno.test("Peter ApoB driver renders as measured, ranked first", () => {
+  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+  assert(res.substantive);
+  const measured = sectionOf(res.content, "**Measured and established, in rank order:**");
+  assertStringIncludes(measured, "Measured atherogenic particle burden");
+  assert(/^\s*1\.\s+Measured atherogenic particle burden/m.test(measured));
+});
+
+Deno.test("Peter tobacco driver renders as measured", () => {
+  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+  const measured = sectionOf(res.content, "**Measured and established, in rank order:**");
+  assertStringIncludes(measured, "Active tobacco and vape exposure");
+});
+
+Deno.test("Peter vascular hypothesis and unestablished iron stay hypothesis", () => {
+  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+  const hyp = sectionOf(res.content, "**Held as hypothesis, not established:**");
+  assertStringIncludes(hyp, "Vascular-injury-associated protein hypothesis");
+  assertStringIncludes(hyp, "One abnormal iron study of unestablished persistence");
+  const measured = sectionOf(res.content, "**Measured and established, in rank order:**");
+  assert(!measured.includes("Vascular-injury-associated protein hypothesis"));
+  assert(!measured.includes("One abnormal iron study"));
+});
+
+Deno.test("non-confirmed truth_status is always hypothesis", () => {
+  const p = buildBiotwinPacket(report, [
+    row({ source_id: "drv-c", statement_kind: "driver", truth_status: "candidate", title: "Measured something firm", ordinal: 1 }),
+    row({ source_id: "drv-m", statement_kind: "driver", truth_status: "confirmed", title: PETER_TOBACCO_TITLE, ordinal: 2 }),
+  ]);
+  const res = buildUsefulBiotwinFallback(p, THE_QUESTION);
+  const hyp = sectionOf(res.content, "**Held as hypothesis, not established:**");
+  assertStringIncludes(hyp, "Measured something firm");
+});
