@@ -185,6 +185,31 @@ export function compileRuntimeTwinV18(
 
   const titleIndex = revealTitleIndex(reveal);
   const released = new Set(decision.released_claim_ids);
+
+  // ---- Unreleased-claim inventory --------------------------------------
+  // "Nothing leaves the factory merely because it exists" is doctrine —
+  // but nothing may be left behind SILENTLY. Discovered live (Aug 9):
+  // Peter's glycemic-control claim was simply never selected by the
+  // release decision, so the patient runtime truthfully reported "no CGM
+  // data" against a 40k-line Twin that has it. The decision author must
+  // see the full cost of their selection at compile time.
+  if (claims) {
+    const unreleased = Object.keys(claims).filter((cid) => !released.has(cid));
+    for (const cid of unreleased) {
+      warn(
+        "unreleased_claim",
+        `Canonical claim ${cid} exists in the Twin but was NOT selected by the release decision. It will be entirely absent from the patient-facing release — the runtime will report this domain as unmeasured.`,
+        `observations.canonicalClaims.${cid}`,
+      );
+    }
+    if (unreleased.length > 0) {
+      diagnostics.push({
+        level: "info",
+        code: "unreleased_claim_summary",
+        message: `${unreleased.length} of ${Object.keys(claims).length} canonical claims are not released: ${unreleased.join(", ")}.`,
+      });
+    }
+  }
   const confirmed: JsonObject[] = [];
   const candidate: JsonObject[] = [];
   const unknown: JsonObject[] = [];
