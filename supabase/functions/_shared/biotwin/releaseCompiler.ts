@@ -155,6 +155,16 @@ function hasProhibitedLeak(text: string, prohibitions: string[]): string | null 
 // decision explicitly quarantines a root. Interpretation still earns
 // authority through the claim machinery; evidence is visible by default.
 export const EVIDENCE_ROOTS = [
+  // Verified against Peter VZ0000119 RUNTIME_TWIN_FINAL v18 (frozen bytes
+  // e4b9ef8e...): the evidence objects live nested under observations.
+  "observations.sensorState.channels.cgm",
+  "observations.sensorState.channels.sleep",
+  "observations.lifestyleView.foodLog",
+  "observations.lifestyleView.cgmMealCoupling",
+  "observations.lifestyleView.heartRate",
+  "observations.lifestyleView.sleep",
+  "observations.questionnaire.objective_sensor_crosswalk",
+  // Legacy/top-level names kept for other twin shapes; harmless if absent.
   "sensor_cgm",
   "sensor_sleep",
   "sensor_hrv",
@@ -166,6 +176,16 @@ export const EVIDENCE_ROOTS = [
   "vitals",
   "activity",
 ] as const;
+
+/** Dot-path resolver — evidence roots may be nested (they are, in v18). */
+function resolveEvidencePath(obj: JsonObject, path: string): unknown {
+  let cur: unknown = obj;
+  for (const seg of path.split(".")) {
+    if (!isObject(cur)) return undefined;
+    cur = (cur as JsonObject)[seg];
+  }
+  return cur;
+}
 
 const EVIDENCE_MAX_LINES_PER_ROOT = 40;
 const EVIDENCE_MAX_INLINE_ARRAY = 8;
@@ -211,7 +231,7 @@ export function harvestMeasuredEvidence(
 ): JsonObject[] {
   const out: JsonObject[] = [];
   for (const root of EVIDENCE_ROOTS) {
-    const value = twin[root];
+    const value = resolveEvidencePath(twin, root);
     if (!isObject(value)) continue;
     if (quarantined.has(root)) {
       warn(
@@ -224,10 +244,11 @@ export function harvestMeasuredEvidence(
     const lines: string[] = [];
     flattenEvidenceObject(value as JsonObject, "", lines, 0);
     if (lines.length === 0) continue;
+    const shortPath = root.replace(/^observations\./, "");
     out.push({
-      evidence_id: `EVID-${root.toUpperCase().replace(/[^A-Z0-9]/g, "-")}`,
+      evidence_id: `EVID-${shortPath.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}`,
       source_root: root,
-      title: `Measured evidence — ${root.replace(/_/g, " ")}`,
+      title: `Measured evidence — ${shortPath.split(".").pop()!.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").toLowerCase()}`,
       summary: lines.join("\n"),
     });
   }
@@ -285,7 +306,9 @@ export function compileRuntimeTwinV18(
   // data" against a 40k-line Twin that has it. The decision author must
   // see the full cost of their selection at compile time.
   if (claims) {
-    const unreleased = Object.keys(claims).filter((cid) => !released.has(cid));
+    const unreleased = Object.keys(claims).filter(
+      (cid) => !released.has(cid) && !cid.startsWith("_"),
+    );
     for (const cid of unreleased) {
       warn(
         "unreleased_claim",
@@ -432,7 +455,7 @@ export function compileRuntimeTwinV18(
         )
       : [],
   );
-  const measuredEvidence = harvestMeasuredEvidence(twin as JsonObject, quarantinedEvidence, warn);
+  const measuredEvidence = harvestMeasuredEvidence(runtimeTwin, quarantinedEvidence, warn);
   if (measuredEvidence.length > 0) {
     diagnostics.push({
       level: "info",
