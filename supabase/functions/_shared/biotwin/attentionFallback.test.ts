@@ -14,8 +14,16 @@ import {
 } from "./packet.ts";
 import {
   buildBiotwinFallback,
+  buildUsefulBiotwinFallback,
   isAttentionQuestion,
 } from "./attentionFallback.ts";
+import {
+  dedupeMarkers,
+  parseGroundingMarkers,
+  stripGroundingMarkers,
+  validateGroundingMarkers,
+  type AllowedGroundingContext,
+} from "../groundingMarkers.ts";
 import {
   validateInterpreterRole,
   replacementTemplateForViolation,
@@ -357,4 +365,87 @@ Deno.test("degrades by omitting a block, never by erasing the answer", () => {
   assert(res.omittedBlocks.includes("measurement"), JSON.stringify(res.omittedBlocks));
   assertStringIncludes(res.content, "ApoB");
   assert(validateBiotwinOutput(res.content, poisoned).valid);
+});
+
+// ---------------------------------------------------------------------------
+// Doctrine F — hold scope is narrow
+// ---------------------------------------------------------------------------
+
+Deno.test("pgx_hold blocks only patient-specific drug/dose use of PGx", () => {
+  const explanatory =
+    "Pharmacogenomic testing describes how enzymes process certain compounds; " +
+    "your report does not use it to decide anything about a drug.";
+  assert(validateBiotwinOutput(explanatory, packet).valid);
+  assertEquals(
+    validateBiotwinOutput(
+      "Your PGx result means you should get a lower dose.",
+      packet,
+    ).valid,
+    false,
+  );
+});
+
+Deno.test("decision_grade_hold does not block explanatory discussion of bounded findings", () => {
+  const explanatory =
+    "The protein abundance signals are discussed as bounded hypotheses, not as " +
+    "a decision-grade multiomic result.";
+  assert(validateBiotwinOutput(explanatory, packet).valid);
+});
+
+// ---------------------------------------------------------------------------
+// Doctrine I — markers parse, validate and dedupe through the real APIs
+// ---------------------------------------------------------------------------
+
+Deno.test("fallback markers validate and dedupe via groundingMarkers APIs", () => {
+  const res = buildUsefulBiotwinFallback(packet, THE_QUESTION, extraValidate);
+  assert(res.substantive);
+
+  const parsed = parseGroundingMarkers(res.content);
+  assert(parsed.length >= 3);
+
+  const allowed: AllowedGroundingContext = {
+    witness: new Set<string>(),
+    cluster: new Set(["none"]),
+    statement: new Set(statements.map((s) => s.source_id)),
+    contradiction: new Set(packet.contradictions.map((s) => s.source_id)),
+  };
+  const validation = validateGroundingMarkers(parsed, allowed);
+  assertEquals(validation.valid, true, JSON.stringify(validation.fabricated));
+
+  const deduped = dedupeMarkers(parsed);
+  assertEquals(new Set(deduped.map((m) => `${m.type}:${m.id}`)).size, deduped.length);
+  assert(deduped.some((m) => m.type === "statement"));
+  assert(deduped.some((m) => m.type === "contradiction"));
+
+  // Markers never reach the patient.
+  const delivered = stripGroundingMarkers(res.content);
+  assertEquals(parseGroundingMarkers(delivered).length, 0);
+  assertStringIncludes(delivered, "ApoB");
+});
+
+// ---------------------------------------------------------------------------
+// Doctrine C — unreleased Twin is the only status-only exception
+// ---------------------------------------------------------------------------
+
+Deno.test("patient_release_hold: unreleased Twin yields status-only, not invented content", () => {
+  const unreleased = buildBiotwinPacket(
+    { ...report, patient_release_permitted: false, holds: ["patient_release_hold"] },
+    statements,
+  );
+  const res = buildUsefulBiotwinFallback(unreleased, THE_QUESTION, extraValidate);
+  assertEquals(res.substantive, false);
+});
+
+Deno.test("safest-statement floor: answer survives even when every composed block fails", () => {
+  // Poison the intro/outro-independent blocks by making the whole assembly
+  // fail: a driver whose title alone is fine, plus an extraValidate that
+  // rejects any text longer than a single line.
+  const res = buildUsefulBiotwinFallback(
+    packet,
+    THE_QUESTION,
+    (t) => t.split("\n").filter((l) => l.trim()).length <= 3,
+  );
+  assert(res.substantive, "must not erase the answer");
+  assert(res.content.length > 0);
+  assert(!res.content.includes("I can't answer that the way it was phrased"));
 });
