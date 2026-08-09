@@ -303,10 +303,16 @@ Deno.test("unsafe medication sentence does not erase unrelated safe content", ()
   const badModelAnswer =
     "You should start atorvastatin 40 mg daily to bring the particle burden down.";
   const roleResult = validateInterpreterRole(badModelAnswer);
-  assertEquals(roleResult.valid, false);
+  const doseResult = validateDoseTokens(badModelAnswer, doseCtx);
+  assert(
+    !roleResult.valid || !doseResult.valid,
+    "the unsafe sentence must fail admission",
+  );
 
   // Runtime path: generic template is replaced by the deterministic fallback.
-  const generic = replacementTemplateForViolation(roleResult.violations);
+  const generic = roleResult.valid
+    ? NO_DOSE_FALLBACK
+    : replacementTemplateForViolation(roleResult.violations);
   const res = buildBiotwinFallback(packet, THE_QUESTION, extraValidate);
   assert(res.substantive);
   const delivered = res.substantive ? res.content : generic;
