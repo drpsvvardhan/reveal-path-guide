@@ -371,11 +371,10 @@ export function biotwinReplacementMessage(packet: BiotwinPacket): string {
     ? " Your imported clinical evidence report is still awaiting treating-clinician review."
     : "";
   return (
-    "I can't answer that the way it was phrased, because it would go past what your imported " +
-    "clinical evidence report actually establishes." +
+    "Your imported clinical evidence report does not currently contain a patient-released " +
+    "statement that can answer this safely." +
     review +
-    " Here is what I can do: I can tell you what the report confirms, what it holds open as " +
-    "unconfirmed, and what measurement would settle the question. Bring this to your clinician " +
-    "so it can be resolved with them."
+    " I can still explain any released findings already present, what the report holds open as " +
+    "unconfirmed, and what measurement would settle the question."
   );
 }
