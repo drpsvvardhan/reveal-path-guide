@@ -11,7 +11,7 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
+export const BIOTWIN_VALIDATOR_VERSION = "1.1.1";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -265,6 +265,14 @@ const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
+  // Narrow: block only POSITIVE decision-grade claims. Negated or bounded
+  // wording ("is not decision-grade", "bounded hypotheses, not decision-grade
+  // evidence") must remain permitted, and ordinary uses of "decision" or
+  // "grade" must never trip this.
+  decision_grade_hold: [
+    /\b(?:is|are|as|remains?|represents?)\s+(?:a\s+|an\s+|your\s+|the\s+|this\s+)?(?:decision[-\s]?grade)\b(?!\s*(?:evidence|result|results?)?\s*(?:only\s+)?(?:when|if))/i,
+    /\b(?:decision[-\s]?grade)\s+(?:multiomic|multi[-\s]?omic|multiomics|proteomic|omics)\b/i,
+  ],
 };
 
 /**
