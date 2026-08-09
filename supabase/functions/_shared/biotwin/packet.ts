@@ -11,7 +11,10 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-export const BIOTWIN_VALIDATOR_VERSION = "1.0.0";
+// 1.1.0: sentence-level, negation-aware prohibition matching; exact-phrase
+//        for short prohibitions; medication-status hold requires an actual
+//        medication object (Aug 9 live-smoke false-positive fix).
+export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -249,11 +252,60 @@ function contentTokens(s: string): string[] {
 const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   medication_hold: [
     /\b(start|stop|begin|discontinue|increase|decrease|titrate|switch)\s+(your\s+)?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|drug|dose)/i,
-    /\byou (are|aren'?t|are not) (currently )?(taking|on)\b/i,
+    // Asserting current medication status under a reconciliation hold.
+    // Requires an actual medication object after taking/on — a bare
+    // "you are on" also matches "you are on the right track", which is
+    // exactly the false positive that suppressed benign answers in the
+    // first live smoke (Aug 9).
+    /\byou (are|aren'?t|are not) (currently )?(taking|on)\s+(?:a |an |the |any |your |this |that )?(?:statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|medications|medicine|medicines|drug|drugs|dose|doses|supplement|supplements|pill|pills|prescription|prescriptions)\b/i,
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
 };
+
+// ---------------------------------------------------------------------------
+// Prohibition matching — sentence-level and negation-aware.
+//
+// The prohibited list contains claims that must never be ASSERTED. The
+// correct patient-facing behavior — "your record does not show chronic
+// short sleep; that earlier reading was retracted" — necessarily contains
+// the prohibited claim's words. A matcher that counts scattered tokens
+// across the whole output and ignores negation flags precisely the honest
+// sentences the constitution requires (scar discipline, rule 8), and the
+// richer the report (more scars → more prohibitions), the more certainly
+// every substantive answer trips it. That is the inversion observed in the
+// first live smoke: the better the twin, the less it could say.
+//
+// Rules:
+//   - Sentences are evaluated individually; tokens scattered across
+//     different sentences never combine into a violation.
+//   - A sentence carrying a negation/retirement cue is treating the claim
+//     as absent, retired, or uncertain — not asserting it.
+//   - Short prohibitions (< 4 content tokens) match only as an exact
+//     normalized phrase; longer ones also match at >= 85% token overlap
+//     within a single sentence (paraphrase protection).
+// ---------------------------------------------------------------------------
+
+const NON_ASSERTION_CUES = [
+  " not ", " no ", " never ", " cannot ", " can t ", " won t ",
+  " isn t ", " aren t ", " wasn t ", " weren t ",
+  " doesn t ", " don t ", " didn t ",
+  " no longer ", " retracted ", " retired ", " corrected ",
+  " invalidated ", " superseded ", " withdrawn ", " ruled out ",
+  " unconfirmed ", " unverified ", " unresolved ", " uncertain ",
+  " held open ", " rather than ", " instead of ",
+];
+
+function splitOutputSentences(output: string): string[] {
+  return output
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function sentenceAsserts(paddedSentence: string): boolean {
+  return !NON_ASSERTION_CUES.some((cue) => paddedSentence.includes(cue));
+}
 
 /**
  * Deterministic admission check of model output against the report's own
@@ -266,14 +318,36 @@ export function validateBiotwinOutput(
   if (!packet.has_report) return { valid: true, violations: [] };
 
   const violations: BiotwinOutputViolation[] = [];
-  const normalizedOutput = normalizeForMatch(output);
+  const sentences = splitOutputSentences(output).map((s) => ({
+    raw: s,
+    padded: ` ${normalizeForMatch(s)} `,
+  }));
 
   for (const prohibited of packet.prohibited_headlines) {
+    const normProhibited = normalizeForMatch(prohibited);
+    if (normProhibited === "") continue;
+    const paddedProhibited = ` ${normProhibited} `;
     const tokens = contentTokens(prohibited);
-    if (tokens.length === 0) continue;
-    const hits = tokens.filter((t) => normalizedOutput.includes(t)).length;
-    const ratio = hits / tokens.length;
-    if (ratio >= 0.85) {
+
+    let asserted = false;
+    for (const sentence of sentences) {
+      if (!sentenceAsserts(sentence.padded)) continue;
+      if (sentence.padded.includes(paddedProhibited)) {
+        asserted = true;
+        break;
+      }
+      if (tokens.length >= 4) {
+        const hits = tokens.filter((t) =>
+          sentence.padded.includes(` ${t} `)
+        ).length;
+        if (hits / tokens.length >= 0.85) {
+          asserted = true;
+          break;
+        }
+      }
+    }
+
+    if (asserted) {
       violations.push({
         kind: "prohibited_headline",
         detail: "Output asserts a statement the imported report prohibits.",
@@ -298,16 +372,18 @@ export function validateBiotwinOutput(
   return { valid: violations.length === 0, violations };
 }
 
+// Quote-free (the doctor-question extractor must not fire on a fallback).
+// Reached only after a corrective regeneration has also failed — it is a
+// last resort, not the ordinary response to a hard question.
 export function biotwinReplacementMessage(packet: BiotwinPacket): string {
   const review = packet.clinician_review_required
-    ? " Your imported clinical evidence report is still awaiting treating-clinician review."
+    ? " Your report is also still awaiting review by your treating clinician."
     : "";
-  return (
-    "I can't answer that the way it was phrased, because it would go past what your imported " +
-    "clinical evidence report actually establishes." +
-    review +
-    " Here is what I can do: I can tell you what the report confirms, what it holds open as " +
-    "unconfirmed, and what measurement would settle the question. Bring this to your clinician " +
-    "so it can be resolved with them."
-  );
+  return `**What this means:**
+Part of the answer I drafted stated something more strongly than your clinical evidence report permits, so I'm not showing it.${review} That check exists so that nothing you read here outruns your own evidence.
+
+**What you can do:**
+- Ask me what your report confirms — that is always answerable.
+- Ask what it holds open as unconfirmed, and which measurement would settle each open question.
+- For any decision this touches, your clinician has the final say; I can help you prepare exactly what to raise with them.`;
 }
