@@ -100,7 +100,7 @@ export function buildBiotwinFallbackBlocks(
       "**What this means:**\n\n" +
       (attention
         ? "Here is what your imported clinical evidence report ranks highest right now, in its own order, separating what is measured from what is still an open question."
-        : "I can't phrase an answer to that directly, so here is what your imported clinical evidence report actually establishes, in its own words."),
+        : "Here is the part of your released Twin I can state safely and directly from the evidence currently available."),
   });
 
   const measured = packet.drivers.filter((d) => classify(d) === "measured");
@@ -165,7 +165,7 @@ export function buildBiotwinFallbackBlocks(
   blocks.push({
     id: "outro",
     text:
-      "**What you can do:**\n\nBring the ranked items above to your clinician — the decisions about anything you take or stop belong with them, and this report does not authorise me to make them. Understanding the ranking is yours to keep.",
+      "**What you can do:**\n\nThese rankings are informational. You can keep asking me to explain any of them in more detail. If you want to start, stop, or change a medication or treatment, that decision belongs with your clinician; understanding what your Twin is showing you does not.",
   });
 
   return blocks;
