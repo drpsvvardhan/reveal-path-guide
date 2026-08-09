@@ -270,8 +270,10 @@ const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   // evidence") must remain permitted, and ordinary uses of "decision" or
   // "grade" must never trip this.
   decision_grade_hold: [
-    /\b(?:is|are|as|remains?|represents?)\s+(?:a\s+|an\s+|your\s+|the\s+|this\s+)?(?:decision[-\s]?grade)\b(?!\s*(?:evidence|result|results?)?\s*(?:only\s+)?(?:when|if))/i,
-    /\b(?:decision[-\s]?grade)\s+(?:multiomic|multi[-\s]?omic|multiomics|proteomic|omics)\b/i,
+    // Requires an affirmative copula immediately before the claim, so every
+    // negated form ("is not decision-grade", "are not decision grade",
+    // "bounded hypotheses, not decision-grade evidence") is permitted.
+    /\b(?:is|are|remains|represents)\s+(?:a\s+|an\s+|your\s+|the\s+|this\s+)?decision[-\s]?grade\b/i,
   ],
 };
 
