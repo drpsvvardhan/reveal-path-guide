@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vizzhy.ai/schemas/founding_cohort_release_decision_v1.schema.json",
+  "title": "Vizzhy Founding Cohort Release Decision v1",
+  "type": "object",
+  "required": ["schema", "subject", "release", "released_claim_ids", "critical_anchor_review", "explicit_prohibitions", "review"],
+  "properties": {
+    "schema": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "Vizzhy Founding Cohort Release Decision" },
+        "version": { "const": "1.0" }
+      },
+      "additionalProperties": false
+    },
+    "subject": {
+      "type": "object",
+      "required": ["twin_id", "source_twin_version", "source_twin_sha256"],
+      "properties": {
+        "twin_id": { "type": "string", "minLength": 1 },
+        "source_twin_version": { "type": "string", "pattern": "^v18\\." },
+        "source_twin_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": ["class", "status", "patient_facing", "decision_grade_multiomic_use", "autonomous_medication_action", "pgx_dose_action"],
+      "properties": {
+        "class": { "const": "FOUNDING_COHORT" },
+        "status": { "const": "RELEASED_WITH_BOUNDS" },
+        "patient_facing": { "const": true },
+        "decision_grade_multiomic_use": { "const": false },
+        "autonomous_medication_action": { "const": false },
+        "pgx_dose_action": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "released_claim_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^CLM-" }
+    },
+    "critical_anchor_review": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "status", "basis"],
+        "properties": {
+          "claim_id": { "type": "string", "pattern": "^CLM-" },
+          "status": { "enum": ["ACCEPT_FOR_RELEASE", "ACCEPT_WITH_PROVENANCE_DEBT", "REJECT"] },
+          "basis": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "measurement_plan_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "contradiction_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+    "explicit_prohibitions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "provenance_debt": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "disposition"],
+        "properties": {
+          "type": { "type": "string" },
+          "disposition": { "type": "string" },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["reviewer_role", "released_at"],
+      "properties": {
+        "reviewer_role": { "type": "string", "minLength": 1 },
+        "released_at": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
