@@ -57,9 +57,22 @@ export function isAttentionQuestion(userMessage: string): boolean {
 // 2. Deterministic packet-grounded fallback
 // ---------------------------------------------------------------------------
 
-/** Titles the report itself marks as not-yet-established. */
-const HYPOTHESIS_MARKERS =
-  /hypothes|unestablished|unquantified|not established|unconfirmed|candidate|possible|suspected|unmeasured/i;
+// Classification vocabulary. A title is only demoted out of the measured
+// block when the report says the FINDING is not established — never merely
+// because some downstream attribute (etiology, cause) is unquantified.
+// "Measured atherogenic particle burden (...) of unquantified etiology" is a
+// measurement: the burden is measured, only its cause is open.
+
+/** The report explicitly frames the statement itself as not-yet-established. */
+const EXPLICIT_HYPOTHESIS_MARKERS =
+  /\b(hypothes\w*|candidate|possible|possibly|suspected|unconfirmed|presumed|putative)\b/i;
+
+/** The persistence or the activity itself is unmeasured — still hypothesis. */
+const UNESTABLISHED_MARKERS =
+  /\bunestablished\b|\bpersistence\s+unestablished\b|\bnot\s+established\b|\bunmeasured\s+\w+|\bunmeasured\b/i;
+
+/** Title asserts a measurement up front. */
+const MEASURED_PREFIX = /^\s*(measured|confirmed|documented|observed)\b/i;
 
 const STRENGTH_MARKERS =
   /within range|within normal|normal|preserved|protective|no evidence of|reassuring|stable/i;
@@ -72,7 +85,17 @@ export interface FallbackBlock {
 
 function classify(row: BiotwinStatementRow): "measured" | "hypothesis" {
   if (row.truth_status !== "confirmed") return "hypothesis";
-  return HYPOTHESIS_MARKERS.test(row.title) ? "hypothesis" : "measured";
+  const title = row.title ?? "";
+  // Explicit hypothesis/candidate framing always wins, even over a
+  // "Measured ..." opening.
+  if (EXPLICIT_HYPOTHESIS_MARKERS.test(title)) return "hypothesis";
+  // A confirmed measurement stays measured even when the title later notes
+  // that the etiology or cause is unquantified/unknown.
+  if (MEASURED_PREFIX.test(title)) return "measured";
+  // Otherwise, "unestablished persistence" / "unmeasured activity" style
+  // wording keeps the statement open.
+  if (UNESTABLISHED_MARKERS.test(title)) return "hypothesis";
+  return "measured";
 }
 
 function marker(row: BiotwinStatementRow, kind: "statement" | "contradiction") {
