@@ -1050,7 +1050,7 @@ async function logValidation(
   },
 ) {
   try {
-    await supabase.from("patient_chat_validation_log").insert({
+    const { error } = await supabase.from("patient_chat_validation_log").insert({
       user_id: userId,
       status,
       ...(payload.receipt ?? {}),
@@ -1068,8 +1068,14 @@ async function logValidation(
       regeneration_attempted: payload.regeneration_attempted ?? false,
       regeneration_succeeded: payload.regeneration_succeeded ?? null,
     });
+    if (error) {
+      console.error("[patient-chat] RECEIPT_WRITE_FAILED:", error);
+      return `insert_error: ${error.message ?? String(error)}`;
+    }
+    return null;
   } catch (e) {
-    console.error("[patient-chat] validation log insert failed:", e);
+    console.error("[patient-chat] RECEIPT_WRITE_FAILED (threw):", e);
+    return `exception: ${(e as Error).message ?? String(e)}`;
   }
 }
 
@@ -1673,7 +1679,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         doctor_question_generated: false,
       };
 
-      await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
+      const budgetReceiptWriteError = await logValidation(supabaseAdmin, userId, "replaced_with_fallback", {
         replaced_with: CONTEXT_BUDGET_FALLBACK_MESSAGE,
         replacement_template_used: "context_budget_exceeded",
         last_user_message: lastUserMessage,
@@ -1690,6 +1696,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             status: "replaced_with_fallback",
             routing_mode: null,
             replacement_template_used: "context_budget_exceeded",
+            receipt_write: budgetReceiptWriteError ?? "ok",
           },
           receipt: {
             answer_id: answerId,
@@ -2164,6 +2171,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     // ----- Step 5: audit log + Answer Receipt -----
+    // The write result is surfaced in the response payload: an unreceipted
+    // answer must never look identical to a receipted one. (Diagnosed
+    // Aug 9: an entire smoke session produced zero log rows with no
+    // visible symptom, because the insert failure was swallowed.)
     const receipt: AnswerReceiptFields = {
       answer_id: answerId,
       conversation_id: conversationId ?? null,
@@ -2218,7 +2229,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       doctor_question_generated: questions.length > 0,
     };
 
-    await logValidation(supabaseAdmin, userId, status, {
+    const receiptWriteError = await logValidation(supabaseAdmin, userId, status, {
       receipt,
       role_violation: roleResult.valid
         ? null
@@ -2294,6 +2305,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status,
           routing_mode: dosePolicyContext.routingMode,
           replacement_template_used: replacementTemplateUsed,
+          receipt_write: receiptWriteError ?? "ok",
         },
         // Patient-visible receipt summary. The full receipt lives on the
         // validation-log row keyed by answer_id; the client uses this for
