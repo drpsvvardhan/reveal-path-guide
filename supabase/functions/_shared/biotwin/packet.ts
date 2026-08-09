@@ -258,11 +258,34 @@ function contentTokens(s: string): string[] {
 const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   medication_hold: [
     /\b(start|stop|begin|discontinue|increase|decrease|titrate|switch)\s+(your\s+)?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|drug|dose)/i,
-    /\byou (are|aren'?t|are not) (currently )?(taking|on)\b/i,
+    // Scope: a *medication* claim, not any sentence containing "you are on".
+    // "you are on track" / "you are on the higher end" are biology, not
+    // prescribing, and must not trip this hold.
+    /\byou (are|aren'?t|are not) (currently )?(taking|on) (a |an |the |your )?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|medications|drug|drugs|dose|therapy|treatment|[a-z]+(?:statin|formin|pril|sartan|olol|prazole|tidine))\b/i,
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
 };
+
+/**
+ * Words too generic to make a prohibited headline identifiable on their own.
+ * Bag-of-words overlap over vocabulary like "biological", "age", "single"
+ * used to fire on perfectly admissible answers — that was the defect that
+ * turned an attention question into a generic refusal.
+ */
+const GENERIC_TOKENS = new Set([
+  "biological","biology","age","single","level","levels","value","values","result","results",
+  "risk","high","higher","low","lower","elevated","data","report","patient","status","state",
+  "measure","measured","measurement","signal","signals","marker","markers","panel","score",
+  "range","normal","current","currently","time","years","year","study","test","tests",
+]);
+
+/** Word-boundary presence, so "age" never matches inside "manage". */
+function hasToken(normalizedOutput: string, token: string): boolean {
+  return new RegExp(`(?:^| )${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$| )`).test(
+    normalizedOutput
+  );
+}
 
 /**
  * Deterministic admission check of model output against the report's own
