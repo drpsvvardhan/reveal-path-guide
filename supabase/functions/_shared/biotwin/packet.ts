@@ -11,7 +11,7 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
+export const BIOTWIN_VALIDATOR_VERSION = "1.1.1";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -265,6 +265,16 @@ const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
+  // Narrow: block only POSITIVE decision-grade claims. Negated or bounded
+  // wording ("is not decision-grade", "bounded hypotheses, not decision-grade
+  // evidence") must remain permitted, and ordinary uses of "decision" or
+  // "grade" must never trip this.
+  decision_grade_hold: [
+    // Requires an affirmative copula immediately before the claim, so every
+    // negated form ("is not decision-grade", "are not decision grade",
+    // "bounded hypotheses, not decision-grade evidence") is permitted.
+    /\b(?:is|are|remains|represents)\s+(?:a\s+|an\s+|your\s+|the\s+|this\s+)?decision[-\s]?grade\b/i,
+  ],
 };
 
 /**
@@ -361,11 +371,10 @@ export function biotwinReplacementMessage(packet: BiotwinPacket): string {
     ? " Your imported clinical evidence report is still awaiting treating-clinician review."
     : "";
   return (
-    "I can't answer that the way it was phrased, because it would go past what your imported " +
-    "clinical evidence report actually establishes." +
+    "Your imported clinical evidence report does not currently contain a patient-released " +
+    "statement that can answer this safely." +
     review +
-    " Here is what I can do: I can tell you what the report confirms, what it holds open as " +
-    "unconfirmed, and what measurement would settle the question. Bring this to your clinician " +
-    "so it can be resolved with them."
+    " I can still explain any released findings already present, what the report holds open as " +
+    "unconfirmed, and what measurement would settle the question."
   );
 }

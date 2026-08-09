@@ -9,6 +9,7 @@ import {
 import {
   buildBiotwinPacket,
   validateBiotwinOutput,
+  biotwinReplacementMessage,
   type BiotwinReportRow,
   type BiotwinStatementRow,
 } from "./packet.ts";
@@ -472,4 +473,86 @@ Deno.test("mixed model answer: ApoB priority survives, dose change is gone", () 
   assert(!/atorvastatin/i.test(res.content));
   assert(!/80\s*mg/i.test(res.content));
   assert(validateDoseTokens(res.content, doseCtx).valid);
+});
+
+// ---------------------------------------------------------------------------
+// Hardening — no cowardice language in released-Twin fallbacks
+// ---------------------------------------------------------------------------
+
+const COWARDICE = [
+  /I can'?t answer/i,
+  /I can'?t phrase/i,
+  /bring this to your clinician/i,
+];
+
+Deno.test("released-Twin fallback never contains cowardice language (attention question)", () => {
+  const res = buildUsefulBiotwinFallback(packet, THE_QUESTION, extraValidate);
+  assert(res.substantive);
+  for (const p of COWARDICE) assert(!p.test(res.content), `matched ${p}`);
+  assertStringIncludes(res.content, "These rankings are informational");
+});
+
+Deno.test("released-Twin fallback never contains cowardice language (non-attention question)", () => {
+  const res = buildUsefulBiotwinFallback(
+    packet,
+    "Can you explain my iron result?",
+    extraValidate,
+  );
+  assert(res.substantive);
+  for (const p of COWARDICE) assert(!p.test(res.content), `matched ${p}`);
+  assertStringIncludes(
+    res.content,
+    "Here is the part of your released Twin I can state safely and directly",
+  );
+});
+
+Deno.test("biotwinReplacementMessage carries no generic refusal phrasing", () => {
+  const msg = biotwinReplacementMessage(packet);
+  for (const p of COWARDICE) assert(!p.test(msg), `matched ${p}`);
+  assertStringIncludes(msg, "does not currently contain a patient-released");
+});
+
+// ---------------------------------------------------------------------------
+// Hardening — decision_grade_hold enforcement, narrowly
+// ---------------------------------------------------------------------------
+
+const dgPacket = { ...packet, holds: ["decision_grade_hold"] as typeof packet.holds };
+
+for (const bad of [
+  "Your multiomic result is decision-grade and can guide therapy.",
+  "This is a decision-grade multiomic result.",
+  "Your multiomics are decision grade.",
+]) {
+  Deno.test(`decision_grade_hold blocks positive claim: ${bad}`, () => {
+    const v = validateBiotwinOutput(bad, dgPacket);
+    assert(!v.valid, "must be rejected");
+    assert(v.violations.some((x) => x.kind === "hold_violation"));
+  });
+}
+
+for (const ok of [
+  "This is not a decision-grade multiomic result.",
+  "The multiomic layers are not decision grade.",
+  "These protein abundance signals are bounded hypotheses, not decision-grade evidence.",
+  "That decision belongs with your clinician, and your grade of exposure is unchanged.",
+]) {
+  Deno.test(`decision_grade_hold permits: ${ok}`, () => {
+    const v = validateBiotwinOutput(ok, dgPacket);
+    assert(
+      !v.violations.some((x) => x.kind === "hold_violation"),
+      `unexpected hold violation: ${JSON.stringify(v.violations)}`,
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Hardening — version stamps
+// ---------------------------------------------------------------------------
+
+Deno.test("version stamps are current", async () => {
+  const { BIOTWIN_VALIDATOR_VERSION } = await import("./packet.ts");
+  const { RUNTIME_VERSION, PROMPT_TEMPLATE_VERSION } = await import("../receipt.ts");
+  assertEquals(BIOTWIN_VALIDATOR_VERSION, "1.1.1");
+  assertEquals(RUNTIME_VERSION, "r0.1.1");
+  assertEquals(PROMPT_TEMPLATE_VERSION, "pt-2026-08-09.1");
 });
