@@ -1946,7 +1946,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           tierViolations = tierResult.violations;
           regenerationSucceeded = false;
-          finalOutput = TIER_VOCABULARY_FALLBACK;
+          finalOutput = safeFallback(
+            TIER_VOCABULARY_FALLBACK,
+            "tier_vocabulary_violation",
+          );
           status = "replaced_with_fallback";
           replacementTemplateUsed = "tier_vocabulary_violation";
         }
@@ -1962,7 +1965,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status = "replaced_with_emergency_routing";
           replacementTemplateUsed = "emergency_routing";
         } else {
-          finalOutput = NO_DOSE_FALLBACK;
+          finalOutput = safeFallback(NO_DOSE_FALLBACK, "no_dose_fallback");
           status = "replaced_with_fallback";
           replacementTemplateUsed = "no_dose_fallback";
         }
