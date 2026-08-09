@@ -1983,10 +1983,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ) {
       const biotwinResult = validateBiotwinOutput(finalOutput, biotwinPacket);
       if (!biotwinResult.valid) {
-        biotwinViolations = biotwinResult.violations;
-        finalOutput = biotwinReplacementMessage(biotwinPacket);
-        status = "replaced_with_fallback";
-        replacementTemplateUsed = "biotwin_governance_violation";
+        // One bounded corrective regeneration, then the deterministic
+        // packet-grounded fallback. A generic refusal may never cross while
+        // a released Twin can answer.
+        let repaired = false;
+        if (!dosePolicyContext.emergencyIntentPresent) {
+          regenerationAttempted = true;
+          const feedback = [
+            "Your previous response breached the imported clinical evidence report's own governance:",
+            ...biotwinResult.violations.map(
+              (v) => `- [${v.kind}] "${v.matched}" — ${v.detail}`,
+            ),
+            "",
+            "Regenerate. Holds restrict only the specific prohibited claim or",
+            "action, not unrelated biological explanation. Keep the substance:",
+            "explain the released findings and rank what deserves attention.",
+          ].join("\n");
+          const regenerated = await attemptCorrectiveRegeneration(
+            finalOutput,
+            feedback,
+            lastUserMessage,
+            finalSystemPrompt,
+            normalizedModel,
+          );
+          if (regenerated) {
+            const reBiotwin = validateBiotwinOutput(regenerated, biotwinPacket);
+            const reRole = validateInterpreterRole(regenerated);
+            const reDose = validateDoseTokens(regenerated, dosePolicyContext);
+            if (reBiotwin.valid && reRole.valid && reDose.valid) {
+              finalOutput = regenerated;
+              status = "regenerated_successfully";
+              regenerationSucceeded = true;
+              repaired = true;
+            }
+          }
+        }
+        if (!repaired) {
+          biotwinViolations = biotwinResult.violations;
+          regenerationSucceeded = false;
+          finalOutput = safeFallback(
+            biotwinReplacementMessage(biotwinPacket),
+            "biotwin_governance_violation",
+          );
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "biotwin_governance_violation";
+        }
       }
     }
 
