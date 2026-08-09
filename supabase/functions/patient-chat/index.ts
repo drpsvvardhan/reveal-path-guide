@@ -2229,6 +2229,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ...biotwinViolations,
         ...tierViolations,
         ...groundingViolations,
+        ...(biotwinFallbackUsed
+          ? [
+              {
+                kind: "biotwin_deterministic_fallback",
+                fallback_reason: biotwinFallbackReason,
+                omitted_blocks: biotwinFallbackOmitted,
+                detail:
+                  "Generic refusal suppressed: answer assembled deterministically from the imported BioTwin packet.",
+              },
+            ]
+          : []),
       ],
       dose_patterns_matched: dosePolicyContext.userDoseTokens,
       original_output: capturedResponse,
