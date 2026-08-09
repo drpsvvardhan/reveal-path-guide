@@ -153,6 +153,68 @@ describe("dedupeMarkers", () => {
   });
 });
 
+describe("bracket citation dialect — from the first live grounded answer (Aug 9)", () => {
+  // The model cited using the packet's display format "[id:X]" instead of
+  // the requested "{statement:X}". The server accepts both dialects: parse,
+  // validate, record as USED, strip before display. Internal IDs must never
+  // reach the patient.
+  const liveSentence =
+    "The most significant finding is a measured burden of atherogenic particles, " +
+    "specifically an ApoB of 124 mg/dL [id:CLM-PT-APOB-001], alongside active tobacco " +
+    "exposure [id:repaired_driver_hierarchy:53:a59dcdb748c19a41].";
+
+  const bracketAllowed: AllowedGroundingContext = {
+    witness: new Set<string>(),
+    cluster: new Set(["none"]),
+    statement: new Set([
+      "CLM-PT-APOB-001",
+      "repaired_driver_hierarchy:53:a59dcdb748c19a41",
+      "CTR-PT-C01",
+    ]),
+    contradiction: new Set(["CTR-PT-C01"]),
+  };
+
+  it("parses bracket citations as statement markers", () => {
+    const markers = parseGroundingMarkers(liveSentence);
+    expect(markers).toEqual([
+      { type: "statement", id: "CLM-PT-APOB-001" },
+      { type: "statement", id: "repaired_driver_hierarchy:53:a59dcdb748c19a41" },
+    ]);
+  });
+
+  it("validates bracket citations against the authorized statement set", () => {
+    const r = validateGroundingMarkers(
+      parseGroundingMarkers(liveSentence),
+      bracketAllowed
+    );
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects a fabricated bracket citation", () => {
+    const r = validateGroundingMarkers(
+      parseGroundingMarkers("A claim. [id:NOT-IN-CONTEXT]"),
+      bracketAllowed
+    );
+    expect(r.valid).toBe(false);
+  });
+
+  it("strips bracket citations so internal IDs never reach the patient", () => {
+    const stripped = stripGroundingMarkers(liveSentence);
+    expect(stripped).not.toContain("[id:");
+    expect(stripped).not.toContain("CLM-PT-APOB-001");
+    expect(stripped).toContain(
+      "specifically an ApoB of 124 mg/dL, alongside active tobacco exposure."
+    );
+  });
+
+  it("counts bracket citations toward marker coverage", () => {
+    const text =
+      "**From your data:** Your ApoB is elevated. [id:CLM-PT-APOB-001] " +
+      "This sentence is uncited.";
+    expect(computeMarkerCoverage(text)).toBeCloseTo(0.5);
+  });
+});
+
 describe("regen feedback + fallback", () => {
   it("names the fabricated IDs in the feedback", () => {
     const fb = buildGroundingRegenFeedback([
