@@ -301,11 +301,37 @@ export function validateBiotwinOutput(
   const normalizedOutput = normalizeForMatch(output);
 
   for (const prohibited of packet.prohibited_headlines) {
-    const tokens = contentTokens(prohibited);
-    if (tokens.length === 0) continue;
-    const hits = tokens.filter((t) => normalizedOutput.includes(t)).length;
-    const ratio = hits / tokens.length;
-    if (ratio >= 0.85) {
+    const normalizedProhibited = normalizeForMatch(prohibited);
+    if (!normalizedProhibited) continue;
+
+    // (a) Exact scar: the prohibited wording appears verbatim (normalized) in
+    // the output. This is what keeps "5.01 h", "65.8%", "chronic short
+    // sleep", "active vascular inflammation is established" and
+    // "APOE-driven ApoB axis" from ever crossing.
+    const phraseHit = hasToken(normalizedOutput, normalizedProhibited) ||
+      normalizedOutput.includes(` ${normalizedProhibited} `) ||
+      normalizedOutput.startsWith(`${normalizedProhibited} `) ||
+      normalizedOutput.endsWith(` ${normalizedProhibited}`) ||
+      normalizedOutput === normalizedProhibited;
+
+    let paraphraseHit = false;
+    if (!phraseHit) {
+      // (b) Paraphrase: only for headlines long enough to be identifiable,
+      // scored on word boundaries, and only when a distinctive (non-generic)
+      // token is actually present.
+      const tokens = contentTokens(prohibited);
+      const distinctive = tokens.filter((t) => !GENERIC_TOKENS.has(t));
+      if (tokens.length >= 4 && distinctive.length >= 2) {
+        const hits = tokens.filter((t) => hasToken(normalizedOutput, t)).length;
+        const distinctiveHits = distinctive.filter((t) =>
+          hasToken(normalizedOutput, t)
+        ).length;
+        paraphraseHit =
+          hits / tokens.length >= 0.9 && distinctiveHits === distinctive.length;
+      }
+    }
+
+    if (phraseHit || paraphraseHit) {
       violations.push({
         kind: "prohibited_headline",
         detail: "Output asserts a statement the imported report prohibits.",
