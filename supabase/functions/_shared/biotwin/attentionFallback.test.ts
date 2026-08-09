@@ -449,3 +449,27 @@ Deno.test("safest-statement floor: answer survives even when every composed bloc
   assert(res.content.length > 0);
   assert(!res.content.includes("I can't answer that the way it was phrased"));
 });
+
+// ---------------------------------------------------------------------------
+// Doctrine H — mixed answer: safe biology survives, unsafe dose does not
+// ---------------------------------------------------------------------------
+
+Deno.test("mixed model answer: ApoB priority survives, dose change is gone", () => {
+  const mixed =
+    "Your ApoB of 124 mg/dL is the measured atherogenic particle burden and is " +
+    "the highest-ranked item in your report. To fix it, increase your " +
+    "atorvastatin to 80 mg daily.";
+  const failsAdmission =
+    !validateDoseTokens(mixed, doseCtx).valid ||
+    !validateInterpreterRole(mixed).valid ||
+    !validateBiotwinOutput(mixed, packet).valid;
+  assert(failsAdmission, "mixed answer must fail admission");
+
+  const res = buildUsefulBiotwinFallback(packet, THE_QUESTION, extraValidate);
+  assert(res.substantive);
+  assertStringIncludes(res.content, "ApoB");
+  assertStringIncludes(res.content, "atherogenic particle burden");
+  assert(!/atorvastatin/i.test(res.content));
+  assert(!/80\s*mg/i.test(res.content));
+  assert(validateDoseTokens(res.content, doseCtx).valid);
+});
