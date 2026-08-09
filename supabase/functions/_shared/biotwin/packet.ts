@@ -11,7 +11,7 @@ import type { BiotwinHold } from "./types.ts";
 
 // Stamped into every Answer Receipt. Bump on any change to the packet shape,
 // caps, or the validateBiotwinOutput admission checks in this module.
-export const BIOTWIN_VALIDATOR_VERSION = "1.0.0";
+export const BIOTWIN_VALIDATOR_VERSION = "1.1.0";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -146,9 +146,9 @@ export function buildBiotwinPacket(
 
 const HOLD_TEXT: Record<string, string> = {
   medication_hold:
-    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping or changing one.",
+    "Medication reconciliation is incomplete. Never state that a medication is taken, not taken, started or stopped, and never suggest starting, stopping, dosing or changing one. SCOPE: this restricts medication claims and medication decisions ONLY. It does not restrict explaining ApoB, tobacco exposure, an iron finding, a vascular hypothesis or any other biological finding.",
   pgx_hold:
-    "Pharmacogenomic results may not be used for this person. Never use a PGx result to justify a drug or dose statement.",
+    "Pharmacogenomic results may not be used to make a drug or dose decision for this person. SCOPE: this restricts drug/dose conclusions drawn from PGx ONLY. It does not restrict explaining any other released finding.",
   cgm_hold:
     "The continuous glucose signal is unconfirmed. Never call it hypoglycaemia or any diagnosis; describe it as unconfirmed sensor readings requiring verification.",
   clinician_review_hold:
@@ -156,7 +156,7 @@ const HOLD_TEXT: Record<string, string> = {
   patient_release_hold:
     "The report is not yet released for patient-facing conclusions. Report only what it explicitly permits and route conclusions to the clinician.",
   decision_grade_hold:
-    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result.",
+    "The multi-omic layers are not decision grade. Never present them as a decision-grade multiomic result. SCOPE: this restricts the decision-grade claim ONLY. Explanatory discussion of bounded released findings, including proteomic abundance signals described as bounded hypotheses, remains permitted.",
 };
 
 export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
@@ -182,6 +182,15 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
     "PRECEDENCE: this imported report overrides CIE-derived scores, cluster narratives, " +
       "generated manifests and any threshold heuristics. Where they disagree, the report wins. " +
       "Never restate a claim the report retired."
+  );
+  lines.push("");
+  lines.push(
+    "EXPLANATORY LICENCE: explain freely within the released Twin. Ranking or explaining " +
+      "what deserves attention is informational, not a treatment decision. Holds restrict the " +
+      "specific prohibited action or claim, not unrelated biological explanation. Never refuse " +
+      "a question merely because some other domain is on hold. If asked what matters most or " +
+      "what to pay attention to, answer with the released driver hierarchy in rank order, " +
+      "clearly separating what is measured from what is held open as hypothesis."
   );
   lines.push(`Report version ${packet.version ?? "?"}, generated ${packet.generated_date ?? "unknown"}.`);
   lines.push("");
@@ -249,11 +258,34 @@ function contentTokens(s: string): string[] {
 const HOLD_FORBIDDEN_PATTERNS: Record<string, RegExp[]> = {
   medication_hold: [
     /\b(start|stop|begin|discontinue|increase|decrease|titrate|switch)\s+(your\s+)?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|drug|dose)/i,
-    /\byou (are|aren'?t|are not) (currently )?(taking|on)\b/i,
+    // Scope: a *medication* claim, not any sentence containing "you are on".
+    // "you are on track" / "you are on the higher end" are biology, not
+    // prescribing, and must not trip this hold.
+    /\byou (are|aren'?t|are not) (currently )?(taking|on) (a |an |the |your )?(statin|metformin|levothyroxine|estradiol|progesterone|sertraline|medication|medications|drug|drugs|dose|therapy|treatment|[a-z]+(?:statin|formin|pril|sartan|olol|prazole|tidine))\b/i,
   ],
   pgx_hold: [/\b(your|this)\s+(pgx|pharmacogenomic)\s+(result|profile)\s+(means|shows|indicates|supports)\b/i],
   cgm_hold: [/\b(recurrent |nocturnal )?hypoglyc(a)?emi[ac]\b(?![^.]*\bunconfirmed\b)/i],
 };
+
+/**
+ * Words too generic to make a prohibited headline identifiable on their own.
+ * Bag-of-words overlap over vocabulary like "biological", "age", "single"
+ * used to fire on perfectly admissible answers — that was the defect that
+ * turned an attention question into a generic refusal.
+ */
+const GENERIC_TOKENS = new Set([
+  "biological","biology","age","single","level","levels","value","values","result","results",
+  "risk","high","higher","low","lower","elevated","data","report","patient","status","state",
+  "measure","measured","measurement","signal","signals","marker","markers","panel","score",
+  "range","normal","current","currently","time","years","year","study","test","tests",
+]);
+
+/** Word-boundary presence, so "age" never matches inside "manage". */
+function hasToken(normalizedOutput: string, token: string): boolean {
+  return new RegExp(`(?:^| )${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$| )`).test(
+    normalizedOutput
+  );
+}
 
 /**
  * Deterministic admission check of model output against the report's own
@@ -269,11 +301,37 @@ export function validateBiotwinOutput(
   const normalizedOutput = normalizeForMatch(output);
 
   for (const prohibited of packet.prohibited_headlines) {
-    const tokens = contentTokens(prohibited);
-    if (tokens.length === 0) continue;
-    const hits = tokens.filter((t) => normalizedOutput.includes(t)).length;
-    const ratio = hits / tokens.length;
-    if (ratio >= 0.85) {
+    const normalizedProhibited = normalizeForMatch(prohibited);
+    if (!normalizedProhibited) continue;
+
+    // (a) Exact scar: the prohibited wording appears verbatim (normalized) in
+    // the output. This is what keeps "5.01 h", "65.8%", "chronic short
+    // sleep", "active vascular inflammation is established" and
+    // "APOE-driven ApoB axis" from ever crossing.
+    const phraseHit = hasToken(normalizedOutput, normalizedProhibited) ||
+      normalizedOutput.includes(` ${normalizedProhibited} `) ||
+      normalizedOutput.startsWith(`${normalizedProhibited} `) ||
+      normalizedOutput.endsWith(` ${normalizedProhibited}`) ||
+      normalizedOutput === normalizedProhibited;
+
+    let paraphraseHit = false;
+    if (!phraseHit) {
+      // (b) Paraphrase: only for headlines long enough to be identifiable,
+      // scored on word boundaries, and only when a distinctive (non-generic)
+      // token is actually present.
+      const tokens = contentTokens(prohibited);
+      const distinctive = tokens.filter((t) => !GENERIC_TOKENS.has(t));
+      if (tokens.length >= 4 && distinctive.length >= 2) {
+        const hits = tokens.filter((t) => hasToken(normalizedOutput, t)).length;
+        const distinctiveHits = distinctive.filter((t) =>
+          hasToken(normalizedOutput, t)
+        ).length;
+        paraphraseHit =
+          hits / tokens.length >= 0.9 && distinctiveHits === distinctive.length;
+      }
+    }
+
+    if (phraseHit || paraphraseHit) {
       violations.push({
         kind: "prohibited_headline",
         detail: "Output asserts a statement the imported report prohibits.",

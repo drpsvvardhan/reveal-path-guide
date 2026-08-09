@@ -102,6 +102,10 @@ import {
   BIOTWIN_VALIDATOR_VERSION,
   type BiotwinPacket,
 } from "../_shared/biotwin/packet.ts";
+import {
+  buildBiotwinFallback,
+  isAttentionQuestion,
+} from "../_shared/biotwin/attentionFallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -464,6 +468,22 @@ When the patient asks an emergency-shaped question (overdose, accidental
 ingestion, severe symptoms, child or pet ingestion), give a brief
 biological framing and direct them to emergency care. Do not estimate
 safe doses.
+
+### Attention is not action
+
+Explain freely within the released Twin. Ranking or explaining what deserves
+attention is informational, not a treatment decision. When asked what matters
+most, what to pay attention to right now, what to focus on, or what the main
+things to know are, answer substantively with the ranked biology — measured
+findings first, hypotheses labelled as hypotheses — and route only the
+*decisions* to the clinician.
+
+Holds restrict the specific prohibited action or claim, not unrelated
+biological explanation. A medication hold blocks starting, stopping,
+changing, dosing or prescribing claims; it does not block explaining ApoB,
+tobacco exposure, an iron finding or a vascular hypothesis. Never refuse a
+question merely because some other domain is on hold, and never answer a
+prioritisation question with a refusal.
 
 ---
 
@@ -1780,6 +1800,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const dosePolicyContext: DosePolicyContext =
       computeDosePolicyContext(lastUserMessage);
 
+    // ----- Safety fallback doctrine: lose fluency, never intelligence -----
+    // When a released Twin exists, a failed admission must NOT deliver a
+    // content-free refusal. It delivers the report's own ranked drivers,
+    // open questions and held-open tensions — deterministically, no LLM.
+    let biotwinFallbackUsed = false;
+    let biotwinFallbackOmitted: string[] = [];
+    let biotwinFallbackReason: string | null = null;
+    const safeFallback = (generic: string, reason: string): string => {
+      if (!biotwinPacket.has_report) return generic;
+      const res = buildBiotwinFallback(
+        biotwinPacket,
+        lastUserMessage,
+        (text) =>
+          validateDoseTokens(text, dosePolicyContext).valid &&
+          validateInterpreterRole(text).valid,
+      );
+      if (!res.substantive) return generic;
+      biotwinFallbackUsed = true;
+      biotwinFallbackOmitted = res.omittedBlocks;
+      biotwinFallbackReason = reason;
+      return res.content;
+    };
+
     // ----- Step 1: clinical authority check (constitutional) -----
     const roleResult = validateInterpreterRole(capturedResponse);
 
@@ -1819,18 +1862,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
           regenerationSucceeded = true;
         } else {
           regenerationSucceeded = false;
-          finalOutput = replacementTemplateForViolation(reValidate.violations);
+          finalOutput = safeFallback(
+            replacementTemplateForViolation(reValidate.violations),
+            "role_violation_after_regen",
+          );
           status = "regenerated_then_replaced";
           replacementTemplateUsed = "role_violation_after_regen";
         }
       } else {
         regenerationSucceeded = false;
-        finalOutput = replacementTemplateForViolation(roleResult.violations);
+        finalOutput = safeFallback(
+          replacementTemplateForViolation(roleResult.violations),
+          "role_violation",
+        );
         status = "replaced_with_fallback";
         replacementTemplateUsed = "role_violation";
       }
     } else if (!roleResult.valid) {
-      finalOutput = replacementTemplateForViolation(roleResult.violations);
+      finalOutput = safeFallback(
+        replacementTemplateForViolation(roleResult.violations),
+        "role_violation",
+      );
       status = "replaced_with_fallback";
       replacementTemplateUsed = "role_violation";
     }
@@ -1894,7 +1946,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           tierViolations = tierResult.violations;
           regenerationSucceeded = false;
-          finalOutput = TIER_VOCABULARY_FALLBACK;
+          finalOutput = safeFallback(
+            TIER_VOCABULARY_FALLBACK,
+            "tier_vocabulary_violation",
+          );
           status = "replaced_with_fallback";
           replacementTemplateUsed = "tier_vocabulary_violation";
         }
@@ -1910,7 +1965,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status = "replaced_with_emergency_routing";
           replacementTemplateUsed = "emergency_routing";
         } else {
-          finalOutput = NO_DOSE_FALLBACK;
+          finalOutput = safeFallback(NO_DOSE_FALLBACK, "no_dose_fallback");
           status = "replaced_with_fallback";
           replacementTemplateUsed = "no_dose_fallback";
         }
@@ -1928,10 +1983,51 @@ Deno.serve(async (req: Request): Promise<Response> => {
     ) {
       const biotwinResult = validateBiotwinOutput(finalOutput, biotwinPacket);
       if (!biotwinResult.valid) {
-        biotwinViolations = biotwinResult.violations;
-        finalOutput = biotwinReplacementMessage(biotwinPacket);
-        status = "replaced_with_fallback";
-        replacementTemplateUsed = "biotwin_governance_violation";
+        // One bounded corrective regeneration, then the deterministic
+        // packet-grounded fallback. A generic refusal may never cross while
+        // a released Twin can answer.
+        let repaired = false;
+        if (!dosePolicyContext.emergencyIntentPresent) {
+          regenerationAttempted = true;
+          const feedback = [
+            "Your previous response breached the imported clinical evidence report's own governance:",
+            ...biotwinResult.violations.map(
+              (v) => `- [${v.kind}] "${v.matched}" — ${v.detail}`,
+            ),
+            "",
+            "Regenerate. Holds restrict only the specific prohibited claim or",
+            "action, not unrelated biological explanation. Keep the substance:",
+            "explain the released findings and rank what deserves attention.",
+          ].join("\n");
+          const regenerated = await attemptCorrectiveRegeneration(
+            finalOutput,
+            feedback,
+            lastUserMessage,
+            finalSystemPrompt,
+            normalizedModel,
+          );
+          if (regenerated) {
+            const reBiotwin = validateBiotwinOutput(regenerated, biotwinPacket);
+            const reRole = validateInterpreterRole(regenerated);
+            const reDose = validateDoseTokens(regenerated, dosePolicyContext);
+            if (reBiotwin.valid && reRole.valid && reDose.valid) {
+              finalOutput = regenerated;
+              status = "regenerated_successfully";
+              regenerationSucceeded = true;
+              repaired = true;
+            }
+          }
+        }
+        if (!repaired) {
+          biotwinViolations = biotwinResult.violations;
+          regenerationSucceeded = false;
+          finalOutput = safeFallback(
+            biotwinReplacementMessage(biotwinPacket),
+            "biotwin_governance_violation",
+          );
+          status = "replaced_with_fallback";
+          replacementTemplateUsed = "biotwin_governance_violation";
+        }
       }
     }
 
@@ -1955,16 +2051,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let markerCoverage: number | null = null;
     let usedRefs: UsedEvidenceRef[] = [];
     let groundingViolations: unknown[] = [];
+    const allowedGrounding: AllowedGroundingContext = {
+      witness: new Set(contextWitnessIds),
+      cluster: new Set([...contextClusterIds, "none"]),
+      statement: new Set(contextStatementIds),
+      contradiction: new Set(
+        biotwinPacket.contradictions.map((s) => s.source_id)
+      ),
+    };
     if (status === "passed" || status === "regenerated_successfully") {
-      const allowedGrounding: AllowedGroundingContext = {
-        witness: new Set(contextWitnessIds),
-        cluster: new Set([...contextClusterIds, "none"]),
-        statement: new Set(contextStatementIds),
-        contradiction: new Set(
-          biotwinPacket.contradictions.map((s) => s.source_id)
-        ),
-      };
-
       let markers = parseGroundingMarkers(finalOutput);
       let groundingResult = validateGroundingMarkers(markers, allowedGrounding);
 
@@ -2006,7 +2101,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           groundingViolations = groundingResult.fabricated;
           regenerationSucceeded = false;
-          finalOutput = GROUNDING_FALLBACK_MESSAGE;
+          finalOutput = safeFallback(
+            GROUNDING_FALLBACK_MESSAGE,
+            "fabricated_grounding",
+          );
           status = "replaced_with_fallback";
           replacementTemplateUsed = "fabricated_grounding";
           markers = [];
@@ -2020,6 +2118,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
           .map((m) => ({
             ref_type:
               m.type === "statement" ? "biotwin_statement" : m.type,
+            ref_id: m.id,
+          }));
+      }
+    }
+
+    // The deterministic fallback carries the packet's own statement and
+    // contradiction ids. Those are real used evidence — record them so the
+    // receipt does not report a grounded answer as ungrounded.
+    if (biotwinFallbackUsed) {
+      const fbMarkers = parseGroundingMarkers(finalOutput);
+      const fbValidation = validateGroundingMarkers(fbMarkers, allowedGrounding);
+      if (fbValidation.valid) {
+        markerCoverage = computeMarkerCoverage(finalOutput);
+        usedRefs = dedupeMarkers(fbMarkers)
+          .filter((m) => !(m.type === "cluster" && m.id === "none"))
+          .map((m) => ({
+            ref_type: m.type === "statement" ? "biotwin_statement" : m.type,
             ref_id: m.id,
           }));
       }
@@ -2114,6 +2229,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ...biotwinViolations,
         ...tierViolations,
         ...groundingViolations,
+        ...(biotwinFallbackUsed
+          ? [
+              {
+                kind: "biotwin_deterministic_fallback",
+                fallback_reason: biotwinFallbackReason,
+                omitted_blocks: biotwinFallbackOmitted,
+                detail:
+                  "Generic refusal suppressed: answer assembled deterministically from the imported BioTwin packet.",
+              },
+            ]
+          : []),
       ],
       dose_patterns_matched: dosePolicyContext.userDoseTokens,
       original_output: capturedResponse,
