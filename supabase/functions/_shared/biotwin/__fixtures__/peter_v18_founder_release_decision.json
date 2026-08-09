@@ -1,0 +1,71 @@
+{
+  "schema": { "name": "Vizzhy Founding Cohort Release Decision", "version": "1.0" },
+  "subject": {
+    "twin_id": "VZ0000119",
+    "source_twin_version": "v18.0-final",
+    "source_twin_sha256": "e4b9ef8eb9c0a11b04646ccafed25aa1f55119e5cd35246b535e830e99ac9d67"
+  },
+  "release": {
+    "class": "FOUNDING_COHORT",
+    "status": "RELEASED_WITH_BOUNDS",
+    "patient_facing": true,
+    "decision_grade_multiomic_use": false,
+    "autonomous_medication_action": false,
+    "pgx_dose_action": false
+  },
+  "released_claim_ids": [
+    "CLM-PT-PLATFORM-001",
+    "CLM-PT-APOB-001",
+    "CLM-PT-XPLAT-R-001",
+    "CLM-PT-SLEEP-001",
+    "CLM-PT-IRON-001",
+    "CLM-PT-LIVER-001",
+    "CLM-PT-KIDNEY-001",
+    "CLM-PT-ED-NO-001",
+    "CLM-PT-CLOCKDISC-001",
+    "CLM-PT-ORGANCLOCK-001",
+    "CLM-PT-APOE-FH-WGS-001"
+  ],
+  "critical_anchor_review": [
+    { "claim_id": "CLM-PT-PLATFORM-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-APOB-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-XPLAT-R-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-SLEEP-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-IRON-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-LIVER-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-KIDNEY-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-ED-NO-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-CLOCKDISC-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-ORGANCLOCK-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
+    { "claim_id": "CLM-PT-APOE-FH-WGS-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." }
+  ],
+  "measurement_plan_ids": ["MP-01", "MP-03", "MP-05", "MP-06"],
+  "contradiction_ids": ["CTR-PT-C01", "CTR-PT-C03", "CTR-PT-C08"],
+  "explicit_prohibitions": [
+    "5.01 h TST",
+    "65.8% efficiency",
+    "chronic short sleep",
+    "severe sleep deficit",
+    "active vascular inflammation is established",
+    "Lp-PLA2 is elevated in Peter",
+    "APOE-driven ApoB axis",
+    "single biological age",
+    "DunedinPACE 0.95 is Peter's observed longitudinal slope"
+  ],
+  "provenance_debt": [
+    {
+      "type": "SOURCE_FILE_DIGESTS_INCOMPLETE",
+      "disposition": "NON_BLOCKING_FOUNDING_COHORT",
+      "note": "Repair prospectively and before any higher-authority clinical decision claim depends on the affected source."
+    },
+    {
+      "type": "ASSAY_LINEAGE_PARTIAL",
+      "disposition": "NON_BLOCKING_FOUNDING_COHORT",
+      "note": "Instrument/barcode-level lineage is not a patient-reveal blocker unless it changes assay identity, comparability, or a load-bearing value."
+    }
+  ],
+  "review": {
+    "reviewer_role": "Vizzhy clinical governance — Founding Cohort release",
+    "released_at": "2026-08-09T04:48:00Z"
+  }
+}

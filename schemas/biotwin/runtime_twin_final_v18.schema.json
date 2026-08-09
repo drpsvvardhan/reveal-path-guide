@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vizzhy.ai/schemas/runtime_twin_final_v18.schema.json",
+  "title": "Vizzhy RUNTIME_TWIN_FINAL v18 — Release Compiler Contract",
+  "description": "Release-facing structural contract for v18. It intentionally validates only the authoritative seams used by BioTwin Release Compiler v1; the full v18 Twin may carry additional factory state.",
+  "type": "object",
+  "required": ["artifactType", "subject", "generatedAt", "twinVersion", "observations"],
+  "properties": {
+    "artifactType": { "const": "RUNTIME_TWIN_FINAL" },
+    "subject": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "minLength": 1 },
+    "twinVersion": { "type": "string", "pattern": "^v18\\." },
+    "_contract": { "type": "string" },
+    "_sourceVerificationState": { "type": "string" },
+    "observations": {
+      "type": "object",
+      "required": ["canonicalClaims", "clinicalReveal"],
+      "properties": {
+        "canonicalClaims": {
+          "type": "object",
+          "description": "Truth authority. Compiler reads only claim IDs explicitly admitted by the release decision; unreleased claims may remain incomplete without blocking the whole Twin.",
+          "additionalProperties": { "type": "object" }
+        },
+        "clinicalReveal": {
+          "type": "object",
+          "required": ["coreThesis"],
+          "properties": {
+            "coreThesis": { "type": "string" },
+            "whatIsMeasured": { "type": "array" },
+            "whatIsInferred": { "type": "array" },
+            "whatIsNotYetKnown": { "type": "array" }
+          },
+          "additionalProperties": true
+        },
+        "driverHierarchy": { "type": "array", "items": { "type": "object" } },
+        "measurementPlan": { "type": "object", "additionalProperties": true },
+        "contradictions": { "type": "array", "items": { "type": "object" } },
+        "releaseClass": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

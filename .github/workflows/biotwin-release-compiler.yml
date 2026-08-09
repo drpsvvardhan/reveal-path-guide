@@ -1,0 +1,40 @@
+name: BioTwin Release Compiler
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/_shared/biotwin/releaseCompiler.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompiler.test.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts'
+      - 'supabase/functions/_shared/biotwin/__fixtures__/peter_v18_founder_release_decision.json'
+      - 'supabase/functions/compile-biotwin-release/**'
+      - 'schemas/biotwin/**'
+      - 'docs/BIOTWIN_RELEASE_COMPILER_V1.md'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/_shared/biotwin/releaseCompiler.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompiler.test.ts'
+      - 'supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts'
+      - 'supabase/functions/_shared/biotwin/__fixtures__/peter_v18_founder_release_decision.json'
+      - 'supabase/functions/compile-biotwin-release/**'
+      - 'schemas/biotwin/**'
+
+jobs:
+  peter-golden-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.7.13
+      - name: Run Peter Golden Fixture and governed gate regressions
+        run: |
+          deno test --allow-read \
+            supabase/functions/_shared/biotwin/releaseCompiler.test.ts \
+            supabase/functions/_shared/biotwin/releaseCompilerGuard.test.ts
