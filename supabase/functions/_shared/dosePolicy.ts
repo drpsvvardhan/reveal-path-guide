@@ -6,7 +6,7 @@
 
 // Stamped into every Answer Receipt. Bump on any change to the patterns,
 // routing modes, or fallback text in this module.
-export const DOSE_POLICY_VERSION = "1.0.0";
+export const DOSE_POLICY_VERSION = "1.1.0";
 
 export interface DosePolicyContext {
   userMentionedDose: boolean;
@@ -79,15 +79,44 @@ export function computeDosePolicyContext(userMessage: string): DosePolicyContext
   };
 }
 
+// Live failure (Aug 10, receipt 283c349f — dose policy 1.1.0): a fluent,
+// correct CGM answer was replaced by the no-dose fallback because it
+// faithfully described the measured food log — "protein supplements: 22
+// servings in two weeks". A quantity the model REPORTS from the patient's
+// own data is not a dose the model DIRECTS. Police directives, not
+// descriptions: a dose token violates only when its own sentence tells the
+// patient to take/change/limit an amount.
+const DOSE_DIRECTIVE_CUES =
+  /\b(?:take|taking|start|stop|begin|increase|decrease|reduce|lower|raise|add|switch|swap|replace|try|aim(?:\s+for)?|target|limit|restrict|cut(?:\s+(?:back|down))?|recommend(?:ed|ing)?|suggest(?:ed|ing)?|consider|should|prescrib\w*|up\s+to|no\s+more\s+than)\b/i;
+
 export function validateDoseTokens(
   output: string,
   context: DosePolicyContext,
 ): { valid: boolean; unauthorizedTokens: string[] } {
-  const outputTokens = extractDoseTokens(output);
   const allowed = new Set(context.allowedDoseTokens.map((t) => t.toLowerCase()));
-  const unauthorized = outputTokens.filter((t) => !allowed.has(t.toLowerCase()));
-
-  return { valid: unauthorized.length === 0, unauthorizedTokens: unauthorized };
+  const unauthorized: string[] = [];
+  for (const sentence of output.split(/(?<=[.!?])\s+|\n+/)) {
+    const tokens = extractDoseTokens(sentence);
+    if (tokens.length === 0) continue;
+    // Descriptive sentence (no directive cue): reporting measured amounts
+    // from the patient's own record is faithful interpretation, not dosing.
+    // NEVER lenient under emergency intent — in an overdose-shaped
+    // conversation, even "standard doses range from 1mg to 5mg" is dosing
+    // information that must not cross.
+    if (
+      !context.emergencyIntentPresent &&
+      !DOSE_DIRECTIVE_CUES.test(sentence)
+    ) {
+      continue;
+    }
+    for (const t of tokens) {
+      if (!allowed.has(t.toLowerCase())) unauthorized.push(t);
+    }
+  }
+  return {
+    valid: unauthorized.length === 0,
+    unauthorizedTokens: Array.from(new Set(unauthorized)),
+  };
 }
 
 const EMERGENCY_ROUTING_BASE = `If you already took it, contact Poison Control now at 1-800-222-1222 in the U.S., or seek urgent medical care. If there is trouble breathing, collapse, seizure, severe confusion, or the person cannot be awakened, call 911.
