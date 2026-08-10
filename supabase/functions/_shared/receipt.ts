@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 // RUNTIME_VERSION identifies the patient-chat pipeline shape (gate order,
 // receipt semantics). Bump on any change to what the pipeline does.
-export const RUNTIME_VERSION = "r0.1.1";
+export const RUNTIME_VERSION = "r0.1.2";
 
 // PROMPT_TEMPLATE_VERSION identifies the system-prompt template in
 // buildPatientSystemPrompt. Bump on any wording/structure change so old
@@ -78,11 +78,19 @@ export function estimateTokens(text: string): number {
 // denies the row in admin view-as), and a non-uuid string kills the receipt
 // insert — an answered question with no receipt. A receipt with a null
 // conversation binding is worth more than no receipt at all.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function sanitizeConversationId(raw: unknown): string | null {
-  return typeof raw === "string" && UUID_RE.test(raw) ? raw : null;
+// Only persisted conversation UUIDs may cross into receipt storage. The
+// chat client can temporarily use `tmp-*` IDs while creating a conversation;
+// those are local coordination tokens, not database identities.
+export function normalizeReceiptConversationId(
+  conversationId: unknown
+): string | null {
+  if (typeof conversationId !== "string") return null;
+  const value = conversationId.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
+    )
+    ? value
+    : null;
 }
 
 // ---------------------------------------------------------------------------

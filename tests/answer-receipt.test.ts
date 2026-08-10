@@ -16,7 +16,7 @@ import {
   sha256Hex,
   estimateTokens,
   latestWitnessDate,
-  sanitizeConversationId,
+  normalizeReceiptConversationId,
   RUNTIME_VERSION,
   PROMPT_TEMPLATE_VERSION,
   type AnswerReceiptFields,
@@ -84,30 +84,30 @@ describe("latestWitnessDate", () => {
   });
 });
 
-describe("sanitizeConversationId", () => {
+describe("normalizeReceiptConversationId", () => {
   // Live failure (Aug 10): the client's chat_conversations insert failed
   // under RLS (admin view-as), so it sent its localStorage placeholder
   // "tmp-1786258344875" as conversationId — and the receipt insert died on
   // uuid parsing. The answer crossed; the receipt vanished.
   it("rejects the exact live placeholder shape", () => {
-    expect(sanitizeConversationId("tmp-1786258344875")).toBeNull();
+    expect(normalizeReceiptConversationId("tmp-1786258344875")).toBeNull();
   });
 
   it("accepts a real conversation uuid", () => {
     expect(
-      sanitizeConversationId("b9424d5b-1234-4abc-9def-0123456789ab")
+      normalizeReceiptConversationId("b9424d5b-1234-4abc-9def-0123456789ab")
     ).toBe("b9424d5b-1234-4abc-9def-0123456789ab");
   });
 
   it("nulls everything that is not a uuid string", () => {
-    expect(sanitizeConversationId(undefined)).toBeNull();
-    expect(sanitizeConversationId(null)).toBeNull();
-    expect(sanitizeConversationId("")).toBeNull();
-    expect(sanitizeConversationId(42)).toBeNull();
-    expect(sanitizeConversationId("not-a-uuid")).toBeNull();
+    expect(normalizeReceiptConversationId(undefined)).toBeNull();
+    expect(normalizeReceiptConversationId(null)).toBeNull();
+    expect(normalizeReceiptConversationId("")).toBeNull();
+    expect(normalizeReceiptConversationId(42)).toBeNull();
+    expect(normalizeReceiptConversationId("not-a-uuid")).toBeNull();
     // uuid embedded in a longer string must not pass
     expect(
-      sanitizeConversationId("x-b9424d5b-1234-4abc-9def-0123456789ab")
+      normalizeReceiptConversationId("x-b9424d5b-1234-4abc-9def-0123456789ab")
     ).toBeNull();
   });
 });
