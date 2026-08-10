@@ -20,6 +20,7 @@ import { adaptBiotwinReport } from "../supabase/functions/_shared/biotwin/adapte
 import {
   buildBiotwinPacket,
   renderBiotwinPacketForPrompt,
+  validateBiotwinOutput,
   type BiotwinStatementRow,
 } from "../supabase/functions/_shared/biotwin/packet.ts";
 
@@ -130,6 +131,39 @@ describe("adapter → packet → prompt chain", () => {
     expect(ev[0].body).toContain("105.8");
   });
 
+  it("prompt overrides stale conversation history when evidence is present", () => {
+    const row: BiotwinStatementRow = {
+      source_id: "EVID-SENSOR-CGM",
+      section: "measured_evidence",
+      statement_kind: "measured_evidence",
+      truth_status: "confirmed",
+      title: "Measured evidence — sensor cgm",
+      body: "mean_glucose_mg_dl: 105.8",
+      bounds: [],
+      timepoint: null,
+      clinical_authority: "patient_facing",
+      requires_measurement: null,
+      holds: null,
+      ordinal: 0,
+    };
+    const packet = buildBiotwinPacket(
+      {
+        id: "r1",
+        twin_id: "VZ-TEST",
+        version: 2,
+        generated_date: "2026-08-09",
+        release_control: {},
+        executive_synthesis: {},
+        holds: [],
+        clinician_review_required: false,
+        patient_release_permitted: true,
+      },
+      [row]
+    );
+    const prompt = renderBiotwinPacketForPrompt(packet);
+    expect(prompt).toContain("that statement is outdated");
+  });
+
   it("packet carries an evidence bucket and the prompt renders it citable", () => {
     const row: BiotwinStatementRow = {
       source_id: "EVID-SENSOR-CGM",
@@ -164,5 +198,106 @@ describe("adapter → packet → prompt chain", () => {
     expect(prompt).toContain("MEASURED EVIDENCE");
     expect(prompt).toContain("[id:EVID-SENSOR-CGM]");
     expect(prompt).toContain("105.8");
+  });
+});
+
+describe("evidence-absence denial gate (validator 1.3.0)", () => {
+  // Live failure (Aug 10, receipt f7eef0c5): the packet carried all 7
+  // evidence statements — the receipt's context_ref_manifest proves it —
+  // and the model still opened with "your BioTwin does not yet contain any
+  // continuous glucose monitor (CGM) data or a food log", following its own
+  // earlier wrong turns in the conversation history over the packet.
+  const evidenceRows: BiotwinStatementRow[] = [
+    {
+      source_id: "EVID-SENSORSTATE-CHANNELS-CGM",
+      section: "measured_evidence",
+      statement_kind: "measured_evidence",
+      truth_status: "confirmed",
+      title: "Measured evidence — cgm",
+      body: "n_readings: 4301\ngmi_pct: 5.84\ntir_pct: 98.1",
+      bounds: [],
+      timepoint: null,
+      clinical_authority: "patient_facing",
+      requires_measurement: null,
+      holds: null,
+      ordinal: 104,
+    },
+    {
+      source_id: "EVID-LIFESTYLEVIEW-FOODLOG",
+      section: "measured_evidence",
+      statement_kind: "measured_evidence",
+      truth_status: "confirmed",
+      title: "Measured evidence — food log",
+      body: "days_logged: 14\ncoffee_servings_14d: 49",
+      bounds: [],
+      timepoint: null,
+      clinical_authority: "patient_facing",
+      requires_measurement: null,
+      holds: null,
+      ordinal: 106,
+    },
+  ];
+  const report = {
+    id: "r1",
+    twin_id: "VZ-TEST",
+    version: 2,
+    generated_date: "2026-08-09",
+    release_control: {},
+    executive_synthesis: {},
+    holds: [],
+    clinician_review_required: false,
+    patient_release_permitted: true,
+  };
+  const packetWithEvidence = buildBiotwinPacket(report, evidenceRows);
+  const packetWithoutEvidence = buildBiotwinPacket(report, []);
+
+  it("flags the exact live denial sentence when the stream is present", () => {
+    const live =
+      "It is important to start with the most significant gap in your current map: your BioTwin does not yet contain any continuous glucose monitor (CGM) data or a food log.";
+    const res = validateBiotwinOutput(live, packetWithEvidence);
+    expect(res.valid).toBe(false);
+    expect(
+      res.violations.some((v) => v.kind === "evidence_absence_denial")
+    ).toBe(true);
+  });
+
+  it("flags 'no CGM or food log present' phrasing", () => {
+    const res = validateBiotwinOutput(
+      "Right now there is no CGM or food log present in your record.",
+      packetWithEvidence
+    );
+    expect(res.valid).toBe(false);
+  });
+
+  it("never blocks the honest answer when the stream truly is absent", () => {
+    const res = validateBiotwinOutput(
+      "Your BioTwin does not yet contain any continuous glucose monitor (CGM) data or a food log.",
+      packetWithoutEvidence
+    );
+    expect(res.valid).toBe(true);
+  });
+
+  it("does not fire on faithful value-level negations about present data", () => {
+    const res = validateBiotwinOutput(
+      "Your CGM shows no values above 180 mg/dL, and your food log records zero alcohol servings.",
+      packetWithEvidence
+    );
+    expect(res.valid).toBe(true);
+  });
+
+  it("does not fire on forward-looking suggestions about wearing a sensor", () => {
+    const res = validateBiotwinOutput(
+      "Wearing a CGM for another 14-day window would deepen the picture your data already shows.",
+      packetWithEvidence
+    );
+    expect(res.valid).toBe(true);
+  });
+
+  it("catches the linking-verb form: 'CGM data is not available'", () => {
+    const res = validateBiotwinOutput(
+      "Unfortunately your CGM data is not available in the Twin.",
+      packetWithEvidence
+    );
+    expect(res.valid).toBe(false);
   });
 });

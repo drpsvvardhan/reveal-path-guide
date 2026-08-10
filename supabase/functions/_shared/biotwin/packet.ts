@@ -16,7 +16,7 @@ import type { BiotwinHold } from "./types.ts";
 //        filtering, distinctive-token paraphrase criteria and scoped hold
 //        regexes (main 1.1.1). Both sides fixed the Aug 9 live-smoke
 //        false-positive class; this version carries the union.
-export const BIOTWIN_VALIDATOR_VERSION = "1.2.0";
+export const BIOTWIN_VALIDATOR_VERSION = "1.3.0";
 
 /** Hard caps — the packet must never grow with report size. */
 export const PACKET_CAPS = {
@@ -225,6 +225,12 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
   listOf("DRIVER HIERARCHY", packet.drivers);
   listOf("MEASUREMENT AND ACTION PLAN", packet.actions);
   listOf("CONTRADICTIONS HELD OPEN", packet.contradictions);
+  if (packet.evidence.length > 0) {
+    lines.push("");
+    lines.push(
+      "Every stream in MEASURED EVIDENCE below IS present in this person's Twin. If an earlier turn in this conversation said one of these streams was missing, absent, or not connected, that statement is outdated — correct it plainly and answer from the values below."
+    );
+  }
   listOf(
     "MEASURED EVIDENCE (the person's own observations — released by default; cite freely, interpret only within the released claims)",
     packet.evidence
@@ -249,7 +255,7 @@ export function renderBiotwinPacketForPrompt(packet: BiotwinPacket): string {
 // ---------------------------------------------------------------------------
 
 export interface BiotwinOutputViolation {
-  kind: "prohibited_headline" | "hold_violation";
+  kind: "prohibited_headline" | "hold_violation" | "evidence_absence_denial";
   detail: string;
   matched: string;
 }
@@ -350,6 +356,60 @@ const GENERIC_TOKENS = new Set([
 ]);
 
 
+// ---------------------------------------------------------------------------
+// Evidence-absence denial (validator 1.3.0)
+// ---------------------------------------------------------------------------
+// Live failure (Aug 10): the packet carried the full MEASURED EVIDENCE bucket
+// — 4,301 CGM readings, a 14-day food log — and the model still answered
+// "your BioTwin does not yet contain any CGM data or a food log", following
+// its own earlier (wrong) turns in the conversation history over the packet
+// in front of it. Denying the existence of released measured data is a
+// governance violation of the same rank as asserting a prohibited claim:
+// police assertions, not topics.
+
+/** Aliases (in normalizeForMatch space) per recognizable evidence stream. */
+const EVIDENCE_STREAM_ALIASES: Array<{ match: RegExp; aliases: string[] }> = [
+  {
+    match: /cgm|glucose/,
+    aliases: ["cgm", "continuous glucose", "glucose monitor", "glucose sensor"],
+  },
+  {
+    match: /food/,
+    aliases: ["food log", "food diary", "food record", "meal log", "nutrition log"],
+  },
+  {
+    match: /sleep/,
+    aliases: ["sleep data", "sleep tracking", "sleep log", "sleep records", "sleep sensor"],
+  },
+  {
+    match: /heart|hrv/,
+    aliases: ["hrv", "heart rate variability", "heart rate data"],
+  },
+];
+
+const NEGATED_EXISTENCE_LEAD =
+  "(?:no|not(?: yet)?|does not(?: yet)?|doesn t(?: yet)?|do not|don t|never|without|lacks?|lacking|missing|absent|yet to (?:contain|have|include|receive))";
+const NEGATED_EXISTENCE_TAIL =
+  "(?:is|are|was|were|has(?: been)?|have(?: been)?) (?:not(?: yet)?|never|no longer) (?:\\w+ ){0,2}?(?:available|present|connected|recorded|collected|captured|contained|included|uploaded|linked|found|on file)|(?:is|are) (?:unavailable|missing|absent)";
+
+/**
+ * A sentence denies a present evidence stream when the denial and the
+ * stream's alias sit adjacently: negation within a few words BEFORE the
+ * alias ("does not yet contain any … CGM data"), or the alias followed by a
+ * negated linking verb ("CGM data is not available"). Adjacency keeps
+ * value-level negations honest — "your CGM shows no values above 180" is a
+ * faithful reading of the data, not a denial of its existence.
+ */
+function sentenceDeniesStream(paddedSentence: string, alias: string): boolean {
+  const lead = new RegExp(
+    `\\b${NEGATED_EXISTENCE_LEAD}\\b(?: \\w+){0,4}? ${alias}\\b`
+  );
+  const tail = new RegExp(
+    `\\b${alias}\\b(?: \\w+){0,4}? (?:${NEGATED_EXISTENCE_TAIL})\\b`
+  );
+  return lead.test(paddedSentence) || tail.test(paddedSentence);
+}
+
 /**
  * Deterministic admission check of model output against the report's own
  * governance. Returns every violation found; the caller decides the template.
@@ -415,6 +475,38 @@ export function validateBiotwinOutput(
         detail: "Output asserts a statement the imported report prohibits.",
         matched: prohibited,
       });
+    }
+  }
+
+  // Evidence-absence denial: only streams actually present in the packet's
+  // evidence bucket are defended — when a stream truly is absent, saying so
+  // is the honest answer and must never be blocked.
+  const presentStreams: Array<{ id: string; aliases: string[] }> = [];
+  for (const ev of packet.evidence) {
+    const key = `${ev.source_id} ${ev.title}`.toLowerCase();
+    for (const stream of EVIDENCE_STREAM_ALIASES) {
+      if (stream.match.test(key)) {
+        presentStreams.push({ id: ev.source_id, aliases: stream.aliases });
+        break;
+      }
+    }
+  }
+  const deniedIds = new Set<string>();
+  for (const sentence of sentences) {
+    for (const stream of presentStreams) {
+      if (deniedIds.has(stream.id)) continue;
+      for (const alias of stream.aliases) {
+        if (!sentence.padded.includes(` ${alias.split(" ")[0]}`)) continue;
+        if (sentenceDeniesStream(sentence.padded, alias)) {
+          deniedIds.add(stream.id);
+          violations.push({
+            kind: "evidence_absence_denial",
+            detail: `The Twin CONTAINS this measured stream — it is released in the packet as [id:${stream.id}]. Never claim it is missing, absent, or not yet collected; correct any earlier such claim and answer from its released values.`,
+            matched: sentence.raw.slice(0, 200),
+          });
+          break;
+        }
+      }
     }
   }
 
