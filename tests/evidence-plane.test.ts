@@ -17,6 +17,7 @@ import {
   EVIDENCE_ROOTS,
 } from "../supabase/functions/_shared/biotwin/releaseCompiler.ts";
 import { adaptBiotwinReport } from "../supabase/functions/_shared/biotwin/adapter.ts";
+import { buildBiotwinFallbackBlocks } from "../supabase/functions/_shared/biotwin/attentionFallback.ts";
 import {
   buildBiotwinPacket,
   renderBiotwinPacketForPrompt,
@@ -299,5 +300,20 @@ describe("evidence-absence denial gate (validator 1.3.0)", () => {
       packetWithEvidence
     );
     expect(res.valid).toBe(false);
+  });
+
+  it("deterministic fallback includes the measured streams — never answers a CGM question without them", () => {
+    // Live failure (Aug 10, receipt af28ae67): 'explain my cgm and food log'
+    // degraded to the deterministic fallback, which answered from claims
+    // alone and omitted the CGM entirely.
+    const blocks = buildBiotwinFallbackBlocks(
+      packetWithEvidence,
+      "explain my cgm and food log"
+    );
+    const evidenceBlock = blocks.find((b) => b.id === "measured_evidence");
+    expect(evidenceBlock).toBeDefined();
+    expect(evidenceBlock!.text).toContain("{statement:EVID-SENSORSTATE-CHANNELS-CGM}");
+    expect(evidenceBlock!.text).toContain("{statement:EVID-LIFESTYLEVIEW-FOODLOG}");
+    expect(evidenceBlock!.text).toContain("n_readings: 4301");
   });
 });
