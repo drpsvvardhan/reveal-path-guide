@@ -16,6 +16,7 @@ import {
   sha256Hex,
   estimateTokens,
   latestWitnessDate,
+  normalizeReceiptConversationId,
   RUNTIME_VERSION,
   PROMPT_TEMPLATE_VERSION,
   type AnswerReceiptFields,
@@ -88,6 +89,22 @@ describe("estimateTokens", () => {
     expect(estimateTokens("abcd")).toBe(1);
     expect(estimateTokens("abcde")).toBe(2);
     expect(estimateTokens("")).toBe(0);
+  });
+});
+
+describe("normalizeReceiptConversationId", () => {
+  it("keeps persisted UUID conversation IDs", () => {
+    const id = "328efbec-26b6-4665-9b4e-926ccb30ce3a";
+    expect(normalizeReceiptConversationId(id)).toBe(id);
+  });
+
+  it("drops client-side temporary IDs before receipt persistence", () => {
+    expect(normalizeReceiptConversationId("tmp-1786258344875")).toBeNull();
+  });
+
+  it("drops absent and malformed identifiers", () => {
+    expect(normalizeReceiptConversationId(undefined)).toBeNull();
+    expect(normalizeReceiptConversationId("not-a-uuid")).toBeNull();
   });
 });
 
