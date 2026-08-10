@@ -70,6 +70,7 @@ import {
   sha256Hex,
   estimateTokens,
   latestWitnessDate,
+  normalizeReceiptConversationId,
   type AnswerReceiptFields,
   type UsedEvidenceRef,
 } from "../_shared/receipt.ts";
@@ -1256,6 +1257,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Receipt clock: when the question entered the runtime.
     const questionTimestamp = new Date().toISOString();
+    // `tmp-*` values are client-only placeholders while a conversation row is
+    // being created. Never send them to the UUID receipt column.
+    const receiptConversationId = normalizeReceiptConversationId(conversationId);
 
     if (!manifest) {
       return new Response(
@@ -1640,7 +1644,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       const budgetReceipt: AnswerReceiptFields = {
         answer_id: answerId,
-        conversation_id: conversationId ?? null,
+        conversation_id: receiptConversationId,
         question_timestamp: questionTimestamp,
         biotwin_report_id: biotwinPacket.has_report
           ? biotwinPacket.report_id
@@ -2158,18 +2162,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ----- Step 4: doctor-question extraction (against final output only) -----
     const questions = extractQueuedQuestions(finalOutput);
-    if (questions.length > 0) {
-      try {
-        await queueExtractedQuestions(
-          userId,
-          questions,
-          lastUserMessage,
-          answerId
-        );
-      } catch (e) {
-        console.error("Question queue insert failed:", e);
-      }
-    }
 
     // ----- Step 5: audit log + Answer Receipt -----
     // The write result is surfaced in the response payload: an unreceipted
@@ -2178,7 +2170,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // visible symptom, because the insert failure was swallowed.)
     const receipt: AnswerReceiptFields = {
       answer_id: answerId,
-      conversation_id: conversationId ?? null,
+      conversation_id: receiptConversationId,
       question_timestamp: questionTimestamp,
 
       biotwin_report_id: biotwinPacket.has_report
@@ -2266,6 +2258,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
       sentences_checked: capturedResponse.split(/[.!?]+/).length,
       last_user_message: lastUserMessage,
     });
+
+    // Queue only after the receipt exists: source_answer_id has a foreign key
+    // to patient_chat_validation_log(answer_id). If a receipt write degrades,
+    // preserve the useful question without fabricating a broken lineage link.
+    if (questions.length > 0) {
+      try {
+        await queueExtractedQuestions(
+          userId,
+          questions,
+          lastUserMessage,
+          receiptWriteError === null ? answerId : null
+        );
+      } catch (e) {
+        console.error("Question queue insert failed:", e);
+      }
+    }
 
     // Evidence actually used — child rows on the receipt. Best-effort:
     // failure never breaks the chat response, but is loudly logged because

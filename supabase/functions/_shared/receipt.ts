@@ -89,6 +89,19 @@ export function latestWitnessDate(
   return latest;
 }
 
+// Only persisted conversation UUIDs may cross into receipt storage. The chat
+// client can temporarily use `tmp-*` IDs while creating a conversation; those
+// are local coordination tokens, not database identities.
+export function normalizeReceiptConversationId(
+  conversationId: unknown
+): string | null {
+  if (typeof conversationId !== "string") return null;
+  const value = conversationId.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
 // ---------------------------------------------------------------------------
 // Receipt field bundle
 // ---------------------------------------------------------------------------
