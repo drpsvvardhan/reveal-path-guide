@@ -128,7 +128,17 @@ export function useChatHistory(userId: string | null) {
         .insert({ user_id: userId, title })
         .select("id,title,last_message_at")
         .single();
-      if (error || !data) return tempId;
+      if (error || !data) {
+        // Local-only mode: the conversation lives in localStorage under the
+        // tmp id. Loud, because a silent failure here means nothing from
+        // this session persists to Cloud (RLS denies inserts for another
+        // user's user_id, e.g. admin view-as).
+        console.error(
+          "chat_conversations insert failed — conversation is local-only and will not sync",
+          error,
+        );
+        return tempId;
+      }
       setActiveId(data.id);
       localStorage.setItem(lsActiveKey(userId), data.id);
       // migrate cached messages from tempId -> real id

@@ -335,7 +335,10 @@ const AskSection: React.FC = () => {
           model: "google/gemini-3-flash-preview",
           userId: resolvedUserId,
           // Binds the server-side Answer Receipt to this conversation.
-          conversationId: convId ?? undefined,
+          // Never send the client-side "tmp-" placeholder — it is not a
+          // uuid and would poison the receipt insert server-side.
+          conversationId:
+            convId && !convId.startsWith("tmp-") ? convId : undefined,
         }),
       });
 

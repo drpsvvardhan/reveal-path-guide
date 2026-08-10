@@ -71,6 +71,21 @@ export function estimateTokens(text: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Conversation binding
+// ---------------------------------------------------------------------------
+// Live failure (Aug 10): the client sends a placeholder id like
+// "tmp-1786258344875" when its own chat_conversations insert fails (RLS
+// denies the row in admin view-as), and a non-uuid string kills the receipt
+// insert — an answered question with no receipt. A receipt with a null
+// conversation binding is worth more than no receipt at all.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function sanitizeConversationId(raw: unknown): string | null {
+  return typeof raw === "string" && UUID_RE.test(raw) ? raw : null;
+}
+
+// ---------------------------------------------------------------------------
 // Freshness clocks
 // ---------------------------------------------------------------------------
 // latest_witness_as_of = newest collection_date across the admitted witness
