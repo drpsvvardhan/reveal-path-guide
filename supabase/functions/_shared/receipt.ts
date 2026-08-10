@@ -20,7 +20,7 @@
 // ---------------------------------------------------------------------------
 // RUNTIME_VERSION identifies the patient-chat pipeline shape (gate order,
 // receipt semantics). Bump on any change to what the pipeline does.
-export const RUNTIME_VERSION = "r0.1.1";
+export const RUNTIME_VERSION = "r0.1.2";
 
 // PROMPT_TEMPLATE_VERSION identifies the system-prompt template in
 // buildPatientSystemPrompt. Bump on any wording/structure change so old
