@@ -33,21 +33,14 @@
 
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import {
-  FRAMEWORK_V2,
-  TIER_VOCABULARY_LICENSES,
-  FORBIDDEN_VOCABULARY_GLOBAL,
-} from "../_shared/framework_v2.ts";
+import { FRAMEWORK_V2, TIER_VOCABULARY_LICENSES, FORBIDDEN_VOCABULARY_GLOBAL } from "../_shared/framework_v2.ts";
 import {
   parseProseAndCitations,
   validateProseAgainstClustersWithAudience,
   stripClusterMarkers,
   type ClusterTier,
 } from "../_shared/framework_v2.ts";
-import {
-  detectDosePatterns,
-  SAFE_FALLBACK_MESSAGE,
-} from "../_shared/dosePattern.ts";
+import { detectDosePatterns, SAFE_FALLBACK_MESSAGE } from "../_shared/dosePattern.ts";
 import {
   validateInterpreterRole,
   replacementTemplateForViolation,
@@ -90,10 +83,7 @@ import {
   CONTEXT_BUDGET_FALLBACK_MESSAGE,
 } from "../_shared/contextBudget.ts";
 import { classifyQueryIntent } from "../_shared/queryIntent.ts";
-import {
-  loadPatientContext,
-  type PatientTerrainContext,
-} from "../_shared/contextLoader.ts";
+import { loadPatientContext, type PatientTerrainContext } from "../_shared/contextLoader.ts";
 import {
   buildBiotwinPacket,
   renderBiotwinPacketForPrompt,
@@ -103,10 +93,7 @@ import {
   BIOTWIN_VALIDATOR_VERSION,
   type BiotwinPacket,
 } from "../_shared/biotwin/packet.ts";
-import {
-  buildBiotwinFallback,
-  isAttentionQuestion,
-} from "../_shared/biotwin/attentionFallback.ts";
+import { buildBiotwinFallback, isAttentionQuestion } from "../_shared/biotwin/attentionFallback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -120,10 +107,7 @@ const corsHeaders = {
 // SMALL HELPERS (preserved verbatim)
 // ============================================================================
 
-function safeList(
-  items: any[] | undefined,
-  formatter: (x: any) => string
-): string {
+function safeList(items: any[] | undefined, formatter: (x: any) => string): string {
   if (!items || !Array.isArray(items) || items.length === 0) {
     return "(none on file)";
   }
@@ -138,11 +122,7 @@ function safeString(s: unknown, fallback = "(not on file)"): string {
     return trimmed ? trimmed : fallback;
   }
 
-  if (
-    typeof s === "number" ||
-    typeof s === "boolean" ||
-    typeof s === "bigint"
-  ) {
+  if (typeof s === "number" || typeof s === "boolean" || typeof s === "bigint") {
     return String(s);
   }
 
@@ -165,9 +145,7 @@ function safeString(s: unknown, fallback = "(not on file)"): string {
 
   try {
     const rendered = JSON.stringify(s);
-    return rendered && rendered !== "{}" && rendered !== "[]"
-      ? rendered
-      : fallback;
+    return rendered && rendered !== "{}" && rendered !== "[]" ? rendered : fallback;
   } catch {
     return String(s);
   }
@@ -268,28 +246,24 @@ function buildWitnessLabHistoryBlock(ctx: PatientTerrainContext): string {
   lines.push(
     `Admitted witnesses: ${rows.length} observations across ` +
       `${byMarker.size} markers, governed by seed ` +
-      `${ctx.witness_provenance.registry_seed_version}.`
+      `${ctx.witness_provenance.registry_seed_version}.`,
   );
   lines.push(
     "Every value below is traceable to a witness_id in the witness_objects " +
       "table. Trends you describe must be consistent with the values shown; " +
       "if a marker is not listed, it has not been witnessed for this patient " +
-      "and you must NOT infer it."
+      "and you must NOT infer it.",
   );
   lines.push("");
 
-  for (const [marker, list] of Array.from(byMarker.entries()).sort(
-    ([a], [b]) => a.localeCompare(b)
-  )) {
+  for (const [marker, list] of Array.from(byMarker.entries()).sort(([a], [b]) => a.localeCompare(b))) {
     lines.push(`marker: ${marker}`);
     lines.push(`unit: ${list[0].unit}`);
     lines.push(`source_window: ${list[0].source}`);
     lines.push("points (witness_id | date | value | flag):");
     for (const r of list) {
       const flag = r.flag ? r.flag : "";
-      lines.push(
-        `  ${r.observation_id} | ${r.collection_date} | ${r.value} | ${flag}`
-      );
+      lines.push(`  ${r.observation_id} | ${r.collection_date} | ${r.value} | ${flag}`);
     }
     lines.push("");
   }
@@ -390,16 +364,9 @@ cluster supports it.
 // format headers are all preserved verbatim.
 // ============================================================================
 
-function buildPatientSystemPrompt(
-  ctx: PatientTerrainContext,
-  manifest: any,
-  documents: any[] | undefined
-): string {
+function buildPatientSystemPrompt(ctx: PatientTerrainContext, manifest: any, documents: any[] | undefined): string {
   const firstName = safeString(manifest?.patient?.firstName, "the patient");
-  const age = safeString(
-    manifest?.patient?.age != null ? String(manifest.patient.age) : undefined,
-    "unknown age"
-  );
+  const age = safeString(manifest?.patient?.age != null ? String(manifest.patient.age) : undefined, "unknown age");
   const sex = safeString(manifest?.patient?.sex, "unspecified sex");
 
   const studyOverview = manifest?.studyOverview ?? {};
@@ -415,9 +382,7 @@ function buildPatientSystemPrompt(
   const careTeam = manifest?.careTeam ?? {};
   const doctorQuestions = manifest?.doctorQuestions ?? [];
 
-  const clusterBlock = buildClusterContextBlock(
-    manifest?.activeClusters ?? []
-  );
+  const clusterBlock = buildClusterContextBlock(manifest?.activeClusters ?? []);
   const witnessLabBlock = buildWitnessLabHistoryBlock(ctx);
 
   const documentsBlock =
@@ -842,16 +807,13 @@ You may render multiple time series blocks in a single response if the patient a
 // STREAMING HANDLERS (preserved verbatim)
 // ============================================================================
 
-async function handleAnthropicStream(
-  messages: any[],
-  systemPrompt: string
-): Promise<Response> {
+async function handleAnthropicStream(messages: any[], systemPrompt: string): Promise<Response> {
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!anthropicKey) {
-    return new Response(
-      JSON.stringify({ error: "Anthropic API key not configured" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return new Response(JSON.stringify({ error: "Anthropic API key not configured" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
   const anthropicResp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -876,13 +838,13 @@ async function handleAnthropicStream(
         JSON.stringify({
           error: "Rate limit exceeded. Please wait a moment and try again.",
         }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
-    return new Response(
-      JSON.stringify({ error: "Anthropic streaming failed" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return new Response(JSON.stringify({ error: "Anthropic streaming failed" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
   const transformedBody = new ReadableStream({
@@ -903,16 +865,11 @@ async function handleAnthropicStream(
             if (!data) continue;
             try {
               const parsed = JSON.parse(data);
-              if (
-                parsed.type === "content_block_delta" &&
-                parsed.delta?.type === "text_delta"
-              ) {
+              if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
                 const out = {
                   choices: [{ delta: { content: parsed.delta.text } }],
                 };
-                controller.enqueue(
-                  new TextEncoder().encode(`data: ${JSON.stringify(out)}\n\n`)
-                );
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(out)}\n\n`));
               } else if (parsed.type === "message_stop") {
                 controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
               }
@@ -932,40 +889,33 @@ async function handleAnthropicStream(
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
       ...corsHeaders,
     },
   });
 }
 
-async function handleLovableStream(
-  messages: any[],
-  systemPrompt: string,
-  model: string
-): Promise<Response> {
+async function handleLovableStream(messages: any[], systemPrompt: string, model: string): Promise<Response> {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY");
   if (!lovableKey) {
-    return new Response(
-      JSON.stringify({ error: "Lovable API key not configured" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return new Response(JSON.stringify({ error: "Lovable API key not configured" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
-  const lovableResp = await fetch(
-    "https://ai.gateway.lovable.dev/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lovableKey}`,
-      },
-      body: JSON.stringify({
-        model: model || "google/gemini-3-flash-preview",
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
-        stream: true,
-      }),
-    }
-  );
+  const lovableResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${lovableKey}`,
+    },
+    body: JSON.stringify({
+      model: model || "google/gemini-3-flash-preview",
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      stream: true,
+    }),
+  });
 
   if (!lovableResp.ok) {
     if (lovableResp.status === 429) {
@@ -973,7 +923,7 @@ async function handleLovableStream(
         JSON.stringify({
           error: "Rate limit exceeded. Please wait a moment and try again.",
         }),
-        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
     if (lovableResp.status === 402) {
@@ -981,20 +931,20 @@ async function handleLovableStream(
         JSON.stringify({
           error: "AI credits exhausted. Please add funds in Settings → Workspace → Usage.",
         }),
-        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
-    return new Response(
-      JSON.stringify({ error: "Lovable streaming failed" }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return new Response(JSON.stringify({ error: "Lovable streaming failed" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 
   return new Response(lovableResp.body, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
       ...corsHeaders,
     },
   });
@@ -1080,12 +1030,8 @@ async function logValidation(
   }
 }
 
-function extractQueuedQuestions(
-  responseText: string
-): { question: string; rationale: string }[] {
-  const sectionMatch = responseText.match(
-    /\*\*What to ask your doctor:?\*\*([\s\S]*?)(?=\*\*[A-Z]|$)/i
-  );
+function extractQueuedQuestions(responseText: string): { question: string; rationale: string }[] {
+  const sectionMatch = responseText.match(/\*\*What to ask your doctor:?\*\*([\s\S]*?)(?=\*\*[A-Z]|$)/i);
   if (!sectionMatch) return [];
   const section = sectionMatch[1];
 
@@ -1107,8 +1053,7 @@ function extractQueuedQuestions(
     if (question.length < 10) continue;
 
     const rationaleStart = match.index + match[0].length;
-    const rationaleEnd =
-      i + 1 < matches.length ? matches[i + 1].index : section.length;
+    const rationaleEnd = i + 1 < matches.length ? matches[i + 1].index : section.length;
     const rationale = section.slice(rationaleStart, rationaleEnd).trim();
 
     results.push({ question, rationale });
@@ -1121,13 +1066,10 @@ async function queueExtractedQuestions(
   userId: string,
   questions: { question: string; rationale: string }[],
   sourceUserMessage: string,
-  sourceAnswerId: string | null = null
+  sourceAnswerId: string | null = null,
 ): Promise<void> {
   if (questions.length === 0) return;
-  const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   const { data: existing } = await supabaseAdmin
     .from("patient_question_queue")
@@ -1137,10 +1079,7 @@ async function queueExtractedQuestions(
     .order("priority", { ascending: false })
     .limit(1);
 
-  const startPriority =
-    existing && existing.length > 0 && existing[0].priority != null
-      ? existing[0].priority + 1
-      : 0;
+  const startPriority = existing && existing.length > 0 && existing[0].priority != null ? existing[0].priority + 1 : 0;
 
   const rows = questions.map((q, idx) => ({
     user_id: userId,
@@ -1155,9 +1094,7 @@ async function queueExtractedQuestions(
     source_answer_id: sourceAnswerId,
   }));
 
-  const { error } = await supabaseAdmin
-    .from("patient_question_queue")
-    .insert(rows);
+  const { error } = await supabaseAdmin.from("patient_question_queue").insert(rows);
 
   if (error) {
     console.error("Question queue insert failed:", error);
@@ -1188,27 +1125,24 @@ async function attemptCorrectiveRegeneration(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const resp = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${lovableKey}`,
-        },
-        body: JSON.stringify({
-          model: model || "google/gemini-3-flash-preview",
-          stream: false,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-            { role: "assistant", content: originalOutput },
-            { role: "user", content: feedback },
-          ],
-        }),
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${lovableKey}`,
       },
-    );
+      body: JSON.stringify({
+        model: model || "google/gemini-3-flash-preview",
+        stream: false,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+          { role: "assistant", content: originalOutput },
+          { role: "user", content: feedback },
+        ],
+      }),
+    });
     if (!resp.ok) return null;
     const json = await resp.json();
     const text = json?.choices?.[0]?.message?.content;
@@ -1264,13 +1198,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!manifest) {
       return new Response(
         JSON.stringify({
-          error:
-            "No manifest provided. The patient companion needs the patient's manifest to ground its reasoning.",
+          error: "No manifest provided. The patient companion needs the patient's manifest to ground its reasoning.",
         }),
         {
           status: 400,
           headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -1301,7 +1234,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         {
           status: 400,
           headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -1333,9 +1266,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
       const authHeader = req.headers.get("Authorization");
-      const bearerToken = authHeader?.startsWith("Bearer ")
-        ? authHeader.slice("Bearer ".length).trim()
-        : "";
+      const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
 
       if (!bearerToken) {
         return new Response(
@@ -1348,14 +1279,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
           {
             status: 401,
             headers: { "Content-Type": "application/json", ...corsHeaders },
-          }
+          },
         );
       }
 
       const authClient = createClient(supabaseUrl, anonKey);
-      const { data: authData, error: authError } = await authClient.auth.getUser(
-        bearerToken
-      );
+      const { data: authData, error: authError } = await authClient.auth.getUser(bearerToken);
 
       if (authError || !authData?.user) {
         return new Response(
@@ -1365,7 +1294,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           {
             status: 401,
             headers: { "Content-Type": "application/json", ...corsHeaders },
-          }
+          },
         );
       }
 
@@ -1403,13 +1332,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
           if (viewAsAuthorized) {
             // Audit the access (best-effort; failure does not block).
-            await adminClient.from("admin_view_as_audit").insert({
-              session_id: session!.id,
-              admin_user_id: authData.user.id,
-              target_user_id: userId,
-              event_type: "patient_chat_access",
-              event_detail: { surface: "patient-chat" },
-            }).then(() => {}, () => {});
+            await adminClient
+              .from("admin_view_as_audit")
+              .insert({
+                session_id: session!.id,
+                admin_user_id: authData.user.id,
+                target_user_id: userId,
+                event_type: "patient_chat_access",
+                event_detail: { surface: "patient-chat" },
+              })
+              .then(
+                () => {},
+                () => {},
+              );
           }
         }
 
@@ -1424,7 +1359,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             {
               status: 401,
               headers: { "Content-Type": "application/json", ...corsHeaders },
-            }
+            },
           );
         }
       }
@@ -1443,17 +1378,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const witnessContext: PatientTerrainContext = await loadPatientContext(
-      supabaseUrl,
-      serviceRoleKey,
-      userId
-    );
+    const witnessContext: PatientTerrainContext = await loadPatientContext(supabaseUrl, serviceRoleKey, userId);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     const { data: clusterRows } = await supabaseAdmin
       .from("clusters")
       .select(
-        "id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held"
+        "id, claim, cluster_kind, confidence_tier, confidence_score, coherence_signals, missing_evidence, tensions_held",
       )
       .eq("patient_id", witnessContext.patient_id)
       .eq("status", "active")
@@ -1465,19 +1396,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (witnessContext.profile) {
       manifest.patient = {
         ...manifest.patient,
-        firstName:
-          witnessContext.profile.display_name ?? manifest.patient?.firstName,
+        firstName: witnessContext.profile.display_name ?? manifest.patient?.firstName,
         age: witnessContext.profile.age ?? manifest.patient?.age,
         sex: witnessContext.profile.sex ?? manifest.patient?.sex,
       };
     }
     manifest.activeClusters = activeClusters;
 
-    const systemPrompt = buildPatientSystemPrompt(
-      witnessContext,
-      manifest,
-      documents
-    );
+    const systemPrompt = buildPatientSystemPrompt(witnessContext, manifest, documents);
 
     // ------------------------------------------------------------------------
     // BioTwin source window.
@@ -1497,7 +1423,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const { data: biotwinReport } = await supabaseAdmin
         .from("biotwin_reports")
         .select(
-          "id, twin_id, version, generated_date, release_control, executive_synthesis, holds, clinician_review_required, patient_release_permitted"
+          "id, twin_id, version, generated_date, release_control, executive_synthesis, holds, clinician_review_required, patient_release_permitted",
         )
         .eq("user_id", userId)
         .eq("status", "active")
@@ -1507,7 +1433,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         const { data: biotwinStatements } = await supabaseAdmin
           .from("biotwin_statements")
           .select(
-            "id, source_id, section, statement_kind, truth_status, title, body, bounds, measurements, timepoint, clinical_authority, requires_measurement, holds"
+            "id, source_id, section, statement_kind, truth_status, title, body, bounds, measurements, timepoint, clinical_authority, requires_measurement, holds",
           )
           .eq("report_id", biotwinReport.id)
           .order("ordinal", { ascending: true });
@@ -1516,13 +1442,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
           // deno-lint-ignore no-explicit-any
           biotwinReport as any,
           // deno-lint-ignore no-explicit-any
-          (biotwinStatements ?? []) as any
+          (biotwinStatements ?? []) as any,
         );
         receiptTwinId = (biotwinReport as any).twin_id ?? null;
-        receiptTwinVersion =
-          (biotwinReport as any).version != null
-            ? String((biotwinReport as any).version)
-            : null;
+        receiptTwinVersion = (biotwinReport as any).version != null ? String((biotwinReport as any).version) : null;
       }
     } catch (e) {
       console.error("BioTwin packet load failed (chat continues without it):", e);
@@ -1548,9 +1471,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ...witnessContext.inbody.observations.map((o) => o.observation_id),
       ...witnessContext.fibroscan.observations.map((o) => o.observation_id),
     ];
-    const contextClusterIds: string[] = activeClusters.map((c: any) =>
-      String(c.id)
-    );
+    const contextClusterIds: string[] = activeClusters.map((c: any) => String(c.id));
     const contextStatementIds: string[] = biotwinPacket.has_report
       ? Array.from(
           new Set(
@@ -1563,8 +1484,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
               ...biotwinPacket.actions,
               ...biotwinPacket.contradictions,
               ...biotwinPacket.evidence,
-            ].map((s) => s.source_id)
-          )
+            ].map((s) => s.source_id),
+          ),
         )
       : [];
 
@@ -1572,9 +1493,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // spans ALL admitted witness classes (CIE/self-report included), not
     // just the partitions printed into the grounding block; falls back to
     // the grounding partitions only if the provenance clock is absent.
-    const twinStateAsOf = biotwinPacket.has_report
-      ? biotwinPacket.generated_date
-      : null;
+    const twinStateAsOf = biotwinPacket.has_report ? biotwinPacket.generated_date : null;
     const latestWitnessAsOf =
       witnessContext.witness_provenance.latest_biological_timestamp ??
       latestWitnessDate([
@@ -1591,16 +1510,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       statement: contextStatementIds,
     };
 
-    const contextSerialized =
-      finalSystemPrompt + "\n␞\n" + canonicalStringify(messages);
+    const contextSerialized = finalSystemPrompt + "\n␞\n" + canonicalStringify(messages);
     const contextBytes = new TextEncoder().encode(contextSerialized).length;
     const contextPacketSha256 = await sha256Hex(contextSerialized);
-    const biotwinPacketSha256 = biotwinPacket.has_report
-      ? await sha256Hex(canonicalStringify(biotwinPacket))
-      : null;
+    const biotwinPacketSha256 = biotwinPacket.has_report ? await sha256Hex(canonicalStringify(biotwinPacket)) : null;
 
-    const lastUserMessage =
-      [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
     // Telemetry only: deterministic, no LLM, never affects the answer.
     const queryIntent = classifyQueryIntent(lastUserMessage);
@@ -1610,9 +1525,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // send legacy Claude model names while avoiding direct-provider failures.
     const requestedModel = typeof model === "string" ? model.trim() : "";
     const normalizedModel =
-      !requestedModel || requestedModel.startsWith("claude")
-        ? "google/gemini-3-flash-preview"
-        : requestedModel;
+      !requestedModel || requestedModel.startsWith("claude") ? "google/gemini-3-flash-preview" : requestedModel;
 
     // ------------------------------------------------------------------------
     // Context budget guard.
@@ -1623,14 +1536,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // provider quietly drop tail context — that would break exactly the
     // grounding guarantees the Answer Receipt certifies.
     // ------------------------------------------------------------------------
-    const contextTokenBudget = resolveContextTokenBudget(
-      Deno.env.get("CONTEXT_TOKEN_BUDGET")
-    );
+    const contextTokenBudget = resolveContextTokenBudget(Deno.env.get("CONTEXT_TOKEN_BUDGET"));
     const estimatedContextTokens = estimateTokens(contextSerialized);
-    const budgetCheck = checkContextBudget(
-      estimatedContextTokens,
-      contextTokenBudget
-    );
+    const budgetCheck = checkContextBudget(estimatedContextTokens, contextTokenBudget);
     if (!budgetCheck.withinBudget) {
       console.error("[patient-chat] CONTEXT_BUDGET_EXCEEDED", {
         userId,
@@ -1646,14 +1554,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         answer_id: answerId,
         conversation_id: receiptConversationId,
         question_timestamp: questionTimestamp,
-        biotwin_report_id: biotwinPacket.has_report
-          ? biotwinPacket.report_id
-          : null,
+        biotwin_report_id: biotwinPacket.has_report ? biotwinPacket.report_id : null,
         twin_id: receiptTwinId,
         twin_version: receiptTwinVersion,
-        report_generated_at: biotwinPacket.has_report
-          ? biotwinPacket.generated_date
-          : null,
+        report_generated_at: biotwinPacket.has_report ? biotwinPacket.generated_date : null,
         biotwin_packet_sha256: biotwinPacketSha256,
         context_packet_sha256: contextPacketSha256,
         twin_state_as_of: twinStateAsOf,
@@ -1670,8 +1574,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         tokens_estimated: true,
         context_bytes: contextBytes,
         latency_ms: null,
-        witness_count_available:
-          witnessContext.witness_provenance.total_witnesses,
+        witness_count_available: witnessContext.witness_provenance.total_witnesses,
         grounding_witness_count: contextWitnessIds.length,
         cluster_count_available: contextClusterIds.length,
         biotwin_statement_count_available: contextStatementIds.length,
@@ -1713,7 +1616,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -1728,31 +1631,25 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // ------------------------------------------------------------------------
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
     if (!lovableKey) {
-      return new Response(
-        JSON.stringify({ error: "Lovable API key not configured" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      return new Response(JSON.stringify({ error: "Lovable API key not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     const llmStartedAt = Date.now();
-    const llmResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: normalizedModel,
-          stream: false,
-          messages: [
-            { role: "system", content: finalSystemPrompt },
-            ...messages,
-          ],
-        }),
-      }
-    );
+    const llmResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: normalizedModel,
+        stream: false,
+        messages: [{ role: "system", content: finalSystemPrompt }, ...messages],
+      }),
+    });
 
     if (!llmResponse.ok) {
       if (llmResponse.status === 429) {
@@ -1760,7 +1657,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           JSON.stringify({
             error: "Rate limit exceeded. Please wait a moment and try again.",
           }),
-          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } },
         );
       }
       if (llmResponse.status === 402) {
@@ -1768,49 +1665,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
           JSON.stringify({
             error: "AI credits exhausted. Please add funds in Settings → Workspace → Usage.",
           }),
-          { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } }
+          { status: 402, headers: { "Content-Type": "application/json", ...corsHeaders } },
         );
       }
       const errText = await llmResponse.text();
       console.error("[patient-chat] LLM gateway error:", llmResponse.status, errText);
-      return new Response(
-        JSON.stringify({ error: "LLM gateway error" }),
-        { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      return new Response(JSON.stringify({ error: "LLM gateway error" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     const llmJson = await llmResponse.json();
     const llmLatencyMs = Date.now() - llmStartedAt;
     const capturedResponse: string = llmJson?.choices?.[0]?.message?.content ?? "";
 
-
     // Token accounting: prefer the gateway's usage block; fall back to an
     // estimate, flagged as estimated so analytics never mistake it for a
     // measurement.
     const usage = llmJson?.usage ?? {};
-    const gatewayInputTokens =
-      typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
-    const gatewayOutputTokens =
-      typeof usage.completion_tokens === "number"
-        ? usage.completion_tokens
-        : null;
-    const tokensEstimated =
-      gatewayInputTokens === null || gatewayOutputTokens === null;
+    const gatewayInputTokens = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null;
+    const gatewayOutputTokens = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null;
+    const tokensEstimated = gatewayInputTokens === null || gatewayOutputTokens === null;
     const inputTokens = gatewayInputTokens ?? estimateTokens(contextSerialized);
     const outputTokens = gatewayOutputTokens ?? estimateTokens(capturedResponse);
 
     if (!capturedResponse) {
       console.error("[patient-chat] LLM returned empty content");
-      return new Response(
-        JSON.stringify({ error: "Empty response from LLM" }),
-        { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      return new Response(JSON.stringify({ error: "Empty response from LLM" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     // Computed once from the user's message; the routing decision depends
     // only on the user's query, not on the model output.
-    const dosePolicyContext: DosePolicyContext =
-      computeDosePolicyContext(lastUserMessage);
+    const dosePolicyContext: DosePolicyContext = computeDosePolicyContext(lastUserMessage);
 
     // ----- Safety fallback doctrine: lose fluency, never intelligence -----
     // When a released Twin exists, a failed admission must NOT deliver a
@@ -1824,9 +1714,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const res = buildBiotwinFallback(
         biotwinPacket,
         lastUserMessage,
-        (text) =>
-          validateDoseTokens(text, dosePolicyContext).valid &&
-          validateInterpreterRole(text).valid,
+        (text) => validateDoseTokens(text, dosePolicyContext).valid && validateInterpreterRole(text).valid,
       );
       if (!res.substantive) return generic;
       biotwinFallbackUsed = true;
@@ -1851,10 +1739,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let regenerationSucceeded: boolean | null = null;
 
     const eligibleForRegen =
-      !roleResult.valid &&
-      !dosePolicyContext.emergencyIntentPresent &&
-      activeClusters &&
-      activeClusters.length > 0;
+      !roleResult.valid && !dosePolicyContext.emergencyIntentPresent && activeClusters && activeClusters.length > 0;
 
     if (eligibleForRegen) {
       regenerationAttempted = true;
@@ -1883,18 +1768,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         }
       } else {
         regenerationSucceeded = false;
-        finalOutput = safeFallback(
-          replacementTemplateForViolation(roleResult.violations),
-          "role_violation",
-        );
+        finalOutput = safeFallback(replacementTemplateForViolation(roleResult.violations), "role_violation");
         status = "replaced_with_fallback";
         replacementTemplateUsed = "role_violation";
       }
     } else if (!roleResult.valid) {
-      finalOutput = safeFallback(
-        replacementTemplateForViolation(roleResult.violations),
-        "role_violation",
-      );
+      finalOutput = safeFallback(replacementTemplateForViolation(roleResult.violations), "role_violation");
       status = "replaced_with_fallback";
       replacementTemplateUsed = "role_violation";
     }
@@ -1913,12 +1792,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
       const runTierValidation = (text: string) => {
         const { sentenceToClusterMap } = parseProseAndCitations(text);
-        return validateProseAgainstClustersWithAudience(
-          text,
-          clusterTierMap,
-          sentenceToClusterMap,
-          "patient",
-        );
+        return validateProseAgainstClustersWithAudience(text, clusterTierMap, sentenceToClusterMap, "patient");
       };
 
       const tierResult = runTierValidation(finalOutput);
@@ -1926,10 +1800,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         regenerationAttempted = true;
         const feedback = [
           "Your previous response violated the tier vocabulary licenses:",
-          ...tierResult.violations.map(
-            (v) =>
-              `- [${v.rule_violated}] "${v.matched_phrase}" in: ${v.sentence}`,
-          ),
+          ...tierResult.violations.map((v) => `- [${v.rule_violated}] "${v.matched_phrase}" in: ${v.sentence}`),
           "",
           "Regenerate the response. Respect each cited cluster's vocabulary",
           "license (allowed/forbidden verbs, required hedging) and never use",
@@ -1958,10 +1829,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           tierViolations = tierResult.violations;
           regenerationSucceeded = false;
-          finalOutput = safeFallback(
-            TIER_VOCABULARY_FALLBACK,
-            "tier_vocabulary_violation",
-          );
+          finalOutput = safeFallback(TIER_VOCABULARY_FALLBACK, "tier_vocabulary_violation");
           status = "replaced_with_fallback";
           replacementTemplateUsed = "tier_vocabulary_violation";
         }
@@ -1989,10 +1857,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // The imported report outranks generic narrative: its prohibited headlines
     // and its medication / PGx / CGM holds are enforced on the final output.
     let biotwinViolations: unknown[] = [];
-    if (
-      biotwinPacket.has_report &&
-      (status === "passed" || status === "regenerated_successfully")
-    ) {
+    if (biotwinPacket.has_report && (status === "passed" || status === "regenerated_successfully")) {
       const biotwinResult = validateBiotwinOutput(finalOutput, biotwinPacket);
       if (!biotwinResult.valid) {
         // One bounded corrective regeneration, then the deterministic
@@ -2003,9 +1868,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           regenerationAttempted = true;
           const feedback = [
             "Your previous response breached the imported clinical evidence report's own governance:",
-            ...biotwinResult.violations.map(
-              (v) => `- [${v.kind}] "${v.matched}" — ${v.detail}`,
-            ),
+            ...biotwinResult.violations.map((v) => `- [${v.kind}] "${v.matched}" — ${v.detail}`),
             "",
             "Regenerate. Holds restrict only the specific prohibited claim or",
             "action, not unrelated biological explanation. Never assert a",
@@ -2036,21 +1899,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           biotwinViolations = biotwinResult.violations;
           regenerationSucceeded = false;
-          finalOutput = safeFallback(
-            biotwinReplacementMessage(biotwinPacket),
-            "biotwin_governance_violation",
-          );
+          finalOutput = safeFallback(biotwinReplacementMessage(biotwinPacket), "biotwin_governance_violation");
           status = "replaced_with_fallback";
           replacementTemplateUsed = "biotwin_governance_violation";
         }
       }
     }
 
-    if (
-      status === "passed" &&
-      dosePolicyContext.emergencyIntentPresent &&
-      !dosePolicyContext.userMentionedDose
-    ) {
+    if (status === "passed" && dosePolicyContext.emergencyIntentPresent && !dosePolicyContext.userMentionedDose) {
       finalOutput = buildEmergencyRoutingMessage(dosePolicyContext);
       status = "replaced_with_emergency_routing";
       replacementTemplateUsed = "emergency_routing";
@@ -2070,9 +1926,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       witness: new Set(contextWitnessIds),
       cluster: new Set([...contextClusterIds, "none"]),
       statement: new Set(contextStatementIds),
-      contradiction: new Set(
-        biotwinPacket.contradictions.map((s) => s.source_id)
-      ),
+      contradiction: new Set(biotwinPacket.contradictions.map((s) => s.source_id)),
     };
     if (status === "passed" || status === "regenerated_successfully") {
       const markers = parseGroundingMarkers(finalOutput);
@@ -2094,21 +1948,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         let repaired = false;
         if (regenerated) {
           const reMarkers = parseGroundingMarkers(regenerated);
-          const reGrounding = validateGroundingMarkers(
-            reMarkers,
-            allowedGrounding
-          );
+          const reGrounding = validateGroundingMarkers(reMarkers, allowedGrounding);
           const reRole = validateInterpreterRole(regenerated);
           const reDose = validateDoseTokens(regenerated, dosePolicyContext);
           const reBiotwin = biotwinPacket.has_report
             ? validateBiotwinOutput(regenerated, biotwinPacket)
             : { valid: true, violations: [] };
-          if (
-            reGrounding.valid &&
-            reRole.valid &&
-            reDose.valid &&
-            reBiotwin.valid
-          ) {
+          if (reGrounding.valid && reRole.valid && reDose.valid && reBiotwin.valid) {
             finalOutput = regenerated;
             status = "regenerated_successfully";
             regenerationSucceeded = true;
@@ -2119,10 +1965,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         if (!repaired) {
           groundingViolations = groundingResult.fabricated;
           regenerationSucceeded = false;
-          finalOutput = safeFallback(
-            GROUNDING_FALLBACK_MESSAGE,
-            "fabricated_grounding",
-          );
+          finalOutput = safeFallback(GROUNDING_FALLBACK_MESSAGE, "fabricated_grounding");
           status = "replaced_with_fallback";
           replacementTemplateUsed = "fabricated_grounding";
           acceptedMarkers = [];
@@ -2134,8 +1977,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         usedRefs = acceptedMarkers
           .filter((m) => !(m.type === "cluster" && m.id === "none"))
           .map((m) => ({
-            ref_type:
-              m.type === "statement" ? "biotwin_statement" : m.type,
+            ref_type: m.type === "statement" ? "biotwin_statement" : m.type,
             ref_id: m.id,
           }));
       }
@@ -2176,14 +2018,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       conversation_id: receiptConversationId,
       question_timestamp: questionTimestamp,
 
-      biotwin_report_id: biotwinPacket.has_report
-        ? biotwinPacket.report_id
-        : null,
+      biotwin_report_id: biotwinPacket.has_report ? biotwinPacket.report_id : null,
       twin_id: receiptTwinId,
       twin_version: receiptTwinVersion,
-      report_generated_at: biotwinPacket.has_report
-        ? biotwinPacket.generated_date
-        : null,
+      report_generated_at: biotwinPacket.has_report ? biotwinPacket.generated_date : null,
       biotwin_packet_sha256: biotwinPacketSha256,
       context_packet_sha256: contextPacketSha256,
 
@@ -2204,8 +2042,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       context_bytes: contextBytes,
       latency_ms: llmLatencyMs,
 
-      witness_count_available:
-        witnessContext.witness_provenance.total_witnesses,
+      witness_count_available: witnessContext.witness_provenance.total_witnesses,
       grounding_witness_count: contextWitnessIds.length,
       cluster_count_available: contextClusterIds.length,
       biotwin_statement_count_available: contextStatementIds.length,
@@ -2219,9 +2056,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       query_intent_rule: queryIntent.matched_rule,
 
       emergency_routed: status === "replaced_with_emergency_routing",
-      fallback_used:
-        status === "replaced_with_fallback" ||
-        status === "regenerated_then_replaced",
+      fallback_used: status === "replaced_with_fallback" || status === "regenerated_then_replaced",
       doctor_question_generated: questions.length > 0,
     };
 
@@ -2267,12 +2102,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // preserve the useful question without fabricating a broken lineage link.
     if (questions.length > 0) {
       try {
-        await queueExtractedQuestions(
-          userId,
-          questions,
-          lastUserMessage,
-          receiptWriteError === null ? answerId : null
-        );
+        await queueExtractedQuestions(userId, questions, lastUserMessage, receiptWriteError === null ? answerId : null);
       } catch (e) {
         console.error("Question queue insert failed:", e);
       }
@@ -2283,22 +2113,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // a receipt without its USED refs is a degraded receipt.
     if (usedRefs.length > 0) {
       try {
-        const { error: refsError } = await supabaseAdmin
-          .from("answer_evidence_refs")
-          .insert(
-            usedRefs.map((r) => ({
-              answer_id: answerId,
-              user_id: userId,
-              ref_type: r.ref_type,
-              ref_id: r.ref_id,
-              usage: "USED",
-            }))
-          );
+        const { error: refsError } = await supabaseAdmin.from("answer_evidence_refs").insert(
+          usedRefs.map((r) => ({
+            answer_id: answerId,
+            user_id: userId,
+            ref_type: r.ref_type,
+            ref_id: r.ref_id,
+            usage: "USED",
+          })),
+        );
         if (refsError) {
-          console.error(
-            "[patient-chat] answer_evidence_refs insert failed:",
-            refsError
-          );
+          console.error("[patient-chat] answer_evidence_refs insert failed:", refsError);
         }
       } catch (e) {
         console.error("[patient-chat] answer_evidence_refs insert threw:", e);
@@ -2335,7 +2160,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (err) {
     console.error("patient-chat fatal error", err);
@@ -2347,7 +2172,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      },
     );
   }
 });
@@ -2355,4 +2180,3 @@ Deno.serve(async (req: Request): Promise<Response> => {
 // ============================================================================
 // END OF patient-chat/index.ts
 // ============================================================================
-
