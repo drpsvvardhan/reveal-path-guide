@@ -553,7 +553,7 @@ Deno.test("version stamps are current", async () => {
   const { BIOTWIN_VALIDATOR_VERSION } = await import("./packet.ts");
   const { RUNTIME_VERSION, PROMPT_TEMPLATE_VERSION } = await import("../receipt.ts");
   assertEquals(BIOTWIN_VALIDATOR_VERSION, "1.3.0");
-  assertEquals(RUNTIME_VERSION, "r0.1.4");
+  assertEquals(RUNTIME_VERSION, "r0.1.5");
   assertEquals(PROMPT_TEMPLATE_VERSION, "pt-2026-08-09.1");
 });
 
