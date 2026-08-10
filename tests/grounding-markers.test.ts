@@ -48,6 +48,31 @@ describe("parseGroundingMarkers", () => {
   it("ignores non-marker braces", () => {
     expect(parseGroundingMarkers("{time_series:start} {foo:bar}")).toEqual([]);
   });
+
+  it("live regression: splits compound markers into one citation per id", () => {
+    // Receipt 663ae60b: this exact marker killed a perfectly grounded
+    // answer — the compound body parsed as one unknown id.
+    expect(
+      parseGroundingMarkers(
+        "{witness:EVID-LIFESTYLEVIEW-FOODLOG, id:CLM-PT-IRON-001}"
+      )
+    ).toEqual([
+      { type: "witness", id: "EVID-LIFESTYLEVIEW-FOODLOG" },
+      { type: "witness", id: "CLM-PT-IRON-001" },
+    ]);
+  });
+
+  it("splits semicolon-separated and re-prefixed fragments in both dialects", () => {
+    // Curly-dialect markers parse before bracket-dialect ones.
+    expect(
+      parseGroundingMarkers("[id:BST-1; statement:BST-2] {statement:BST-3,BST-4}")
+    ).toEqual([
+      { type: "statement", id: "BST-3" },
+      { type: "statement", id: "BST-4" },
+      { type: "statement", id: "BST-1" },
+      { type: "statement", id: "BST-2" },
+    ]);
+  });
 });
 
 describe("validateGroundingMarkers", () => {
