@@ -325,6 +325,28 @@ describe("dose policy — output validation", () => {
     expect(result.unauthorizedTokens).toContain("5000 iu");
   });
 
+  it("live regression: descriptive food-log quantities are not doses", () => {
+    // Receipt 283c349f (Aug 10): this sentence — faithful reporting of the
+    // measured food log — triggered the no-dose fallback and replaced a
+    // correct CGM answer.
+    const ctx = computeDosePolicyContext("Explain my cgm and food log");
+    const result = validateDoseTokens(
+      "Your logs show a diet very high in protein supplements—22 servings in two weeks—and a significant caffeine intake.",
+      ctx,
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("directive sentences with dose tokens still fail", () => {
+    const ctx = computeDosePolicyContext("Explain my cgm and food log");
+    const result = validateDoseTokens(
+      "I suggest cutting back to 2 servings per day.",
+      ctx,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.unauthorizedTokens).toContain("2 servings");
+  });
+
   it("model output repeating user-stated emergency dose passes", () => {
     const ctx = computeDosePolicyContext("is 1g of melatonin too much?");
     const result = validateDoseTokens(
