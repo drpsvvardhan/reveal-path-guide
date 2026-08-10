@@ -147,6 +147,29 @@ export function buildBiotwinFallbackBlocks(
     });
   }
 
+  // Live failure (Aug 10, receipt af28ae67): a patient asked about their CGM
+  // and food log, the answer degraded to this fallback — and the fallback,
+  // built before the Evidence Plane, answered without mentioning either.
+  // The measured streams are the patient's own observations, released by
+  // default; a deterministic answer that omits them is not substantive.
+  if (packet.evidence.length > 0) {
+    const evLines = packet.evidence.map((e) => {
+      const detail = (e.body ?? "")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join("; ");
+      return `- ${e.title.trim()} ${marker(e, "statement")}${detail ? ` — ${detail}` : ""}`;
+    });
+    blocks.push({
+      id: "measured_evidence",
+      text:
+        "**Your measured data streams (present in your Twin):**\n\n" +
+        evLines.join("\n"),
+    });
+  }
+
   const open = [...packet.unknown, ...packet.candidate].slice(0, 3);
   if (open.length > 0) {
     blocks.push({

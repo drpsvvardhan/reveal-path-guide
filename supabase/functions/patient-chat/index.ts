@@ -2075,8 +2075,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ),
     };
     if (status === "passed" || status === "regenerated_successfully") {
-      let markers = parseGroundingMarkers(finalOutput);
-      let groundingResult = validateGroundingMarkers(markers, allowedGrounding);
+      const markers = parseGroundingMarkers(finalOutput);
+      const groundingResult = validateGroundingMarkers(markers, allowedGrounding);
+      // USED refs always come from the validation's accepted list — it
+      // re-homes authorized ids cited under the wrong marker type.
+      let acceptedMarkers = groundingResult.accepted;
 
       if (!groundingResult.valid) {
         regenerationAttempted = true;
@@ -2109,7 +2112,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             finalOutput = regenerated;
             status = "regenerated_successfully";
             regenerationSucceeded = true;
-            markers = reMarkers;
+            acceptedMarkers = reGrounding.accepted;
             repaired = true;
           }
         }
@@ -2122,13 +2125,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
           );
           status = "replaced_with_fallback";
           replacementTemplateUsed = "fabricated_grounding";
-          markers = [];
+          acceptedMarkers = [];
         }
       }
 
       if (status === "passed" || status === "regenerated_successfully") {
         markerCoverage = computeMarkerCoverage(finalOutput);
-        usedRefs = dedupeMarkers(markers)
+        usedRefs = acceptedMarkers
           .filter((m) => !(m.type === "cluster" && m.id === "none"))
           .map((m) => ({
             ref_type:
@@ -2146,7 +2149,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       const fbValidation = validateGroundingMarkers(fbMarkers, allowedGrounding);
       if (fbValidation.valid) {
         markerCoverage = computeMarkerCoverage(finalOutput);
-        usedRefs = dedupeMarkers(fbMarkers)
+        usedRefs = fbValidation.accepted
           .filter((m) => !(m.type === "cluster" && m.id === "none"))
           .map((m) => ({
             ref_type: m.type === "statement" ? "biotwin_statement" : m.type,

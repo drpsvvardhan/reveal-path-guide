@@ -74,12 +74,52 @@ describe("validateGroundingMarkers", () => {
     ]);
   });
 
-  it("rejects cross-type citation (a witness ID cited as a statement)", () => {
+  it("re-homes cross-type citation of an authorized id instead of rejecting", () => {
+    // This test used to assert rejection — that strictness caused the live
+    // failure (Aug 10, receipt af28ae67): the model cited the real evidence
+    // statements as {witness:EVID-…} and the first answer that ever used
+    // the evidence was killed as fabrication. Wrong type of a real id is a
+    // dialect error, not fabrication.
     const r = validateGroundingMarkers(
       [{ type: "statement", id: "WIT-1" }],
       allowed
     );
+    expect(r.valid).toBe(true);
+    expect(r.accepted).toEqual([{ type: "witness", id: "WIT-1" }]);
+  });
+
+  it("live regression: evidence statement cited as witness is accepted as statement", () => {
+    const withEvidence = {
+      ...allowed,
+      statement: new Set([
+        ...allowed.statement,
+        "EVID-SENSORSTATE-CHANNELS-CGM",
+        "EVID-LIFESTYLEVIEW-FOODLOG",
+      ]),
+    };
+    const r = validateGroundingMarkers(
+      [
+        { type: "witness", id: "EVID-SENSORSTATE-CHANNELS-CGM" },
+        { type: "witness", id: "EVID-LIFESTYLEVIEW-FOODLOG" },
+      ],
+      withEvidence
+    );
+    expect(r.valid).toBe(true);
+    expect(r.accepted).toEqual([
+      { type: "statement", id: "EVID-SENSORSTATE-CHANNELS-CGM" },
+      { type: "statement", id: "EVID-LIFESTYLEVIEW-FOODLOG" },
+    ]);
+  });
+
+  it("still rejects ids found in no authorized set", () => {
+    const r = validateGroundingMarkers(
+      [{ type: "witness", id: "EVID-FABRICATED-STREAM" }],
+      allowed
+    );
     expect(r.valid).toBe(false);
+    expect(r.fabricated).toEqual([
+      { type: "witness", id: "EVID-FABRICATED-STREAM" },
+    ]);
   });
 
   it("allows the cluster:none sentinel", () => {
