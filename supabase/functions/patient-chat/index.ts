@@ -70,6 +70,7 @@ import {
   sha256Hex,
   estimateTokens,
   latestWitnessDate,
+  sanitizeConversationId,
   type AnswerReceiptFields,
   type UsedEvidenceRef,
 } from "../_shared/receipt.ts";
@@ -1243,7 +1244,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       documents,
       model,
       userId,
-      conversationId,
+      conversationId: rawConversationId,
     }: {
       messages: { role: "user" | "assistant"; content: string }[];
       manifest: any;
@@ -1253,6 +1254,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       /** chat_conversations.id — binds the Answer Receipt to its conversation. */
       conversationId?: string;
     } = body;
+
+    // A client-side "tmp-…" placeholder must never reach the receipt
+    // insert — see sanitizeConversationId for the live failure this guards.
+    const conversationId = sanitizeConversationId(rawConversationId);
 
     // Receipt clock: when the question entered the runtime.
     const questionTimestamp = new Date().toISOString();
