@@ -252,6 +252,43 @@ export function harvestMeasuredEvidence(
       summary: lines.join("\n"),
     });
   }
+
+  // The omics-layer inventory is the patient's own meta-data: WHICH assays
+  // were run and what each covers. Live failure (Aug 14): asked "what does
+  // my omics tell and what is in each layer", the runtime named two layers
+  // out of thirteen — the packet carried claim fragments but no inventory,
+  // so the model honestly reconstructed from the two claims that happened
+  // to describe platforms. One summary line per domain, released by
+  // default; quarantine (by "omicsDomains" or its full path) withholds it
+  // loudly like any other stream.
+  const OMICS_INVENTORY_ROOT = "observations.omicsDomains";
+  const domains = resolveEvidencePath(twin, OMICS_INVENTORY_ROOT);
+  if (isObject(domains)) {
+    if (quarantined.has("omicsDomains") || quarantined.has(OMICS_INVENTORY_ROOT)) {
+      warn(
+        "evidence_quarantined",
+        `Evidence root "${OMICS_INVENTORY_ROOT}" exists in the Twin but is quarantined by the release decision. The runtime will report this stream as unavailable.`,
+        OMICS_INVENTORY_ROOT,
+      );
+    } else {
+      const lines: string[] = [];
+      for (const [domain, spec] of Object.entries(domains as JsonObject)) {
+        if (!isObject(spec)) continue;
+        const s = spec as JsonObject;
+        const avail = s.available === true ? "AVAILABLE" : "NOT AVAILABLE";
+        const depth = typeof s.depth === "string" ? (s.depth as string).slice(0, 200) : "";
+        lines.push(`${domain}: ${avail}${depth ? ` — ${depth}` : ""}`);
+      }
+      if (lines.length > 0) {
+        out.push({
+          evidence_id: "EVID-OMICS-INVENTORY",
+          source_root: OMICS_INVENTORY_ROOT,
+          title: "Measured evidence — omics layer inventory",
+          summary: lines.join("\n"),
+        });
+      }
+    }
+  }
   return out;
 }
 

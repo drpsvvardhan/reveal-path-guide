@@ -82,6 +82,51 @@ describe("harvestMeasuredEvidence", () => {
     expect(EVIDENCE_ROOTS).not.toContain("unrelated_root" as never);
   });
 
+  it("releases the omics-layer inventory by default — one line per domain", () => {
+    // Live failure (Aug 14): asked "what does my omics tell and what is in
+    // each layer", the runtime named 2 of 13 layers — the packet carried no
+    // inventory. The inventory of what was measured is itself the
+    // patient's data.
+    const withInventory = {
+      ...twin,
+      observations: {
+        omicsDomains: {
+          "Methylation (EPICv2 array)": {
+            available: true,
+            depth: "Illumina EPICv2 genome-wide methylation array (~935K CpG probes).",
+          },
+          "Metabolomics (plasma)": { available: true, depth: "Broad plasma small-molecule panel." },
+          not_a_domain: "plain string ignored",
+        },
+      },
+    };
+    const out = harvestMeasuredEvidence(withInventory as never, new Set(), warn);
+    const inv = out.find(
+      (e) => (e as { evidence_id: string }).evidence_id === "EVID-OMICS-INVENTORY"
+    ) as { summary: string } | undefined;
+    expect(inv).toBeDefined();
+    expect(inv!.summary).toContain("Methylation (EPICv2 array): AVAILABLE — Illumina EPICv2");
+    expect(inv!.summary).toContain("Metabolomics (plasma): AVAILABLE");
+    expect(inv!.summary).not.toContain("not_a_domain");
+  });
+
+  it("omics inventory honors quarantine loudly", () => {
+    warnings.length = 0;
+    const withInventory = {
+      ...twin,
+      observations: { omicsDomains: { "Metabolomics": { available: true, depth: "x" } } },
+    };
+    const out = harvestMeasuredEvidence(
+      withInventory as never,
+      new Set(["omicsDomains"]),
+      warn
+    );
+    expect(
+      out.some((e) => (e as { evidence_id: string }).evidence_id === "EVID-OMICS-INVENTORY")
+    ).toBe(false);
+    expect(warnings.some((w) => w.code === "evidence_quarantined")).toBe(true);
+  });
+
   it("quarantine is explicit and loud, never silent", () => {
     warnings.length = 0;
     const out = harvestMeasuredEvidence(
