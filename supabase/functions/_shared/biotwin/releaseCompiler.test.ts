@@ -19,7 +19,7 @@ const peterSource: JsonObject = {
   artifactType: "RUNTIME_TWIN_FINAL",
   subject: "VZ0000119",
   generatedAt: "2026-08-07",
-  twinVersion: "v18.0-final",
+  twinVersion: "v18.1-final",
   observations: {
     canonicalClaims: {
       "CLM-PT-APOB-001": {

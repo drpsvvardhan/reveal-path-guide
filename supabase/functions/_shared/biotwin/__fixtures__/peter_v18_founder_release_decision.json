@@ -1,9 +1,12 @@
 {
-  "schema": { "name": "Vizzhy Founding Cohort Release Decision", "version": "1.0" },
+  "schema": {
+    "name": "Vizzhy Founding Cohort Release Decision",
+    "version": "1.0"
+  },
   "subject": {
     "twin_id": "VZ0000119",
-    "source_twin_version": "v18.0-final",
-    "source_twin_sha256": "e4b9ef8eb9c0a11b04646ccafed25aa1f55119e5cd35246b535e830e99ac9d67"
+    "source_twin_version": "v18.1-final",
+    "source_twin_sha256": "3db232b540a5b5f04a9bbfa612bd7b19257f533bc5386cba794105d7aeea6dfd"
   },
   "release": {
     "class": "FOUNDING_COHORT",
@@ -27,20 +30,73 @@
     "CLM-PT-APOE-FH-WGS-001"
   ],
   "critical_anchor_review": [
-    { "claim_id": "CLM-PT-PLATFORM-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-APOB-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-XPLAT-R-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-SLEEP-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-IRON-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-LIVER-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-KIDNEY-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-ED-NO-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-CLOCKDISC-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-ORGANCLOCK-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." },
-    { "claim_id": "CLM-PT-APOE-FH-WGS-001", "status": "ACCEPT_WITH_PROVENANCE_DEBT", "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt." }
+    {
+      "claim_id": "CLM-PT-PLATFORM-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-APOB-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-XPLAT-R-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-SLEEP-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-IRON-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-LIVER-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-KIDNEY-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-ED-NO-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-CLOCKDISC-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-ORGANCLOCK-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    },
+    {
+      "claim_id": "CLM-PT-APOE-FH-WGS-001",
+      "status": "ACCEPT_WITH_PROVENANCE_DEBT",
+      "basis": "Accepted for Founding Cohort explanation under the canonical claim ceiling; primary-source digest/lineage hardening remains declared debt."
+    }
   ],
-  "measurement_plan_ids": ["MP-01", "MP-03", "MP-05", "MP-06"],
-  "contradiction_ids": ["CTR-PT-C01", "CTR-PT-C03", "CTR-PT-C08"],
+  "measurement_plan_ids": [
+    "MP-01",
+    "MP-03",
+    "MP-05",
+    "MP-06"
+  ],
+  "contradiction_ids": [
+    "CTR-PT-C01",
+    "CTR-PT-C03",
+    "CTR-PT-C08"
+  ],
   "explicit_prohibitions": [
     "5.01 h TST",
     "65.8% efficiency",
@@ -62,6 +118,10 @@
       "type": "ASSAY_LINEAGE_PARTIAL",
       "disposition": "NON_BLOCKING_FOUNDING_COHORT",
       "note": "Instrument/barcode-level lineage is not a patient-reveal blocker unless it changes assay identity, comparability, or a load-bearing value."
+    },
+    {
+      "item": "v18.1 correction: five 'array genotyping' mislabels in v18.0 replaced with the accurate substrate description (filtered sequencing-derived variant subset: keygenes + 1,382-row SIFT-filtered nonsynonymous calls). Assay-type label only; no epistemic content changed.",
+      "status": "RESOLVED_IN_V18_1"
     }
   ],
   "review": {
