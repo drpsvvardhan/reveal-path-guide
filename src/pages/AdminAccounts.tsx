@@ -58,6 +58,11 @@ const AdminAccounts: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
 
+  const [cieFile, setCieFile] = useState<File | null>(null);
+  const [cieTakenAt, setCieTakenAt] = useState("");
+  const [cieUploading, setCieUploading] = useState(false);
+  const [cieResult, setCieResult] = useState<Record<string, unknown> | null>(null);
+
   const loadProfiles = async () => {
     setLoadingProfiles(true);
     try {
@@ -153,6 +158,39 @@ const AdminAccounts: React.FC = () => {
       toast.error(`Upload failed: ${e?.message ?? e}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const uploadCie = async () => {
+    if (!targetUserId) {
+      toast.error("Choose the account this CIE belongs to.");
+      return;
+    }
+    if (!cieFile) {
+      toast.error("Select the factory CIE export (question.json).");
+      return;
+    }
+    setCieUploading(true);
+    setCieResult(null);
+    try {
+      const body: Record<string, unknown> = {
+        user_id: targetUserId,
+        cie_json: JSON.parse(await readJsonFile(cieFile)),
+      };
+      if (cieTakenAt) body.taken_at = cieTakenAt;
+
+      const { data, error } = await supabase.functions.invoke("admin-import-cie", { body });
+      if (error) throw error;
+      setCieResult(data ?? null);
+      if (data?.imported) {
+        toast.success(`CIE imported as assessment version ${data.version}.`);
+      } else {
+        toast.error(data?.message ?? data?.error ?? "Not imported. See diagnostics below.");
+      }
+    } catch (e: any) {
+      toast.error(`CIE upload failed: ${e?.message ?? e}`);
+    } finally {
+      setCieUploading(false);
     }
   };
 
@@ -386,6 +424,75 @@ const AdminAccounts: React.FC = () => {
                   </div>
                   <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-muted-foreground">
                     {JSON.stringify(result, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* ── import completed CIE ───────────────────────────────────── */}
+          <Card className="p-5 min-w-0">
+            <div className="flex items-center gap-2 mb-4">
+              <Upload className="h-4 w-4 text-muted-foreground shrink-0" />
+              <h2 className="font-serif text-lg">Import a completed CIE</h2>
+            </div>
+
+            <div className="space-y-4 min-w-0">
+              <p className="font-sans text-xs text-muted-foreground break-words">
+                Bootstrap an assessment already taken in the factory pipeline
+                (question.json) for the account selected above — the patient
+                never retakes Layer 1. Factory scores are imported exactly as
+                scored; in-app retakes remain available and version alongside.
+              </p>
+
+              <div>
+                <Label className="font-sans text-xs">Factory CIE export (question.json)</Label>
+                <Input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(e) => setCieFile(e.target.files?.[0] ?? null)}
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label className="font-sans text-xs">Date taken (optional)</Label>
+                <Input
+                  type="date"
+                  value={cieTakenAt}
+                  onChange={(e) => setCieTakenAt(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="mt-1 font-sans text-[11px] text-muted-foreground">
+                  The intake date, if known — it becomes the assessment's
+                  biological timestamp. Left empty, the import date is used.
+                </p>
+              </div>
+
+              <Button onClick={uploadCie} disabled={cieUploading} className="min-h-[44px] w-full">
+                {cieUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                Import CIE
+              </Button>
+
+              {cieResult && (
+                <div className="rounded-md border border-border bg-muted/30 p-3 min-w-0 space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant={cieResult.imported ? "secondary" : "outline"} className="text-[10px]">
+                      {cieResult.imported ? "imported" : "not imported"}
+                    </Badge>
+                    {typeof cieResult.responses === "number" && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {cieResult.responses} responses
+                      </Badge>
+                    )}
+                    {typeof cieResult.version === "number" && (
+                      <Badge variant="outline" className="text-[10px]">
+                        version {cieResult.version}
+                      </Badge>
+                    )}
+                  </div>
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] text-muted-foreground">
+                    {JSON.stringify(cieResult, null, 2)}
                   </pre>
                 </div>
               )}
