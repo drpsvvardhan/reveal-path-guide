@@ -22,9 +22,11 @@ const completedAssessment = {
   created_at: "2026-06-17T10:00:00.000Z",
   full_completed_at: "2026-06-17T10:05:00.000Z",
 };
+// Mutable so individual tests can vary the assessment's timestamps.
+const assessmentState = { current: { ...completedAssessment } };
 vi.mock("@/context/CIEAssessmentContext", () => ({
   useCIEAssessment: () => ({
-    currentAssessment: completedAssessment,
+    currentAssessment: assessmentState.current,
     domainScores: {},
     gateScores: {},
     isLoading: false,
@@ -149,6 +151,7 @@ function Probe() {
 beforeEach(() => {
   state.renders = [];
   state.invokeCalls = [];
+  assessmentState.current = { ...completedAssessment };
 });
 
 afterEach(() => {
@@ -211,6 +214,38 @@ describe("Terrain auto-regeneration after CIE completion (regression)", () => {
         expect(state.invokeCalls.some((c) => c.name === "generate-terrain-render")).toBe(true);
         const text = screen.getByTestId("portrait").textContent || "";
         assertNoCieNotDoneCopy(text);
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("regenerates for a back-dated factory import: created_at newer than the render wins", async () => {
+    // Live case (Aug 15): an imported factory CIE carries its real intake
+    // date (months in the past) in full_completed_at but ENTERS the system
+    // at created_at. An active render generated before the import must be
+    // considered stale, or the imported CIE never renders.
+    assessmentState.current = {
+      ...completedAssessment,
+      full_completed_at: "2026-03-14T00:00:00.000Z", // real intake, back-dated
+      created_at: "2026-06-17T10:20:00.000Z", // import time — newest signal
+    };
+    state.renders = [
+      buildRender(
+        "r-pre-import",
+        "Your CIE responses show consistent signal across metabolic and vascular domains.",
+        "2026-06-17T10:10:00.000Z", // newer than intake date, older than import
+      ),
+    ];
+
+    render(
+      <TerrainRenderProvider>
+        <Probe />
+      </TerrainRenderProvider>,
+    );
+
+    await waitFor(
+      () => {
+        expect(state.invokeCalls.some((c) => c.name === "generate-terrain-render")).toBe(true);
       },
       { timeout: 3000 },
     );
