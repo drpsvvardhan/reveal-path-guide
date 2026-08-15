@@ -228,8 +228,19 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
     if (isLoading) return;
     if (!effectiveUserId) return;
     if (!currentAssessment || currentAssessment.status !== "complete") return;
-    const cieTs = currentAssessment.full_completed_at || currentAssessment.created_at;
-    if (!cieTs) return;
+    // An imported factory CIE carries its real intake date in
+    // full_completed_at, which can be far in the past — but it ENTERED the
+    // system at created_at. Staleness must compare against whichever is
+    // newer, or a back-dated import would look older than the active
+    // render and never trigger regeneration.
+    const cieCandidates = [
+      currentAssessment.full_completed_at,
+      currentAssessment.created_at,
+    ].filter(Boolean) as string[];
+    if (cieCandidates.length === 0) return;
+    const cieTs = cieCandidates.reduce((a, b) =>
+      new Date(a).getTime() >= new Date(b).getTime() ? a : b
+    );
     const renderTs = activeRender?.generated_at || activeRender?.created_at;
     const placeholder = hasCompletedCiePlaceholder(activeRender);
     const staleLabs = hasStaleLabUploadPlaceholder(activeRender, (labObservations?.length ?? 0) > 0);
