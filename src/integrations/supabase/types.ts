@@ -1044,21 +1044,21 @@ export type Database = {
           id: string
           logged_at: string
           patient_id: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           entry: string
           id?: string
           logged_at?: string
-          patient_id?: string
-          user_id?: string | null
+          patient_id: string
+          user_id: string
         }
         Update: {
           entry?: string
           id?: string
           logged_at?: string
           patient_id?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -2761,21 +2761,21 @@ export type Database = {
           patient_id: string
           recorded_at: string
           transcript: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           id?: string
-          patient_id?: string
+          patient_id: string
           recorded_at?: string
           transcript: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           id?: string
           patient_id?: string
           recorded_at?: string
           transcript?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
