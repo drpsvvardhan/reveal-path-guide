@@ -485,9 +485,10 @@ export function compileRuntimeTwinV18(
   const nextTests = [...candidate, ...unknown].map((x) => str(x.next_truth_test)).filter((x): x is string => !!x).slice(0, 3);
 
   const sourceReleaseClass = isObject(observations!.releaseClass) ? observations!.releaseClass as JsonObject : {};
+  const decisionRecord = decision as unknown as JsonObject;
   const quarantinedEvidence = new Set(
-    Array.isArray((decision as JsonObject).quarantined_evidence)
-      ? ((decision as JsonObject).quarantined_evidence as unknown[]).filter(
+    Array.isArray(decisionRecord.quarantined_evidence)
+      ? (decisionRecord.quarantined_evidence as unknown[]).filter(
           (v): v is string => typeof v === "string",
         )
       : [],
