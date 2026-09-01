@@ -20,7 +20,7 @@ import {
   type BiotwinPacket,
 } from "../supabase/functions/_shared/biotwin/packet.ts";
 
-// Peter-class packet: many short scar prohibitions + always-on holds —
+// Subject-01-class packet: many short scar prohibitions + always-on holds —
 // exactly the shape the Release Compiler emits for a mature twin.
 const packet: BiotwinPacket = {
   ...EMPTY_BIOTWIN_PACKET,

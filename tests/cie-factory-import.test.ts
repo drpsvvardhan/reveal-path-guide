@@ -6,7 +6,7 @@
 // Authority rule under test: FACTORY scores are authoritative. The factory
 // engine scores natural-language vocabularies the app's maps don't know, and
 // its domain scores are the exact values frozen into the patient's Twin
-// (Peter's E13 = 57.3 appears verbatim in his v18 twin). Import must copy,
+// (Subject-01's E13 = 57.3 appears verbatim in his v18 twin). Import must copy,
 // never re-score.
 
 import { describe, it, expect } from "vitest";
@@ -17,12 +17,12 @@ import {
   type FactoryCiePayload,
 } from "../supabase/functions/_shared/cieFactoryImport.ts";
 
-// Peter-shaped fixture: real domains, real score shapes, factory vocabulary
+// Subject-01-shaped fixture: real domains, real score shapes, factory vocabulary
 // the app's score maps don't contain.
-const peterish: FactoryCiePayload = {
+const syntheticCie: FactoryCiePayload = {
   Name: "Test Patient",
   intakeData: {
-    customer_id: "VZ0000119",
+    customer_id: "VZSYN0001",
     layer1Responses: {
       A1: { A1Q1: "excellent", A1Q2: "no", A1Q3: "sometimes" },
       E13: { E13Q1: "sometimes", E13Q2: "twice", E13Q3: "somewhat_refreshed" },
@@ -48,7 +48,7 @@ const ids = { assessmentId: "aaaaaaaa-0000-0000-0000-000000000001", userId: "bbb
 
 describe("validateFactoryCiePayload", () => {
   it("accepts the factory export shape", () => {
-    expect(validateFactoryCiePayload(peterish).valid).toBe(true);
+    expect(validateFactoryCiePayload(syntheticCie).valid).toBe(true);
   });
 
   it("rejects non-factory shapes with named reasons", () => {
@@ -65,7 +65,7 @@ describe("validateFactoryCiePayload", () => {
 });
 
 describe("mapFactoryCie", () => {
-  const mapped = mapFactoryCie(peterish, ids);
+  const mapped = mapFactoryCie(syntheticCie, ids);
 
   it("factory domain finals are copied verbatim, never re-scored", () => {
     const e13 = mapped.domainRows.find((d) => d.domain_id === "E13")!;
@@ -118,7 +118,7 @@ describe("mapFactoryCie", () => {
   it("counts and trigger lists round-trip", () => {
     expect(mapped.totalQuestions).toBe(9 + 10);
     expect(mapped.triggeredDomains).toEqual(["E13"]);
-    expect(mapped.customerId).toBe("VZ0000119");
+    expect(mapped.customerId).toBe("VZSYN0001");
   });
 });
 

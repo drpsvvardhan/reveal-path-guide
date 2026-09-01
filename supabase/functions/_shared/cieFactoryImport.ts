@@ -10,7 +10,7 @@
 // scores natural-language vocabularies the app's maps don't fully know
 // ("mostly_regular", "somewhat_refreshed", "4_5_cups"), and the factory's
 // domain scores are the exact values already frozen into the patient's Twin
-// (Peter's E13 = 57.3 appears verbatim in his v18 twin). Re-scoring here
+// (Subject-01's E13 = 57.3 appears verbatim in his v18 twin). Re-scoring here
 // would create a second, conflicting truth. Per-question display scores use
 // the payload's own qScores where given; domain finals are copied, never
 // recomputed; gates are aggregated from those finals with the app's shared
