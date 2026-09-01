@@ -154,7 +154,9 @@ def render_tables(constraints) -> tuple[str, str, list[str], list[str]]:
         "\n\n".join(out) + "\n",
         "\n".join(fk_statements) + "\n",
         auth_fk_rewrites,
+        sorted(cols_by_table),
     )
+
 
 
 def sql_lit(value: str) -> str:
