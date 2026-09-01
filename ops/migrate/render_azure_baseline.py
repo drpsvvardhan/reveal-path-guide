@@ -63,11 +63,57 @@ def render_types() -> str:
     return "\n".join(rows) + "\n"
 
 
-def render_tables(columns, constraints) -> tuple[str, str, list[str]]:
-    cols_by_table = defaultdict(list)
-    for c in columns:
-        if c["schema"] == "public":
-            cols_by_table[c["table"]].append(c)
+def render_views() -> tuple[str, list[str]]:
+    """Views are rendered as views. Emitting one as a table (which is what the
+    information_schema column list alone would produce) silently turns a derived
+    projection into an unmaintained copy."""
+    rows = subprocess.run(
+        [
+            "psql",
+            "-X",
+            "-q",
+            "-tAc",
+            "select format('CREATE OR REPLACE VIEW public.%I AS %s', c.relname, "
+            "pg_get_viewdef(c.oid, true)) || " + sql_lit(SPLIT) + " "
+            "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+            "where n.nspname='public' and c.relkind in ('v','m') order by c.relname",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    defs = [chunk.strip() for chunk in rows.split(SPLIT) if chunk.strip()]
+    names = psql(
+        "select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace "
+        "where n.nspname='public' and c.relkind in ('v','m') order by 1"
+    )
+    return ("\n\n".join(defs) + "\n" if defs else "-- no views\n"), names
+
+
+def table_column_lines() -> dict[str, list[str]]:
+    """Column definitions come from pg_attribute/format_type, not
+    information_schema: the latter drops numeric precision and enum type names."""
+    rows = psql(
+        "select c.relname || E'\\t' || format('%I %s%s%s', a.attname, "
+        "format_type(a.atttypid, a.atttypmod), "
+        "case when d.adbin is not null then ' DEFAULT ' || pg_get_expr(d.adbin, d.adrelid) else '' end, "
+        "case when a.attnotnull then ' NOT NULL' else '' end) "
+        "from pg_attribute a "
+        "join pg_class c on c.oid = a.attrelid "
+        "join pg_namespace n on n.oid = c.relnamespace "
+        "left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum "
+        "where n.nspname='public' and c.relkind='r' and a.attnum > 0 and not a.attisdropped "
+        "order by c.relname, a.attnum"
+    )
+    by_table: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        table, frag = row.split("\t", 1)
+        by_table[table].append("  " + frag)
+    return by_table
+
+
+def render_tables(constraints) -> tuple[str, str, list[str], list[str]]:
+    cols_by_table = table_column_lines()
 
     cons_by_table = defaultdict(list)
     for c in constraints:
@@ -79,21 +125,8 @@ def render_tables(columns, constraints) -> tuple[str, str, list[str]]:
     fk_statements: list[str] = []
     out: list[str] = []
     for table in sorted(cols_by_table):
-        col_lines = []
-        for c in sorted(cols_by_table[table], key=lambda r: r["ordinal"]):
-            frag = f'  "{c["column"]}" {c["type"]}'
-            if c["type"] in ("USER-DEFINED", "ARRAY"):
-                # information_schema loses the concrete type name; ask the catalogue
-                frag = "  " + psql(
-                    "select format('%I %s', a.attname, format_type(a.atttypid, a.atttypmod)) "
-                    f"from pg_attribute a where a.attrelid = 'public.{table}'::regclass "
-                    f"and a.attname = {sql_lit(c['column'])}"
-                )[0]
-            if c["default"] is not None:
-                frag += f' DEFAULT {c["default"]}'
-            if c["nullable"] == "NO":
-                frag += " NOT NULL"
-            col_lines.append(frag)
+        col_lines = list(cols_by_table[table])
+
 
         table_cons = []
         for con in sorted(cons_by_table.get(table, []), key=lambda r: r["name"]):
