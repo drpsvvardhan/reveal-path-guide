@@ -46,8 +46,12 @@ QUERIES = {
     "where schemaname='public' order by 1",
     "fks": "select conname from pg_constraint where contype='f' "
     "and connamespace='public'::regnamespace order by 1",
-    "anon_grants": "select table_name from information_schema.role_table_grants "
-    "where grantee='anon' and table_schema='public' group by 1 order by 1",
+    # relacl, not information_schema: the latter hides grants the connecting
+    # role cannot see, which would silently produce empty T3 evidence.
+    "anon_grants": "select c.relname from pg_class c join pg_namespace n "
+    "on n.oid=c.relnamespace, aclexplode(c.relacl) acl "
+    "where n.nspname='public' and c.relkind in ('r','v') "
+    "and acl.grantee = 'anon'::regrole group by c.relname order by 1",
 }
 
 

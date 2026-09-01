@@ -151,4 +151,22 @@ INSERT INTO storage.buckets (id, public) VALUES
   ('ontology', false)
 ON CONFLICT (id) DO NOTHING;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- ---------------------------------------------------------------------------
+-- 5. Extensions live in their own schema, exactly as they do today. Installing
+--    them into `public` would add ~36 functions to the application schema and
+--    make every future drift comparison noisy.
+-- ---------------------------------------------------------------------------
+CREATE SCHEMA IF NOT EXISTS extensions AUTHORIZATION app_schema_owner;
+CREATE EXTENSION IF NOT EXISTS pgcrypto  WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
+GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;
+-- Per-role search_path (not ALTER DATABASE) so extension functions resolve for
+-- every connecting identity without a database-wide setting.
+DO $$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
+    EXECUTE format('ALTER ROLE %I SET search_path TO public, extensions', r);
+  END LOOP;
+END
+$$;
