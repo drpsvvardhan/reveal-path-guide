@@ -63,7 +63,7 @@ def render_types() -> str:
     return "\n".join(rows) + "\n"
 
 
-def render_tables(columns, constraints) -> tuple[str, list[str]]:
+def render_tables(columns, constraints) -> tuple[str, str, list[str]]:
     cols_by_table = defaultdict(list)
     for c in columns:
         if c["schema"] == "public":
