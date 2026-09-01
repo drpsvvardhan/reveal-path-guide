@@ -104,39 +104,68 @@ def render_tables(columns, constraints) -> tuple[str, list[str]]:
                     "auth.users", "app_identity.app_users"
                 )
                 auth_fk_rewrites.append(f"{table}.{con['name']}")
+            if con["type"] == "f":
+                # Deferred to 021_foreign_keys.sql: table creation order must not
+                # depend on the reference graph.
+                fk_statements.append(
+                    f'ALTER TABLE public."{table}" ADD CONSTRAINT '
+                    f'"{con["name"]}" {definition};'
+                )
+                continue
             table_cons.append(f'  CONSTRAINT "{con["name"]}" {definition}')
 
         body = ",\n".join(col_lines + table_cons)
         out.append(f'CREATE TABLE public."{table}" (\n{body}\n);')
-    return "\n\n".join(out) + "\n", auth_fk_rewrites
+    return (
+        "\n\n".join(out) + "\n",
+        "\n".join(fk_statements) + "\n",
+        auth_fk_rewrites,
+    )
 
 
 def sql_lit(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def render_indexes(indexes) -> str:
+def render_indexes(indexes, constraints) -> str:
+    # Primary-key and unique constraints already create their index in
+    # 020_tables.sql; replaying them again would collide on the index name.
+    constraint_names = {
+        c["name"] for c in constraints if c["schema"] == "public"
+    }
     lines = []
     for idx in indexes:
-        if idx["schema"] != "public":
-            continue
-        # primary/unique constraints already emitted with the table
-        if idx["name"].endswith("_pkey") or idx["definition"].startswith(
-            "CREATE UNIQUE INDEX"
-        ) and idx["name"].endswith("_key"):
+        if idx["schema"] != "public" or idx["name"] in constraint_names:
             continue
         lines.append(idx["definition"] + ";")
     return "\n".join(lines) + "\n"
 
 
+SPLIT = "-- @@ROUTINE_SPLIT@@"
+
+
 def render_routines() -> str:
-    rows = psql(
-        "select replace(pg_get_functiondef(p.oid), E'\\n', '\\u0001') "
-        "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
-        "where n.nspname='public' order by p.proname, pg_get_function_identity_arguments(p.oid)"
-    )
-    defs = [r.replace("\u0001", "\n") + ";" for r in rows]
+    rows = subprocess.run(
+        [
+            "psql",
+            "-X",
+            "-q",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-tAc",
+            "select pg_get_functiondef(p.oid) || E';\\n' || "
+            f"{sql_lit(SPLIT)} "
+            "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+            "where n.nspname='public' and p.prokind in ('f','p') "
+            "order by p.proname, pg_get_function_identity_arguments(p.oid)",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    defs = [chunk.strip() for chunk in rows.split(SPLIT) if chunk.strip()]
     return "\n\n".join(defs) + "\n"
+
 
 
 def render_triggers(triggers) -> str:
