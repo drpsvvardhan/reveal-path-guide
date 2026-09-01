@@ -211,7 +211,7 @@ def render_triggers(triggers) -> str:
     )
 
 
-def render_security(rls_enabled, policies, table_acls) -> tuple[str, dict]:
+def render_security(rls_enabled, policies, table_acls, base_tables) -> tuple[str, dict]:
     lines: list[str] = []
     anon_kept: list[str] = []
     anon_dropped: list[str] = []
@@ -228,7 +228,12 @@ def render_security(rls_enabled, policies, table_acls) -> tuple[str, dict]:
     }
 
     for t in sorted(
-        (r for r in rls_enabled if r["schema"] == "public"), key=lambda r: r["table"]
+        (
+            r
+            for r in rls_enabled
+            if r["schema"] == "public" and r["table"] in base_tables
+        ),
+        key=lambda r: r["table"],
     ):
         if not t["rls_enabled"]:
             lines.append(
@@ -290,7 +295,6 @@ def main() -> int:
     with open(os.path.join(cat_dir, "catalogue-hash.txt")) as fh:
         cat_hash = fh.read().strip()
 
-    columns = load(cat_dir, "columns")
     constraints = load(cat_dir, "constraints")
     indexes = load(cat_dir, "indexes")
     triggers = load(cat_dir, "triggers")
@@ -304,14 +308,18 @@ def main() -> int:
     with open(prereq_src) as fh:
         prereqs = fh.read()
 
-    tables_sql, fks_sql, auth_fks = render_tables(columns, constraints)
-    security_sql, security_notes = render_security(rls_enabled, policies, table_acls)
+    tables_sql, fks_sql, auth_fks, base_tables = render_tables(constraints)
+    views_sql, view_names = render_views()
+    security_sql, security_notes = render_security(
+        rls_enabled, policies, table_acls, set(base_tables)
+    )
 
     files = {
         "000_prereqs.sql": prereqs,
         "010_types.sql": render_types(),
         "020_tables.sql": tables_sql,
         "021_foreign_keys.sql": fks_sql,
+        "025_views.sql": views_sql,
         "030_indexes.sql": render_indexes(indexes, constraints),
         "040_routines.sql": render_routines(),
         "050_triggers.sql": render_triggers(triggers),
@@ -336,6 +344,7 @@ def main() -> int:
                 "storage_policies_advisory"
             ],
         },
+        "objects": {"base_tables": len(base_tables), "views": view_names},
         "storage": {"buckets": buckets, "object_rollup": rollup},
         "files": [],
     }
