@@ -76,6 +76,7 @@ def render_tables(columns, constraints) -> tuple[str, list[str]]:
         cons_by_table[c["table"].replace("public.", "")].append(c)
 
     auth_fk_rewrites: list[str] = []
+    fk_statements: list[str] = []
     out: list[str] = []
     for table in sorted(cols_by_table):
         col_lines = []
@@ -268,14 +269,15 @@ def main() -> int:
     with open(prereq_src) as fh:
         prereqs = fh.read()
 
-    tables_sql, auth_fks = render_tables(columns, constraints)
+    tables_sql, fks_sql, auth_fks = render_tables(columns, constraints)
     security_sql, security_notes = render_security(rls_enabled, policies, table_acls)
 
     files = {
         "000_prereqs.sql": prereqs,
         "010_types.sql": render_types(),
         "020_tables.sql": tables_sql,
-        "030_indexes.sql": render_indexes(indexes),
+        "021_foreign_keys.sql": fks_sql,
+        "030_indexes.sql": render_indexes(indexes, constraints),
         "040_routines.sql": render_routines(),
         "050_triggers.sql": render_triggers(triggers),
         "060_security.sql": security_sql,
