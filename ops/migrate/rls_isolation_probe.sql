@@ -25,10 +25,13 @@ INSERT INTO public.profiles (user_id, display_name) VALUES
 INSERT INTO public.user_roles (user_id, role) VALUES
   ('33333333-3333-4333-8333-333333333333', 'admin');
 
-INSERT INTO public.biotwin_reports (user_id, status, version, report_payload)
-VALUES
-  ('11111111-1111-4111-8111-111111111111', 'active', 1, '{"synthetic": true}'),
-  ('22222222-2222-4222-8222-222222222222', 'active', 1, '{"synthetic": true}');
+INSERT INTO public.biotwin_reports (
+  user_id, schema_name, report_type, content_sha256, adapter_version, raw_report
+) VALUES
+  ('11111111-1111-4111-8111-111111111111', 'synthetic.probe', 'synthetic',
+   repeat('0', 64), 'probe-0', '{"synthetic": true}'),
+  ('22222222-2222-4222-8222-222222222222', 'synthetic.probe', 'synthetic',
+   repeat('1', 64), 'probe-0', '{"synthetic": true}');
 
 CREATE OR REPLACE FUNCTION pg_temp.assert(p_label text, p_ok boolean)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -97,8 +100,10 @@ $$;
 
 DO $$
 BEGIN
-  INSERT INTO public.biotwin_reports (user_id, status, version, report_payload)
-  VALUES ('11111111-1111-4111-8111-111111111111', 'active', 2, '{"forged": true}');
+  INSERT INTO public.biotwin_reports (
+    user_id, schema_name, report_type, content_sha256, adapter_version, raw_report
+  ) VALUES ('11111111-1111-4111-8111-111111111111', 'synthetic.probe', 'synthetic',
+    repeat('2', 64), 'probe-0', '{"forged": true}');
   RAISE EXCEPTION 'FAIL  forged insert for another patient was accepted';
 EXCEPTION
   WHEN insufficient_privilege THEN
