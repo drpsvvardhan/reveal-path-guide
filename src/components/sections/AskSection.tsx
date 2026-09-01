@@ -207,7 +207,6 @@ const AskSection: React.FC = () => {
     const fetchContext = async () => {
       try {
         const accessToken = await getAccessToken();
-        const accessToken = accessToken;
         if (!accessToken) {
           console.warn("Skipping ask-anything context fetch — no auth session");
           return;
@@ -300,7 +299,6 @@ const AskSection: React.FC = () => {
 
     try {
       const accessToken = await getAccessToken();
-      const accessToken = accessToken;
       if (!accessToken) {
         throw new Error("Not signed in. Please log in to use Ask Anything.");
       }

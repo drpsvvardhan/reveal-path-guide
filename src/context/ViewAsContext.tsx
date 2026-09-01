@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getSession, getUserId, onSessionChange } from "@/lib/session";
+import { getAccessToken, getUserId, onSessionChange } from "@/lib/session";
 import { toast } from "sonner";
 
 /**
@@ -130,8 +130,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
           } else {
             const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-            const authSessionData = await getSession();
-            const token = authData.session?.access_token;
+            const token = await getAccessToken();
             if (token) {
               const res = await fetch(
                 `${supabaseUrl}/functions/v1/admin-view-as-mint?target_user_id=${encodeURIComponent(parsed.target_user_id)}`,
@@ -179,7 +178,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
-      sub.subscription.unsubscribe();
+      unsubscribeSession();
     };
   }, []);
 
@@ -213,8 +212,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 
     try {
       const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-      const authSessionData = await getSession();
-      const token = authData.session?.access_token;
+      const token = await getAccessToken();
       if (!token) throw new Error("Not authenticated");
 
       const res = await fetch(`${supabaseUrl}/functions/v1/admin-view-as-mint`, {
@@ -251,8 +249,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     if (!session) return;
     try {
       const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-      const authSessionData = await getSession();
-      const token = authData.session?.access_token;
+      const token = await getAccessToken();
       if (token) {
         await fetch(`${supabaseUrl}/functions/v1/admin-view-as-mint/${session.session_id}`, {
           method: "DELETE",
