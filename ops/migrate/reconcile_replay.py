@@ -31,7 +31,7 @@ QUERIES = {
     "and c.relkind='r' and a.attnum>0 and not a.attisdropped order by 1",
     "enums": "select t.typname||'='||string_agg(e.enumlabel,',' order by e.enumsortorder) "
     "from pg_type t join pg_enum e on e.enumtypid=t.oid join pg_namespace n "
-    "on n.oid=t.typnamespace where n.nspname='public' group by 1 order by 1",
+    "on n.oid=t.typnamespace where n.nspname='public' group by t.typname order by 1",
     "routines": "select p.proname||'('||pg_get_function_identity_arguments(p.oid)||')' "
     "from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
     "where n.nspname='public' and p.prokind in ('f','p') order by 1",
