@@ -28,9 +28,9 @@ INSERT INTO public.user_roles (user_id, role) VALUES
 INSERT INTO public.biotwin_reports (
   user_id, schema_name, report_type, content_sha256, adapter_version, raw_report
 ) VALUES
-  ('11111111-1111-4111-8111-111111111111', 'synthetic.probe', 'synthetic',
+  ('11111111-1111-4111-8111-111111111111', 'Vizzhy BioTwin Clinical Evidence Report', 'FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT',
    repeat('0', 64), 'probe-0', '{"synthetic": true}'),
-  ('22222222-2222-4222-8222-222222222222', 'synthetic.probe', 'synthetic',
+  ('22222222-2222-4222-8222-222222222222', 'Vizzhy BioTwin Clinical Evidence Report', 'FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT',
    repeat('1', 64), 'probe-0', '{"synthetic": true}');
 
 CREATE OR REPLACE FUNCTION pg_temp.assert(p_label text, p_ok boolean)
@@ -102,7 +102,7 @@ DO $$
 BEGIN
   INSERT INTO public.biotwin_reports (
     user_id, schema_name, report_type, content_sha256, adapter_version, raw_report
-  ) VALUES ('11111111-1111-4111-8111-111111111111', 'synthetic.probe', 'synthetic',
+  ) VALUES ('11111111-1111-4111-8111-111111111111', 'Vizzhy BioTwin Clinical Evidence Report', 'FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT',
     repeat('2', 64), 'probe-0', '{"forged": true}');
   RAISE EXCEPTION 'FAIL  forged insert for another patient was accepted';
 EXCEPTION
