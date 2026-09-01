@@ -4,7 +4,7 @@
 //
 //   Evidence is visible by default; interpretation earns authority.
 //
-// Live failure this encodes (Aug 9): Peter's v18 Twin holds 4,301 CGM
+// Live failure this encodes (Aug 9): Subject-01's v18 Twin holds 4,301 CGM
 // readings (mean 105.8, GMI 5.84%, CV 20.1%, TIR 98.1%) and a 14-day food
 // log — and the patient runtime said "no CGM or food log present" because
 // that evidence was attached to a claim the release decision never
@@ -28,7 +28,7 @@ import {
 const warnings: Array<{ code: string; message: string }> = [];
 const warn = (code: string, message: string) => warnings.push({ code, message });
 
-// Peter-shaped twin fragment: real summary scalars + a raw trace that must
+// Subject-01-shaped twin fragment: real summary scalars + a raw trace that must
 // never be inlined.
 const twin = {
   sensor_cgm: {

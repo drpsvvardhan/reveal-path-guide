@@ -1,4 +1,4 @@
-// BioTwin Release Compiler v1 — Peter Golden Fixture
+// BioTwin Release Compiler v1 — Subject-01 Golden Fixture
 // Run with:
 //   deno test --allow-read supabase/functions/_shared/biotwin/releaseCompiler.test.ts
 
@@ -8,16 +8,16 @@ import { detectBiotwinReport, validateBiotwinStructure, hasBlockingDiagnostic } 
 import { adaptBiotwinReport } from "./adapter.ts";
 
 const fullDecision = JSON.parse(
-  await Deno.readTextFile(new URL("./__fixtures__/peter_v18_founder_release_decision.json", import.meta.url)),
+  await Deno.readTextFile(new URL("./__fixtures__/synthetic_v18_founder_release_decision.json", import.meta.url)),
 ) as Record<string, unknown>;
 
-// Compact release-facing projection of the frozen Peter v18 source. This is
+// Compact release-facing projection of the frozen Subject-01 v18 source. This is
 // not a second Twin: every scientific assertion below is copied from the v18
 // canonical claim layer. The compiler is forbidden from reading arbitrary
 // legacy narrative roots.
-const peterSource: JsonObject = {
+const syntheticSource: JsonObject = {
   artifactType: "RUNTIME_TWIN_FINAL",
-  subject: "VZ0000119",
+  subject: "VZSYN0001",
   generatedAt: "2026-08-07",
   twinVersion: "v18.1-final",
   observations: {
@@ -25,7 +25,7 @@ const peterSource: JsonObject = {
       "CLM-PT-APOB-001": {
         claimId: "CLM-PT-APOB-001",
         currentState: "MEASURED",
-        canonicalStatement: "Peter's atherogenic particle burden is measured clinically and corroborated by abundance signals on two proteomic technologies. Clinical ApoB 124 mg/dL (ref <90, HIGH; Quest/Function Health panel 2026-02-20) and ApoB 118 mg/dL (2026-04-02, statin OFF, PCP flowsheet) are BOTH retained as dated observations. Supporting particle measures: LDL-P 1574 nmol/L (ref <1138), LDL-C 163 mg/dL, non-HDL-C 188 mg/dL, LDL-small 242, LDL peak size 220.9 A (ref >222.9, LOW).",
+        canonicalStatement: "Subject-01's atherogenic particle burden is measured clinically and corroborated by abundance signals on two proteomic technologies. Clinical ApoB 124 mg/dL (ref <90, HIGH; Quest/Function Health panel 2026-02-20) and ApoB 118 mg/dL (2026-04-02, statin OFF, PCP flowsheet) are BOTH retained as dated observations. Supporting particle measures: LDL-P 1574 nmol/L (ref <1138), LDL-C 163 mg/dL, non-HDL-C 188 mg/dL, LDL-small 242, LDL peak size 220.9 A (ref >222.9, LOW).",
         claimCeiling: { text: "A chronic, measured, ongoing atherogenic particle burden. The ETIOLOGIC DECOMPOSITION is not claimable: no fraction of the clinical ApoB may be attributed to APOE, polygenic burden, diet or smoking." },
         cannotProve: { text: "What fraction of the ApoB value is caused by APOE, polygenic burden, diet or smoking; that a low CAC offsets the particle burden." },
         evidenceRole: "SUSCEPTIBILITY_WITNESS",
@@ -36,7 +36,7 @@ const peterSource: JsonObject = {
       "CLM-PT-SLEEP-001": {
         claimId: "CLM-PT-SLEEP-001",
         currentState: "MEASURED",
-        canonicalStatement: "Peter's measured sleep is ADEQUATE over the measured windows. The ONLY canonical aggregate is Oura device-exact: 14 included main-sleep nights, mean TST 9.06 h, mean efficiency 88.4%, mean HRV 47.8 ms, with 12 fragment records excluded via include_in_aggregate=False. The Fitbit OCR provisional tier is held SEPARATELY: 28 included nights, mean TST 7.11 h. The tiers have different provenance and are NEVER pooled.",
+        canonicalStatement: "Subject-01's measured sleep is ADEQUATE over the measured windows. The ONLY canonical aggregate is Oura device-exact: 14 included main-sleep nights, mean TST 9.06 h, mean efficiency 88.4%, mean HRV 47.8 ms, with 12 fragment records excluded via include_in_aggregate=False. The Fitbit OCR provisional tier is held SEPARATELY: 28 included nights, mean TST 7.11 h. The tiers have different provenance and are NEVER pooled.",
         claimCeiling: { text: "Adequate measured duration and efficiency over the measured Oura window. Sleep may NOT be described as a deficit or as short, may NOT be presented as a driver or explanation for cortisol, ED, vascular injury, biological aging or glycemic variability." },
         cannotProve: { text: "That sleep architecture is normal; that apnea, parasomnia or medication effects are excluded; any sleep-driven mechanism for cortisol, ED, vascular injury or aging." },
         evidenceRole: "RESPONSE_MARKER",
@@ -51,8 +51,8 @@ const peterSource: JsonObject = {
       "CLM-PT-CLOCKDISC-001": {
         claimId: "CLM-PT-CLOCKDISC-001",
         currentState: "DERIVED_REPORTED_OUTPUT",
-        canonicalStatement: "Peter's epigenetic clocks disagree, and the disagreement is INFORMATION rather than internal inconsistency, because each clock estimates a DIFFERENT trained construct. Horvath353 47.15 (~+3.15 y versus chronological 44); SkinBlood 41.95 (~-2.05 y); PhenoAge 34.09 (~-9.91 y); DunedinPACE 0.95; Hannum ABSTAINED because 7 of 71 required high-weight CpGs are absent on EPICv2.",
-        claimCeiling: { text: "Clock-specific discordance, NOT one biological age. The clocks may NEVER be averaged into a single age. Hannum renders as unavailable, NEVER as zero. DunedinPACE from a single measurement is NOT Peter's directly observed aging trajectory." },
+        canonicalStatement: "Subject-01's epigenetic clocks disagree, and the disagreement is INFORMATION rather than internal inconsistency, because each clock estimates a DIFFERENT trained construct. Horvath353 47.15 (~+3.15 y versus chronological 44); SkinBlood 41.95 (~-2.05 y); PhenoAge 34.09 (~-9.91 y); DunedinPACE 0.95; Hannum ABSTAINED because 7 of 71 required high-weight CpGs are absent on EPICv2.",
+        claimCeiling: { text: "Clock-specific discordance, NOT one biological age. The clocks may NEVER be averaged into a single age. Hannum renders as unavailable, NEVER as zero. DunedinPACE from a single measurement is NOT Subject-01's directly observed aging trajectory." },
         cannotProve: { text: "A single biological age; a patient-local aging rate from one draw." },
         evidenceRole: "COMPATIBLE",
         coverageBound: "EXACT",
@@ -63,7 +63,7 @@ const peterSource: JsonObject = {
       "CLM-PT-IRON-001": {
         claimId: "CLM-PT-IRON-001",
         currentState: "HYPOTHESIS",
-        canonicalStatement: "Peter has an ABNORMAL single-timepoint iron study requiring standardized confirmation: serum iron 266 mcg/dL (ref 50-170, OUT), iron saturation 78% (ref 20-48, OUT), iron binding capacity 341 mcg/dL (ref 250-425), ferritin 61 ng/mL (ref 38-380, within range) — one study. A within-sample proteomic HAMP rank is not a clinical hepcidin concentration, and no clinical hepcidin assay has been performed.",
+        canonicalStatement: "Subject-01 has an ABNORMAL single-timepoint iron study requiring standardized confirmation: serum iron 266 mcg/dL (ref 50-170, OUT), iron saturation 78% (ref 20-48, OUT), iron binding capacity 341 mcg/dL (ref 250-425), ferritin 61 ng/mL (ref 38-380, within range) — one study. A within-sample proteomic HAMP rank is not a clinical hepcidin concentration, and no clinical hepcidin assay has been performed.",
         claimCeiling: { text: "An abnormal serum iron/transferrin-saturation result requiring standardized repeat testing. PERSISTENCE, TISSUE IRON ACCUMULATION, hepatic injury from iron, and HFE/non-HFE etiology are NOT established. No treatment implication follows from the current data." },
         evidenceRole: "COMPATIBLE",
         coverageBound: "EXACT",
@@ -73,9 +73,9 @@ const peterSource: JsonObject = {
       "CLM-PT-APOE-FH-WGS-001": {
         claimId: "CLM-PT-APOE-FH-WGS-001",
         currentState: "RAW_GAP",
-        canonicalStatement: "Peter's genomic layer is ARRAY GENOTYPING plus PGx diplotypes only. WGS 30X is PENDING. APOE: rs429358 heterozygosity is supported; rs7412 is not present in the ALT-only variant call list, so reference is INFERRED and per-site depth is NOT confirmed — the diplotype call therefore remains depth-unresolved. Monogenic-FH evaluation is INCOMPLETE: LDLR, APOB and PCSK9 coverage plus relevant CNV/SV coverage have not been demonstrated.",
+        canonicalStatement: "Subject-01's genomic layer is ARRAY GENOTYPING plus PGx diplotypes only. WGS 30X is PENDING. APOE: rs429358 heterozygosity is supported; rs7412 is not present in the ALT-only variant call list, so reference is INFERRED and per-site depth is NOT confirmed — the diplotype call therefore remains depth-unresolved. Monogenic-FH evaluation is INCOMPLETE: LDLR, APOB and PCSK9 coverage plus relevant CNV/SV coverage have not been demonstrated.",
         claimCeiling: { text: "APOE may be named as a possible genetic contributor ONLY if the complete diplotype is source-verified. It is NOT a per-patient causal measurement. No APOE-attributable ApoB fraction may be quantified. A complete negative monogenic-FH evaluation may NOT be declared. Alzheimer's-risk disclosure remains governance-gated." },
-        cannotProve: { text: "That APOE causes a quantified fraction of Peter's ApoB; that monogenic FH is excluded; that rs7412 is reference; any Alzheimer's risk statement." },
+        cannotProve: { text: "That APOE causes a quantified fraction of Subject-01's ApoB; that monogenic FH is excluded; that rs7412 is reference; any Alzheimer's risk statement." },
         evidenceRole: "SUSCEPTIBILITY_WITNESS",
         coverageBound: "ABSENT",
         nextMeasurementThatCouldChangeThis: "Complete governed WGS 30X with per-site depth/QC for rs429358 and rs7412, demonstrated LDLR/APOB/PCSK9 SNV and CNV/SV coverage, and a governed LDL-PRS.",
@@ -84,7 +84,7 @@ const peterSource: JsonObject = {
       },
     },
     clinicalReveal: {
-      coreThesis: "Peter has a strong glycemic, body-composition and measured sleep phenotype alongside a persistent atherogenic-particle burden and several vascular-injury-associated protein signals. His low CAC and low hs-CRP do not erase that substrate, but the clinical activity and causal sources of the molecular signals remain incompletely typed.",
+      coreThesis: "Subject-01 has a strong glycemic, body-composition and measured sleep phenotype alongside a persistent atherogenic-particle burden and several vascular-injury-associated protein signals. His low CAC and low hs-CRP do not erase that substrate, but the clinical activity and causal sources of the molecular signals remain incompletely typed.",
       whatIsMeasured: [
         { item: "Clinical lipid burden", claimId: "CLM-PT-APOB-001" },
         { item: "Corrected sleep metrics", claimId: "CLM-PT-SLEEP-001" },
@@ -126,12 +126,12 @@ function goldenDecision() {
   return d;
 }
 
-Deno.test("Peter v18 Golden Fixture compiles deterministically", () => {
+Deno.test("Subject-01 v18 Golden Fixture compiles deterministically", () => {
   const d = goldenDecision();
   // deno-lint-ignore no-explicit-any
-  const a = compileRuntimeTwinV18(structuredClone(peterSource), d as any);
+  const a = compileRuntimeTwinV18(structuredClone(syntheticSource), d as any);
   // deno-lint-ignore no-explicit-any
-  const b = compileRuntimeTwinV18(structuredClone(peterSource), structuredClone(d) as any);
+  const b = compileRuntimeTwinV18(structuredClone(syntheticSource), structuredClone(d) as any);
   assert(a.ok && b.ok);
   assertEquals(a.report, b.report);
   assertEquals(a.stats.released_claims, 5);
@@ -143,9 +143,9 @@ Deno.test("Peter v18 Golden Fixture compiles deterministically", () => {
   assertEquals(a.stats.contradictions, 2);
 });
 
-Deno.test("compiled Peter report is accepted by the existing Release-0 importer contract", () => {
+Deno.test("compiled Subject-01 report is accepted by the existing Release-0 importer contract", () => {
   // deno-lint-ignore no-explicit-any
-  const res = compileRuntimeTwinV18(structuredClone(peterSource), goldenDecision() as any);
+  const res = compileRuntimeTwinV18(structuredClone(syntheticSource), goldenDecision() as any);
   assert(res.ok && res.report);
   assert(detectBiotwinReport(res.report).accepted);
   const structural = validateBiotwinStructure(res.report);
@@ -161,7 +161,7 @@ Deno.test("compiled Peter report is accepted by the existing Release-0 importer 
 
 Deno.test("canonical truth outranks clinicalReveal: clocks stay DERIVED_REPORTED_OUTPUT", () => {
   // deno-lint-ignore no-explicit-any
-  const res = compileRuntimeTwinV18(structuredClone(peterSource), goldenDecision() as any);
+  const res = compileRuntimeTwinV18(structuredClone(syntheticSource), goldenDecision() as any);
   assert(res.ok && res.report);
   const cs = res.report.clinical_state as Record<string, unknown>;
   const rows = cs.confirmed_measurements_and_bounded_findings as Array<Record<string, unknown>>;
@@ -172,9 +172,9 @@ Deno.test("canonical truth outranks clinicalReveal: clocks stay DERIVED_REPORTED
   assert((clock.important_bounds as string[]).some((b) => b.includes("not a direct measurement")));
 });
 
-Deno.test("old Peter sleep scar is prohibition-only, never a renderable assertion", () => {
+Deno.test("old Subject-01 sleep scar is prohibition-only, never a renderable assertion", () => {
   // deno-lint-ignore no-explicit-any
-  const res = compileRuntimeTwinV18(structuredClone(peterSource), goldenDecision() as any);
+  const res = compileRuntimeTwinV18(structuredClone(syntheticSource), goldenDecision() as any);
   assert(res.ok && res.report);
   const s = JSON.stringify(res.report);
   const projection = res.report.clinical_report_projection as Record<string, unknown>;
@@ -198,7 +198,7 @@ Deno.test("identity mismatch is a hard failure", () => {
   const d = goldenDecision();
   (d.subject as Record<string, unknown>).twin_id = "VZ-WRONG";
   // deno-lint-ignore no-explicit-any
-  const res = compileRuntimeTwinV18(structuredClone(peterSource), d as any);
+  const res = compileRuntimeTwinV18(structuredClone(syntheticSource), d as any);
   assertEquals(res.ok, false);
   assert(res.diagnostics.some((x) => x.code === "identity_mismatch"));
 });
@@ -208,7 +208,7 @@ Deno.test("a rejected released claim cannot cross", () => {
   const reviews = d.critical_anchor_review as Array<Record<string, unknown>>;
   reviews.find((r) => r.claim_id === "CLM-PT-APOB-001")!.status = "REJECT";
   // deno-lint-ignore no-explicit-any
-  const res = compileRuntimeTwinV18(structuredClone(peterSource), d as any);
+  const res = compileRuntimeTwinV18(structuredClone(syntheticSource), d as any);
   assertEquals(res.ok, false);
   assert(res.diagnostics.some((x) => x.code === "critical_anchor_not_released"));
 });
@@ -218,17 +218,17 @@ Deno.test("Founding Cohort decision cannot elevate clinical authority", () => {
     const d = goldenDecision();
     (d.release as Record<string, unknown>)[key] = true;
     // deno-lint-ignore no-explicit-any
-    const res = compileRuntimeTwinV18(structuredClone(peterSource), d as any);
+    const res = compileRuntimeTwinV18(structuredClone(syntheticSource), d as any);
     assertEquals(res.ok, false);
     assert(res.diagnostics.some((x) => x.code === "authority_violation"));
   }
 });
 
 Deno.test("injected retired sleep prose is blocked from release", () => {
-  const src = structuredClone(peterSource);
+  const src = structuredClone(syntheticSource);
   const obs = src.observations as Record<string, unknown>;
   const claims = obs.canonicalClaims as Record<string, Record<string, unknown>>;
-  claims["CLM-PT-SLEEP-001"].canonicalStatement = "Peter has chronic short sleep.";
+  claims["CLM-PT-SLEEP-001"].canonicalStatement = "Subject-01 has chronic short sleep.";
   // deno-lint-ignore no-explicit-any
   const res = compileRuntimeTwinV18(src, goldenDecision() as any);
   assertEquals(res.ok, false);
@@ -236,7 +236,7 @@ Deno.test("injected retired sleep prose is blocked from release", () => {
 });
 
 Deno.test("measurement plan is recommendation-only", () => {
-  const src = structuredClone(peterSource);
+  const src = structuredClone(syntheticSource);
   const obs = src.observations as Record<string, unknown>;
   const plan = obs.measurementPlan as Record<string, unknown>;
   (plan.queue as Array<Record<string, unknown>>)[0].is_action = true;

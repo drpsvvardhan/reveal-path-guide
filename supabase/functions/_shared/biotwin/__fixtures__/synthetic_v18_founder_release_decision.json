@@ -4,7 +4,7 @@
     "version": "1.0"
   },
   "subject": {
-    "twin_id": "VZ0000119",
+    "twin_id": "VZSYN0001",
     "source_twin_version": "v18.1-final",
     "source_twin_sha256": "3db232b540a5b5f04a9bbfa612bd7b19257f533bc5386cba794105d7aeea6dfd"
   },
@@ -103,10 +103,10 @@
     "chronic short sleep",
     "severe sleep deficit",
     "active vascular inflammation is established",
-    "Lp-PLA2 is elevated in Peter",
+    "Lp-PLA2 is elevated in Subject-01",
     "APOE-driven ApoB axis",
     "single biological age",
-    "DunedinPACE 0.95 is Peter's observed longitudinal slope"
+    "DunedinPACE 0.95 is Subject-01's observed longitudinal slope"
   ],
   "provenance_debt": [
     {

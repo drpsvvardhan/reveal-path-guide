@@ -7,6 +7,7 @@
 // Enforces minimum days/observations for each transition. Never skips phases.
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,9 @@ const NEXT: Record<string, string> = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const authRes = await authenticateRequest(req);
+    if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
+
     const { experiment_id, target_phase, stopped_reason } = await req.json();
     if (!experiment_id) {
       return new Response(JSON.stringify({ error: "experiment_id required" }), {
@@ -42,6 +46,9 @@ Deno.serve(async (req) => {
       .eq("id", experiment_id)
       .single();
     if (expErr || !exp) throw expErr || new Error("experiment not found");
+
+    const owner = await resolveTargetUserId(authRes.auth, (exp as { user_id: string }).user_id);
+    if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
 
     const { data: proto } = await supabase
       .from("simulator_experiment_protocols")

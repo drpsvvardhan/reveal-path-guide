@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { admitExperiments } from "../_shared/aae/experimentAdmission.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
+import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -229,12 +230,21 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { user_id, focus } = await req.json();
-    if (!user_id) {
+    const authRes = await authenticateRequest(req);
+    if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
+
+    const { user_id: requestedUserId, focus } = await req.json();
+    if (!requestedUserId) {
       return new Response(JSON.stringify({ error: "user_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Identity binding: caller-supplied user_id is resolved against the caller
+    // identity (owner, or admin with an active view-as session).
+    const owner = await resolveTargetUserId(authRes.auth, requestedUserId);
+    if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
+    const user_id = owner.targetUserId;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

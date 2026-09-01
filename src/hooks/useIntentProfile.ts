@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getUser } from "@/lib/session";
 
 // patient_intent_profiles postdates the generated client types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,8 +79,8 @@ export function useIntentProfile(effectiveUserId: string | null | undefined) {
     async (answers: IntentProfileAnswers): Promise<boolean> => {
       setSaving(true);
       try {
-        const { data: sessionData } = await supabase.auth.getUser();
-        const uid = sessionData.user?.id;
+        const currentUser = await getUser();
+        const uid = currentUser?.id;
         if (!uid) return false;
         const { data, error } = await sb
           .from("patient_intent_profiles")

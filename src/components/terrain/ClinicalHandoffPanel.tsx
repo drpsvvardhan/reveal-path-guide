@@ -32,22 +32,13 @@ const ClinicalHandoffPanel: React.FC = () => {
   const handleShare = async () => {
     setSharing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const res = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/get-or-create-terrain-share-token`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-        }
+      const { data, error } = await supabase.functions.invoke(
+        "get-or-create-terrain-share-token",
+        { method: "POST" },
       );
-      if (!res.ok) throw new Error("Failed to get share token");
-      const { token } = await res.json();
+      if (error) throw new Error(error.message || "Failed to get share token");
+      const token = (data as { token?: string } | null)?.token;
+      if (!token) throw new Error("Failed to get share token");
       const url = `${window.location.origin}/clinical/${token}`;
       await navigator.clipboard.writeText(url);
       toast.success("Link copied. Send this to your physician — they can read your terrain summary on any device, no login required.");
@@ -57,6 +48,7 @@ const ClinicalHandoffPanel: React.FC = () => {
       setSharing(false);
     }
   };
+
 
   const copyQuestion = async (q: string, idx: number) => {
     await navigator.clipboard.writeText(q);

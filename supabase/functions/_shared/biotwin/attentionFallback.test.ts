@@ -1,4 +1,4 @@
-// Peter golden regression + doctrine tests for the attention/fallback path.
+// Subject-01 golden regression + doctrine tests for the attention/fallback path.
 //   deno test --allow-read supabase/functions/_shared/biotwin/attentionFallback.test.ts
 
 import {
@@ -38,7 +38,7 @@ import {
 const THE_QUESTION = "Tell me what I should be paying attention to right now";
 
 // ---------------------------------------------------------------------------
-// Peter-like packet, derived from the imported report shape (titles, ids,
+// Subject-01-like packet, derived from the imported report shape (titles, ids,
 // truth_status and holds as they exist in the released Twin).
 // ---------------------------------------------------------------------------
 
@@ -66,7 +66,7 @@ const PROHIBITED = [
   "chronic short sleep",
   "severe sleep deficit",
   "active vascular inflammation is established",
-  "Lp-PLA2 is elevated in Peter",
+  "Lp-PLA2 is elevated in Subject-01",
   "APOE-driven ApoB axis",
   "single biological age",
   "sleeping five hours",
@@ -76,8 +76,8 @@ const PROHIBITED = [
 ];
 
 const report: BiotwinReportRow = {
-  id: "report-peter",
-  twin_id: "twin-peter-v18",
+  id: "report-synthetic-01",
+  twin_id: "twin-synthetic-01-v18",
   version: 1,
   generated_date: "2026-08-09",
   release_control: { patient_release: "permitted" },
@@ -235,7 +235,7 @@ Deno.test("generic vocabulary alone no longer trips a prohibited headline", () =
 });
 
 // ---------------------------------------------------------------------------
-// Doctrine 6 — Peter golden regression
+// Doctrine 6 — Subject-01 golden regression
 // ---------------------------------------------------------------------------
 
 Deno.test("PETER GOLDEN: attention question yields a substantive packet-grounded answer", () => {
@@ -558,7 +558,7 @@ Deno.test("version stamps are current", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Classification regression (found by read-only Peter production replay):
+// Classification regression (found by read-only Subject-01 production replay):
 // "Measured atherogenic particle burden (...) of unquantified etiology" is a
 // MEASUREMENT. Only the etiology is unquantified.
 // ---------------------------------------------------------------------------
@@ -572,7 +572,7 @@ const PETER_VASCULAR_TITLE =
 const PETER_IRON_TITLE =
   "One abnormal iron study of unestablished persistence and etiology (serum iron 266 mcg/dL, saturation 78%, ferritin 61 within range)";
 
-function peterDriverPacket() {
+function syntheticDriverPacket() {
   return buildBiotwinPacket(report, [
     row({ source_id: "drv-apob", statement_kind: "driver", truth_status: "confirmed", title: PETER_APOB_TITLE, ordinal: 1 }),
     row({ source_id: "drv-tobacco", statement_kind: "driver", truth_status: "confirmed", title: PETER_TOBACCO_TITLE, ordinal: 2 }),
@@ -589,22 +589,22 @@ function sectionOf(text: string, heading: string): string {
   return next < 0 ? rest : rest.slice(0, next);
 }
 
-Deno.test("Peter ApoB driver renders as measured, ranked first", () => {
-  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+Deno.test("Subject-01 ApoB driver renders as measured, ranked first", () => {
+  const res = buildUsefulBiotwinFallback(syntheticDriverPacket(), THE_QUESTION);
   assert(res.substantive);
   const measured = sectionOf(res.content, "**Measured and established, in rank order:**");
   assertStringIncludes(measured, "Measured atherogenic particle burden");
   assert(/^\s*1\.\s+Measured atherogenic particle burden/m.test(measured));
 });
 
-Deno.test("Peter tobacco driver renders as measured", () => {
-  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+Deno.test("Subject-01 tobacco driver renders as measured", () => {
+  const res = buildUsefulBiotwinFallback(syntheticDriverPacket(), THE_QUESTION);
   const measured = sectionOf(res.content, "**Measured and established, in rank order:**");
   assertStringIncludes(measured, "Active tobacco and vape exposure");
 });
 
-Deno.test("Peter vascular hypothesis and unestablished iron stay hypothesis", () => {
-  const res = buildUsefulBiotwinFallback(peterDriverPacket(), THE_QUESTION);
+Deno.test("Subject-01 vascular hypothesis and unestablished iron stay hypothesis", () => {
+  const res = buildUsefulBiotwinFallback(syntheticDriverPacket(), THE_QUESTION);
   const hyp = sectionOf(res.content, "**Held as hypothesis, not established:**");
   assertStringIncludes(hyp, "Vascular-injury-associated protein hypothesis");
   assertStringIncludes(hyp, "One abnormal iron study of unestablished persistence");

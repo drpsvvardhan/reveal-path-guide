@@ -6,6 +6,7 @@
 // inserts a learning row, advancing the loop's "Compare → Learn" arc.
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    const authRes = await authenticateRequest(req);
+    if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
+
     const { checkpoint_id } = await req.json();
     if (!checkpoint_id) {
       return new Response(JSON.stringify({ error: "checkpoint_id required" }), {
@@ -75,6 +79,9 @@ Deno.serve(async (req) => {
       .eq("id", chk.experiment_id)
       .single();
     if (expErr || !exp) throw expErr || new Error("Experiment not found");
+
+    const owner = await resolveTargetUserId(authRes.auth, (exp as { user_id: string }).user_id);
+    if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
 
     const predicted: PredictedDelta[] = Array.isArray(exp.predicted_deltas)
       ? exp.predicted_deltas as any

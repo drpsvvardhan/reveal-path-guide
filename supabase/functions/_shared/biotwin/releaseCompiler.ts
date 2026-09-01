@@ -149,13 +149,13 @@ function hasProhibitedLeak(text: string, prohibitions: string[]): string | null 
 // ---------------------------------------------------------------------------
 // "May this interpretation be released?" and "May the patient access their
 // own measured data?" are different questions. v1 conflated them: evidence
-// attached to an unreleased claim vanished (Peter's 4,301-reading CGM,
+// attached to an unreleased claim vanished (Subject-01's 4,301-reading CGM,
 // food log). The Evidence Plane releases legitimate patient observations
 // BY DEFAULT — summaries and scalars only, never raw series — unless the
 // decision explicitly quarantines a root. Interpretation still earns
 // authority through the claim machinery; evidence is visible by default.
 export const EVIDENCE_ROOTS = [
-  // Verified against Peter VZ0000119 RUNTIME_TWIN_FINAL v18 (frozen bytes
+  // Verified against Subject-01 VZSYN0001 RUNTIME_TWIN_FINAL v18 (frozen bytes
   // e4b9ef8e...): the evidence objects live nested under observations.
   "observations.sensorState.channels.cgm",
   "observations.sensorState.channels.sleep",
@@ -338,7 +338,7 @@ export function compileRuntimeTwinV18(
   // ---- Unreleased-claim inventory --------------------------------------
   // "Nothing leaves the factory merely because it exists" is doctrine —
   // but nothing may be left behind SILENTLY. Discovered live (Aug 9):
-  // Peter's glycemic-control claim was simply never selected by the
+  // Subject-01's glycemic-control claim was simply never selected by the
   // release decision, so the patient runtime truthfully reported "no CGM
   // data" against a 40k-line Twin that has it. The decision author must
   // see the full cost of their selection at compile time.
