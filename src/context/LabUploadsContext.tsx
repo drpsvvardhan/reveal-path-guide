@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadLabFile, removeLabFiles } from "@/lib/files";
+import { getAccessToken } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { LabUpload, LabObservationRow, LabUploadProcessResult, BiomarkerObservation } from "@/types/manifest";
@@ -218,11 +219,16 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (options?.confirmedName && options.confirmedName.trim().length > 0) {
           reqBody.pre_confirmed = { confirmed_name: options.confirmedName.trim() };
         }
+        // process-lab-pdf binds the upload to the caller identity, so the
+        // request must carry the user's access token, not the public key.
+        const processToken = await getAccessToken();
+        if (!processToken) throw new Error("Not authenticated");
         const resp = await fetch(PROCESS_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${processToken}`,
           },
           body: JSON.stringify(reqBody),
         });
