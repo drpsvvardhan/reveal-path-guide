@@ -14,6 +14,7 @@ import { useDocuments } from "@/context/DocumentContext";
 import { useQueue } from "@/context/QueueContext";
 import { useClusters } from "@/hooks/useClusters";
 import { supabase } from "@/integrations/supabase/client";
+import { getAccessToken } from "@/lib/session";
 import { consumePendingAskQuestion } from "@/lib/askIntent";
 import {
   stripClusterMarkers,
@@ -205,8 +206,8 @@ const AskSection: React.FC = () => {
 
     const fetchContext = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
+        const accessToken = await getAccessToken();
+        const accessToken = accessToken;
         if (!accessToken) {
           console.warn("Skipping ask-anything context fetch — no auth session");
           return;
@@ -298,8 +299,8 @@ const AskSection: React.FC = () => {
     if (convId) await persistMessage(convId, userMessage);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const accessToken = await getAccessToken();
+      const accessToken = accessToken;
       if (!accessToken) {
         throw new Error("Not signed in. Please log in to use Ask Anything.");
       }

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadLabFile, removeLabFiles } from "@/lib/files";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { LabUpload, LabObservationRow, LabUploadProcessResult, BiomarkerObservation } from "@/types/manifest";
@@ -182,9 +183,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           ? file
           : new Blob([file], { type: uploadContentType });
 
-        const { error: uploadError } = await supabase.storage
-          .from("lab-uploads")
-          .upload(storagePath, uploadBody, {
+        const { error: uploadError } = await uploadLabFile(storagePath, uploadBody, {
             contentType: uploadContentType,
             upsert: false,
           });
@@ -207,7 +206,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         if (insertError || !uploadRow) {
           // Roll back the storage object so we don't leak orphaned files.
-          await supabase.storage.from("lab-uploads").remove([storagePath]);
+          await removeLabFiles([storagePath]);
           throw new Error(insertError?.message || "Failed to create upload row");
         }
 
@@ -321,7 +320,7 @@ export const LabUploadsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (!upload) return;
 
       if (upload.storage_path && upload.storage_path !== "pending") {
-        await supabase.storage.from("lab-uploads").remove([upload.storage_path]);
+        await removeLabFiles([upload.storage_path]);
       }
 
       await supabase.from("patient_lab_observations").delete().eq("upload_id", uploadId);

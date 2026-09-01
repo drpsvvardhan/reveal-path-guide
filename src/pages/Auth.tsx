@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { signInWithPassword, signUpWithPassword } from "@/lib/session";
 import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -28,10 +29,10 @@ const Auth: React.FC = () => {
     setSubmitting(true);
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await signInWithPassword(email, password);
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
+        const { error } = await signUpWithPassword(email, password, window.location.origin);
         if (error) throw error;
         toast.success("Check your email to verify your account");
       }

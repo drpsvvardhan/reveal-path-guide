@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getSession, getUserId, onSessionChange } from "@/lib/session";
 import { toast } from "sonner";
 
 /**
@@ -129,7 +130,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
           } else {
             const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-            const { data: authData } = await supabase.auth.getSession();
+            const authSessionData = await getSession();
             const token = authData.session?.access_token;
             if (token) {
               const res = await fetch(
@@ -165,10 +166,10 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     };
 
     // Initial check
-    supabase.auth.getUser().then(({ data }) => evaluate(data.user?.id ?? null));
+    getUserId().then((id) => evaluate(id));
 
     // React to auth changes (login / logout / token refresh switching users)
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, authSession) => {
+    const unsubscribeSession = onSessionChange((authSession) => {
       const newUid = authSession?.user?.id ?? null;
       // If the signed-in user changed, drop any persisted view-as state immediately.
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -212,7 +213,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 
     try {
       const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-      const { data: authData } = await supabase.auth.getSession();
+      const authSessionData = await getSession();
       const token = authData.session?.access_token;
       if (!token) throw new Error("Not authenticated");
 
@@ -250,7 +251,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
     if (!session) return;
     try {
       const supabaseUrl = (supabase as any).supabaseUrl ?? import.meta.env.VITE_SUPABASE_URL;
-      const { data: authData } = await supabase.auth.getSession();
+      const authSessionData = await getSession();
       const token = authData.session?.access_token;
       if (token) {
         await fetch(`${supabaseUrl}/functions/v1/admin-view-as-mint/${session.session_id}`, {

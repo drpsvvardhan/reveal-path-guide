@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { useClusters } from "@/hooks/useClusters";
 import { supabase } from "@/integrations/supabase/client";
+import { uploadLabFile } from "@/lib/files";
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, Trash2, Pencil, Check, X,
   ChevronDown, ChevronUp, Calendar, Building2, RefreshCw, Zap,
@@ -232,9 +233,10 @@ const RecordsSection: React.FC = () => {
 
       // 2. Upload to storage bucket (same bucket the lab flow uses)
       const storagePath = `${targetUserId}/${uploadRow.id}.pdf`;
-      const { error: uploadError } = await supabase.storage
-        .from("lab-uploads")
-        .upload(storagePath, file, { contentType: "application/pdf", upsert: false });
+      const { error: uploadError } = await uploadLabFile(storagePath, file, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
       if (uploadError) {
         await supabase.from("patient_lab_uploads").delete().eq("id", uploadRow.id);
         throw new Error(`Storage upload failed: ${uploadError.message}`);

@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAccessToken } from "@/lib/session";
 import { useViewAs } from "@/context/ViewAsContext";
 
 export type CelfExportCoverage = {
@@ -69,8 +70,8 @@ export function useCelfExport() {
         const qs = viewAsUserId ? `?user_id=${encodeURIComponent(viewAsUserId)}` : "";
 
         // We must use direct fetch — supabase.functions.invoke strips query strings.
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
+        const accessToken = await getAccessToken();
+        const token = accessToken;
         if (!token) throw new Error("Not authenticated");
 
         const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
