@@ -1,5 +1,6 @@
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 import {
   sha256Bytes,
   verifyPatientIdentity,
@@ -1141,6 +1142,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const authRes = await authenticateRequest(req);
+    if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
+
     const body = await req.json();
     const { uploadId } = body;
     const identityOverride: IdentityOverride | undefined = body.identity_override;
@@ -1165,7 +1169,7 @@ Deno.serve(async (req) => {
 
     const { data: upload, error: uploadError } = await supabase
       .from("patient_lab_uploads")
-      .select("id, status")
+      .select("id, status, user_id")
       .eq("id", uploadId)
       .single();
 
@@ -1175,6 +1179,11 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Identity binding: the caller must own this upload, or be an admin with an
+    // active view-as session for the upload's owner.
+    const owner = await resolveTargetUserId(authRes.auth, (upload as { user_id: string }).user_id);
+    if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
 
     // @ts-ignore — EdgeRuntime is available in Supabase edge functions
     EdgeRuntime.waitUntil(processUpload(uploadId, identityOverride, preConfirmed));

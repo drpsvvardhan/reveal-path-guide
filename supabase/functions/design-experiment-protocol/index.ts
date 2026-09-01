@@ -7,6 +7,7 @@
 // or bound to admitted patient data (labs/InBody/FibroScan/CIE via witness ctx).
 // ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,9 @@ function validate(p: ProtocolPayload): string[] {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const authRes = await authenticateRequest(req);
+    if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
+
     const p = (await req.json()) as ProtocolPayload;
     const missing = validate(p);
     if (missing.length) {
@@ -76,6 +80,12 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Identity binding: the payload user_id must be the caller, or an admin with
+    // an active view-as session for that user. Never trust the body alone.
+    const owner = await resolveTargetUserId(authRes.auth, p.user_id);
+    if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
+    p.user_id = owner.targetUserId;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
