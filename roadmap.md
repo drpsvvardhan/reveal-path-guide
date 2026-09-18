@@ -40,6 +40,15 @@
 - [ ] Human clinical validity remains NOT_ESTABLISHED
 
 
+## Upload extraction + clinician walkthrough (Sep 18, 2026)
+- [x] Duplicate-upload guard fixed so a file that produced no results can be re-read
+- [x] process-lab-pdf and process-fibroscan deployed with the fix
+- [ ] Run Vishnu's two real lab PDFs through the live pipeline and report extracted values, conditions, safety flags
+- [ ] Confirm the stuck "Processing" card resolves (no hanging spinner)
+- [ ] New extraction-detail page: per-document values/conditions found plus what was skipped (detailed view for owner/admin, plain-language view for patients)
+- [ ] Wire extracted biomarkers and conditions into the CIE 3.3 recheck so labs affect the safety verdict
+- [ ] Clinician review walkthrough on the real account: authorize clinician Vishnu Vardhan, submit review, confirm hold + fresh sentinel, revoke grant
+
 Patient autonomy post-release verification: the public custom-domain bundle was
 confirmed independently. The one live-test fixture failure was covered by a
 corrected rollback-only PostgreSQL owner-read/protected-write probe, which passed
