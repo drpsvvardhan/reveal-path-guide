@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,10 +13,12 @@ import ClinicalShare from "./pages/ClinicalShare.tsx";
 import AdminReviewQueue from "./pages/AdminReviewQueue.tsx";
 import AdminProfiles from "./pages/AdminProfiles.tsx";
 import AdminAccounts from "./pages/AdminAccounts.tsx";
+import AdminClinicianAuthority from "./pages/AdminClinicianAuthority.tsx";
+import ClinicianSafetyReview from "./pages/ClinicianSafetyReview.tsx";
+import ClinicalWorkNav from "./components/navigation/ClinicalWorkNav.tsx";
 import Account from "./pages/Account.tsx";
 import ManifestPreview from "./pages/ManifestPreview.tsx";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const queryClient = new QueryClient();
@@ -34,26 +36,21 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session, user, loading } = useAuth();
-  const [checking, setChecking] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      setChecking(false);
-      return;
-    }
-    (async () => {
-      const { data } = await supabase
+  const { data: isAdmin, isLoading: checking } = useQuery({
+    queryKey: ["admin-route", user?.id],
+    enabled: !!user && !loading,
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", user.id)
+        .eq("user_id", user!.id)
         .eq("role", "admin")
         .maybeSingle();
-      setIsAdmin(!!data);
-      setChecking(false);
-    })();
-  }, [user, loading]);
+      return !error && !!data;
+    },
+    staleTime: 0,
+    gcTime: 0,
+  });
 
   if (loading || checking) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -73,6 +70,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <ViewAsProvider>
+            <ClinicalWorkNav />
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -82,6 +80,8 @@ const App = () => (
               <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
               <Route path="/admin/profiles" element={<AdminRoute><AdminProfiles /></AdminRoute>} />
               <Route path="/admin/accounts" element={<AdminRoute><AdminAccounts /></AdminRoute>} />
+              <Route path="/admin/clinician-authority" element={<AdminRoute><AdminClinicianAuthority /></AdminRoute>} />
+              <Route path="/clinician/safety-review" element={<ProtectedRoute><ClinicianSafetyReview /></ProtectedRoute>} />
               <Route path="/manifest-preview" element={<ManifestPreview />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

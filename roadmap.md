@@ -12,3 +12,9 @@
 - [x] Closed: generate-ask-anything-context identifier leak — prompt hardened + deterministic output guard (cached responses included), 33 tests, redeployed, live call clean
 - [x] Closed: package-lock.json reconciled for drizzle-kit/drizzle-orm/postgres (npm ci path valid again; dependencies unchanged)
 - [x] Closed: two temporary rollout accounts and their synthetic data removed (25 legacy CIE 2.2 assessments and all real patients preserved)
+- [x] Clinical desk assessment and 37-item validation protocol merged in PR #4; human ratings and study forms remain blank
+- [x] PPE comparator test fixture corrected with overlap/consistency boundary and client/edge parity coverage; production thresholds unchanged
+- [x] Clinician review implementation completed: routes/navigation, patient-only instructions, fresh recheck, consistent audit IDs, authorization locking and durable retries; full suite 397 passed, typecheck/build passed
+- [ ] Clinician review release: apply forward migration, deploy functions, fresh managed security scan, synthetic live checks and frontend publication
+- [ ] Resolve dependency audit findings separately: 12 affected package nodes in existing lockfile; static applicability and update targets recorded in docs/validation/CIE33_DEPENDENCY_REVIEW.md
+- [ ] Human clinical panel, patient comprehension study and paired clinical-information pilot; clinical validity remains NOT_ESTABLISHED

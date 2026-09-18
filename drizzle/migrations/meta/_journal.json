@@ -15,6 +15,13 @@
       "when": 1789739957882,
       "tag": "0001_clinician_review_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789748443478,
+      "tag": "0002_clinician_review_consistency",
+      "breakpoints": true
     }
   ]
 }

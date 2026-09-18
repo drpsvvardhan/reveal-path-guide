@@ -145,10 +145,15 @@ async function submit(opts: {
   const requestId = opts.requestId ?? crypto.randomUUID();
   const witnessId = latestEntries(opts.held).find((e) => e.key === "safety")!
     .witness.id;
+  const authorizationId = opts.authId ?? (await db.query<{ id: string }>(
+    `select id from public.clinician_patient_authorizations
+      where clinician_user_id = $1 and patient_user_id = $2
+      order by granted_at desc, id desc limit 1`, [clinicianId, patient]
+  )).rows[0]?.id ?? other;
   const state =
     opts.state === undefined
       ? disposition === "permit_resumption"
-        ? permittedState(opts.held, clinicianId, opts.authId ?? other)
+        ? permittedState(opts.held, clinicianId, authorizationId)
         : null
       : opts.state;
   const note =
@@ -223,6 +228,7 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(readFileSync("drizzle/migrations/0002_clinician_review_consistency.sql", "utf8"));
 }, 60000);
 
 beforeEach(async () => {
@@ -376,6 +382,10 @@ describe("clinician safety review RPC", () => {
     ).rows;
     expect(event).toHaveLength(1);
     expect(event[0].event.clinicianUserId).toBe(clinician);
+    expect(out.state.safetyReview!.reviewId).toBe(out.review_id);
+    expect(out.state.safetyReview!.authorizationId).toBe(authId);
+    expect(event[0].event.reviewId).toBe(out.review_id);
+    expect(event[0].event.authorizationId).toBe(authId);
 
     // service_role holds no update/delete privilege at all;
     // even the table owner is stopped by the append-only guard.
@@ -434,6 +444,61 @@ describe("clinician safety review RPC", () => {
         note: "A completely different assessment note for the same request ID.",
       }),
     ).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
+  });
+
+  it("retains the exact bound grant when another active grant also exists", async () => {
+    const boundGrant = await grant();
+    const newerGrant = await grant();
+    expect(newerGrant).not.toBe(boundGrant);
+    const held = await seedHeldSession();
+    const out = await submit({ held, authId: boundGrant }) as {
+      review_id: string; state: IntakeState;
+    };
+    const row = (await db.query<{ authorization_id: string }>(
+      "select authorization_id from public.cie33_safety_reviews where id = $1", [out.review_id],
+    )).rows[0];
+    expect(row.authorization_id).toBe(boundGrant);
+    expect(out.state.safetyReview!.authorizationId).toBe(boundGrant);
+  });
+
+  it("never substitutes another grant after the state-bound grant is revoked", async () => {
+    const boundGrant = await grant();
+    await grant();
+    const held = await seedHeldSession();
+    const state = permittedState(held, clinician, boundGrant);
+    await db.query("select public.clinician_revoke_authorization($1,$2,$3)", [
+      admin, boundGrant, "Clinical engagement changed",
+    ]);
+    await expect(submit({ held, state })).rejects.toThrow(/NOT_AUTHORIZED/);
+    const rows = await db.query("select id from public.cie33_safety_reviews");
+    expect(rows.rows).toHaveLength(0);
+  });
+
+  it("denies durable replay after the clinician loses patient authority", async () => {
+    const authId = await grant();
+    const held = await seedHeldSession();
+    const requestId = crypto.randomUUID();
+    await submit({ held, requestId, authId });
+    await db.query("select public.clinician_revoke_authorization($1,$2,$3)", [
+      admin, authId, "Engagement ended",
+    ]);
+    await expect(submit({ held, requestId, authId })).rejects.toThrow(/NOT_AUTHORIZED/);
+  });
+
+  it("uses current time rather than transaction-start time for an expired queued review", async () => {
+    const held = await seedHeldSession();
+    await db.exec("begin");
+    try {
+      const authId = (await db.query<{ id: string }>(
+        `select (public.clinician_grant_authorization($1,$2,$3,$4,$5,
+          clock_timestamp() + interval '50 milliseconds')).id as id`,
+        [admin, clinician, patient, "LIC-current", "Credential verified by the clinical operations lead."],
+      )).rows[0].id;
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      await expect(submit({ held, authId })).rejects.toThrow(/NOT_AUTHORIZED/);
+    } finally {
+      await db.exec("rollback");
+    }
   });
 
   it("rejects a stale revision and a stale state hash", async () => {
@@ -509,7 +574,10 @@ describe("clinician safety review RPC", () => {
   it("rejects a resumption state that has been tampered with", async () => {
     await grant();
     const held = await seedHeldSession();
-    const permitted = permittedState(held);
+    const authorizationId = (await db.query<{ id: string }>(
+      "select id from public.clinician_patient_authorizations where clinician_user_id = $1", [clinician]
+    )).rows[0].id;
+    const permitted = permittedState(held, clinician, authorizationId);
     // The clinician cannot answer the safety question on the patient's behalf.
     const tampered = {
       ...permitted,
@@ -526,7 +594,7 @@ describe("clinician safety review RPC", () => {
       /INVALID_PERMIT/,
     );
     await expect(submit({ held, state: null })).rejects.toThrow(
-      /INVALID_PERMIT/,
+      /INVALID_PERMIT|NOT_AUTHORIZED/,
     );
   });
 });

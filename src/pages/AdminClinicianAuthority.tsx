@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeClinical } from "@/lib/clinicalFunctions";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,9 +47,11 @@ interface AuditRow {
 }
 
 const AdminClinicianAuthority: React.FC = () => {
+  const queryClient = useQueryClient();
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [rows, setRows] = useState<Authorization[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [clinicianId, setClinicianId] = useState("");
   const [patientId, setPatientId] = useState("");
@@ -60,27 +63,22 @@ const AdminClinicianAuthority: React.FC = () => {
   const [auditFor, setAuditFor] = useState<string | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
 
-  const call = async (body: Record<string, unknown>) => {
-    const { data, error } = await supabase.functions.invoke(
-      "clinician-authorization",
-      { body },
-    );
-    if (error) throw error;
-    if (data?.error) throw new Error(data.message ?? data.error);
-    return data;
-  };
+  const call = <T,>(body: Record<string, unknown>) => invokeClinical<T>("clinician-authorization", body);
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [list, people] = await Promise.all([
-        call({ action: "list" }),
-        supabase.functions.invoke("admin-list-profiles"),
+        call<{ authorizations: Authorization[] }>({ action: "list" }),
+        invokeClinical<{ profiles: ProfileOption[] }>("admin-list-profiles"),
       ]);
       setRows(list.authorizations ?? []);
-      setProfiles(people.data?.profiles ?? []);
+      setProfiles(people.profiles ?? []);
     } catch (e: any) {
-      toast.error(`Could not load review authority: ${e?.message ?? e}`);
+      setRows([]);
+      setProfiles([]);
+      setLoadError(`Could not load review authority: ${e?.message ?? e}`);
     } finally {
       setLoading(false);
     }
@@ -107,6 +105,7 @@ const AdminClinicianAuthority: React.FC = () => {
         expires_in_days: Number(days),
       });
       toast.success("Clinician authorized for this patient.");
+      void queryClient.invalidateQueries({ queryKey: ["clinical-work-access"] });
       setCredential("");
       setAttestation("");
       await load();
@@ -123,6 +122,7 @@ const AdminClinicianAuthority: React.FC = () => {
     try {
       await call({ action: "revoke", authorization_id: id, reason: reason.trim() });
       toast.success("Authority revoked.");
+      void queryClient.invalidateQueries({ queryKey: ["clinical-work-access"] });
       await load();
     } catch (e: any) {
       toast.error(`Could not revoke: ${e?.message ?? e}`);
@@ -132,7 +132,7 @@ const AdminClinicianAuthority: React.FC = () => {
   const showAudit = async (id: string) => {
     if (auditFor === id) { setAuditFor(null); return; }
     try {
-      const data = await call({ action: "audit", authorization_id: id });
+      const data = await call<{ audit: AuditRow[] }>({ action: "audit", authorization_id: id });
       setAudit(data.audit ?? []);
       setAuditFor(id);
     } catch (e: any) {
@@ -154,9 +154,6 @@ const AdminClinicianAuthority: React.FC = () => {
           <Link to="/admin/accounts" className="ml-auto text-sm text-muted-foreground hover:text-foreground">
             Accounts
           </Link>
-          <Link to="/clinician/safety-review" className="text-sm text-muted-foreground hover:text-foreground">
-            Review queue
-          </Link>
         </div>
 
         <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
@@ -165,6 +162,8 @@ const AdminClinicianAuthority: React.FC = () => {
           for as long as the authorization lasts, and only after their credential has
           been checked by a person. Every grant and revocation is recorded.
         </p>
+
+        {loadError && <Card role="alert" className="space-y-3 p-5"><p>{loadError}</p><Button variant="outline" onClick={load}>Try again</Button></Card>}
 
         <Card className="space-y-5 p-5 sm:p-6">
           <div className="flex items-center gap-2">
@@ -178,7 +177,7 @@ const AdminClinicianAuthority: React.FC = () => {
                 <SelectTrigger><SelectValue placeholder="Choose a clinician account" /></SelectTrigger>
                 <SelectContent>
                   {sorted.map((p) => (
-                    <SelectItem key={p.user_id} value={p.user_id}>{labelFor(p)}</SelectItem>
+                    <SelectItem key={p.user_id} value={p.user_id} disabled={p.user_id === patientId}>{labelFor(p)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -189,7 +188,7 @@ const AdminClinicianAuthority: React.FC = () => {
                 <SelectTrigger><SelectValue placeholder="Choose the patient" /></SelectTrigger>
                 <SelectContent>
                   {sorted.map((p) => (
-                    <SelectItem key={p.user_id} value={p.user_id}>{labelFor(p)}</SelectItem>
+                    <SelectItem key={p.user_id} value={p.user_id} disabled={p.user_id === clinicianId}>{labelFor(p)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -222,7 +221,7 @@ const AdminClinicianAuthority: React.FC = () => {
           </div>
           <Button
             onClick={grant}
-            disabled={granting || !clinicianId || !patientId || credential.trim().length < 3 || attestation.trim().length < 20}
+            disabled={loading || !!loadError || granting || !clinicianId || !patientId || clinicianId === patientId || !Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 365 || credential.trim().length < 3 || attestation.trim().length < 20}
             className="min-h-11"
           >
             {granting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
@@ -236,7 +235,7 @@ const AdminClinicianAuthority: React.FC = () => {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading
             </div>
-          ) : rows.length === 0 ? (
+          ) : loadError ? null : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No clinician has been authorized yet. Nobody can act on a paused intake until you authorize them above.
             </p>

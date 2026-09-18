@@ -16,7 +16,8 @@ export function publishedEvidence(
     state.phase !== "complete" ||
     state.instrumentVersion !== "3.3.0" ||
     state.profileVersion !== PROFILE_VERSION ||
-    state.safety === "handoff_required"
+    state.safety === "handoff_required" ||
+    state.safety === "recheck_required"
   )
     throw new Error("CIE33_PUBLISHED_STATE_INVALID");
   const { current: _current, route: _route, stateHash, ...body } = state;
