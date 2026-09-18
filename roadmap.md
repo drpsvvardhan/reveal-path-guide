@@ -25,3 +25,16 @@
 - [ ] tests/autonomy/ handler + policy + import regression tests
 - [ ] docs/PATIENT_AUTONOMY.md D2C principle and actual limits
 - Runtime/SQL fixes are owned externally; no deploy/publish/apply in this pass.
+
+## Patient autonomy release (Sep 18, 2026)
+- [x] tests/autonomy/ handler + policy + import regression tests (72 tests) and docs/PATIENT_AUTONOMY.md
+- [x] Full suite 492 passed across 41 files; app typecheck and production build clean; deno check clean on all six changed functions
+- [x] Managed migration 0005_patient_autonomy_authority applied after 0004 with journal/snapshot; 0000–0004 untouched; existing rows intact
+- [x] Deployed design-experiment-protocol, start-experiment-phase, compare-experiment-phases, simulate-what-if, import-biotwin-report, admin-import-biotwin, compare-experiment-checkpoint
+- [x] Live signed-in synthetic verification 72/73 (one test-fixture failure, not a product defect); both temporary accounts and all their rows removed; baseline counts restored
+- [x] Managed security scan: no critical findings; the protected-write findings now read fail-closed
+- [ ] Open: celf_feature_map is readable by any signed-in user (reference mapping data; confirm intent)
+- [ ] Open: two SECURITY DEFINER execute warnings previously dismissed by the user
+- [ ] Open: authenticated read exposure of RAE engine configuration tables and witness_signal_registry
+- [ ] Open: dependency audit — 12 affected package nodes (10 high, 1 moderate, 1 low) in the unchanged lockfile
+- [ ] Human clinical validity remains NOT_ESTABLISHED
