@@ -21,6 +21,7 @@ import HelpingFeedingSection from "@/components/sections/HelpingFeedingSection";
 import ReversibilitySection from "@/components/sections/ReversibilitySection";
 import ActionSection from "@/components/sections/ActionSection";
 import RecordsSection from "@/components/sections/RecordsSection";
+import ExtractionSection from "@/components/sections/ExtractionSection";
 import AskSection from "@/components/sections/AskSection";
 import ConfidenceSection from "@/components/sections/ConfidenceSection";
 import CareMapSection from "@/components/sections/CareMapSection";
@@ -45,6 +46,7 @@ const sections: Record<string, React.FC> = {
   actions: ActionSection,
   simulator: SimulatorSection,
   records: RecordsSection,
+  extraction: ExtractionSection,
   biotwin: BioTwinSection,
   ask: AskSection,
   queue: QueueSection,
