@@ -324,6 +324,7 @@ describe("clinician authority register", () => {
 
   it("keeps the audit trail append-only", async () => {
     const id = await grant();
+    await role("postgres");
     await expect(
       db.query(
         "update public.clinician_authorization_audit set action = 'revoked' where authorization_id = $1",
@@ -376,12 +377,19 @@ describe("clinician safety review RPC", () => {
     expect(event).toHaveLength(1);
     expect(event[0].event.clinicianUserId).toBe(clinician);
 
+    // service_role holds no update/delete privilege at all;
+    // even the table owner is stopped by the append-only guard.
+    await expect(
+      db.query("update public.cie33_safety_reviews set rationale = 'x'"),
+    ).rejects.toThrow(/permission denied/i);
+    await role("postgres");
     await expect(
       db.query("update public.cie33_safety_reviews set rationale = 'x'"),
     ).rejects.toThrow(/APPEND_ONLY/);
     await expect(
       db.query("delete from public.cie33_safety_reviews"),
     ).rejects.toThrow(/APPEND_ONLY/);
+    await role("service_role");
   });
 
   it("keep_hold documents the review and leaves the held state untouched", async () => {
@@ -473,10 +481,18 @@ describe("clinician safety review RPC", () => {
     ]);
     await expect(submit({ held })).rejects.toThrow(/NOT_AUTHORIZED/);
 
+    // Simulate the passage of time past the expiry: the immutability guard is
+    // suspended as the table owner purely so the fixture can age the row.
     await role("postgres");
+    await db.exec(
+      "alter table public.clinician_patient_authorizations disable trigger clinician_authorization_validate",
+    );
     await db.query(
       "update public.clinician_patient_authorizations set revoked_at = null, revoked_by = null, expires_at = now() - interval '1 day' where id = $1",
       [id],
+    );
+    await db.exec(
+      "alter table public.clinician_patient_authorizations enable trigger clinician_authorization_validate",
     );
     await role("service_role");
     await expect(submit({ held })).rejects.toThrow(/NOT_AUTHORIZED/);
@@ -486,7 +502,7 @@ describe("clinician safety review RPC", () => {
     await grant();
     const held = await seedHeldSession();
     await expect(submit({ held, clinicianId: patient })).rejects.toThrow(
-      /SELF_REVIEW_FORBIDDEN|cpa_no_self|NOT_AUTHORIZED/,
+      /SELF_REVIEW_FORBIDDEN|own intake|cpa_no_self|NOT_AUTHORIZED/,
     );
   });
 
