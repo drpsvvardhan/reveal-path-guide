@@ -16,5 +16,6 @@
 - [x] PPE comparator test fixture corrected with overlap/consistency boundary and client/edge parity coverage; production thresholds unchanged
 - [x] Clinician review implementation completed: routes/navigation, patient-only instructions, fresh recheck, consistent audit IDs, authorization locking and durable retries; full suite 397 passed, typecheck/build passed
 - [ ] Clinician review release: apply forward migration, deploy functions, fresh managed security scan, synthetic live checks and frontend publication
+- [x] Reconciled managed migration collision: preserved applied notice security migration 0002, moved pending consistency migration to 0003, retained both branch histories; 399 tests passed
 - [ ] Resolve dependency audit findings separately: 12 affected package nodes in existing lockfile; static applicability and update targets recorded in docs/validation/CIE33_DEPENDENCY_REVIEW.md
 - [ ] Human clinical panel, patient comprehension study and paired clinical-information pilot; clinical validity remains NOT_ESTABLISHED

@@ -135,6 +135,14 @@ beforeEach(() => {
 });
 
 describe("clinician safety review HTTP boundary", () => {
+  it("returns the server-accepted safety answer timestamp in review history", async () => {
+    const response = await post({ action: "detail", session_id: held.id });
+    expect(response.status).toBe(200);
+    const detail = await response.json();
+    expect(detail.session.safety_history[0].submitted_at).toBe(held.entries[0].answer.acceptedAt);
+    expect(detail.session.safety_history[0].submitted_at).toBeTruthy();
+  });
+
   it("replays a lost successful permit response despite its now-stale revision", async () => {
     const first = await post(body);
     expect(first.status).toBe(200);
