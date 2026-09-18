@@ -58,6 +58,17 @@ export interface CurrentQuestion {
   instance: QuestionInstance;
   revisesWitnessId?: string;
 }
+export interface ClinicianSafetyPermit {
+  reviewId: string;
+  authorizationId: string;
+  clinicianUserId: string;
+  sourceWitnessId: string;
+}
+export interface SafetyReviewPointer extends ClinicianSafetyPermit {
+  sourceRevision: number;
+  sourceStateHash: Hash;
+  permittedAt: string;
+}
 export interface IntakeState {
   schemaVersion: 1;
   instrumentVersion: typeof INSTRUMENT_VERSION;
@@ -70,15 +81,24 @@ export interface IntakeState {
     | "not_evaluated"
     | "insufficient_coverage"
     | "no_signal_reported"
-    | "handoff_required";
+    | "handoff_required"
+    /**
+     * A clinician with an active, patient-scoped authorization documented an
+     * assessment and permitted the patient to resume intake. This is permission
+     * to resume, never a determination that risk is absent. A fresh safety
+     * sentinel is outstanding; only the patient may answer it.
+     */
+    | "recheck_required";
   contract: AcquisitionContract;
   entries: IntakeEntry[];
   current?: CurrentQuestion;
+  safetyReview?: SafetyReviewPointer;
   stateHash: Hash;
   route?: RouteDecision;
   startedAt: string;
   updatedAt: string;
 }
+
 export interface AnswerInput {
   questionInstanceId: string;
   questionInstanceHash: Hash;
@@ -508,8 +528,16 @@ export function applyCommand(
             ? "handoff_required"
             : "no_signal_reported"
           : "insufficient_coverage";
+      // Failure to answer a clinician-permitted recheck must never become
+      // clearance: an unanswerable recheck reinstates the hold.
+      if (
+        previous.safety === "recheck_required" &&
+        state.safety === "insufficient_coverage"
+      )
+        state.safety = "handoff_required";
       if (state.safety === "handoff_required") state.phase = "safety_hold";
     }
+
     route(state, now);
   } else if (command.action === "revise") {
     if (!["review", "complete"].includes(previous.phase))
@@ -583,3 +611,68 @@ export function applyCommand(
   } else throw new IntakeError("UNKNOWN_ACTION", "Unknown intake action.");
   return state;
 }
+
+/**
+ * Clinician disposition: permit the patient to resume a held intake.
+ *
+ * This is NOT a determination that risk is absent and NOT treatment approval.
+ * The original positive safety answer and its witness are retained; a fresh
+ * safety sentinel is issued and linked to the original witness through
+ * `supersedes`. Only the patient can answer that recheck — a clinician can
+ * never answer the safety question on the patient's behalf, and the patient can
+ * never self-clear a hold.
+ */
+export function permitResumption(
+  previous: IntakeState,
+  permit: ClinicianSafetyPermit,
+  now: string,
+): IntakeState {
+  if (previous.stateHash !== hashState(previous))
+    throw new IntakeError(
+      "STATE_INTEGRITY",
+      "The saved intake could not be verified.",
+      500,
+    );
+  if (previous.safety !== "handoff_required" || previous.phase !== "safety_hold")
+    throw new IntakeError(
+      "NOT_HELD",
+      "This intake is not on a safety hold.",
+      409,
+    );
+  if (permit.clinicianUserId === previous.subjectId)
+    throw new IntakeError(
+      "SELF_REVIEW_FORBIDDEN",
+      "A clinician cannot review their own intake.",
+      403,
+    );
+  const held = latestEntries(previous).find((e) => e.key === "safety");
+  if (!held || held.witness.id !== permit.sourceWitnessId)
+    throw new IntakeError(
+      "SAFETY_WITNESS_MISMATCH",
+      "Reload the held intake before recording a disposition.",
+      409,
+    );
+  const safetyQuestion = FOUNDATION.find((q) => q.key === "safety");
+  if (!safetyQuestion)
+    throw new IntakeError(
+      "NO_SENTINEL",
+      "The safety sentinel is unavailable.",
+      500,
+    );
+  const state = structuredClone(previous);
+  state.revision++;
+  state.updatedAt = now;
+  state.safety = "recheck_required";
+  state.phase = "active";
+  state.safetyReview = {
+    ...permit,
+    sourceRevision: previous.revision,
+    sourceStateHash: previous.stateHash,
+    permittedAt: now,
+  };
+  delete state.current;
+  state.stateHash = hashState(state);
+  issue(state, safetyQuestion, now, permit.sourceWitnessId);
+  return state;
+}
+
