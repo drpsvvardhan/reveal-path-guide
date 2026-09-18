@@ -283,6 +283,9 @@ Deno.serve(async (req) => {
         patient_safe: a.patient_safe,
         safety_flags: a.safety_flags,
         unbound_biomarkers: a.unbound_biomarkers,
+        // Recorded with the card so the reason for a restriction, and what
+        // could change it, stays attached to the decision it shaped.
+        lab_concerns: labAssessment.concerns,
       };
     });
 
@@ -306,6 +309,11 @@ Deno.serve(async (req) => {
           blocked: ledger.blocked,
           blocked_unsafe: ledger.blocked_unsafe,
           blocked_unbound: ledger.blocked_unbound,
+        },
+        lab_reassessment: {
+          concerns: labAssessment.concerns,
+          insufficient_evidence: labAssessment.insufficientEvidence,
+          evaluated_markers: labAssessment.evaluatedMarkers,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
