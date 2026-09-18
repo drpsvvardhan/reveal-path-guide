@@ -1,4 +1,5 @@
 import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
+import { sanitizeSuggestedQuestions } from "../_shared/patientQuestionGuard.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
@@ -89,6 +90,12 @@ The patient's full terrain context is provided. Generate exactly 4 questions tha
 - Are each under 25 words
 - Never use words like "optimize", "biohack", "wellness", "holistic", "journey" (in the wellness sense)
 
+ABSOLUTE OUTPUT RULE — internal identifiers are forbidden in question text:
+- Never include any ID, UUID, hash, hex fragment, or database field name. Never write "witness_id", "witness id", "packet_id", "observation_id", "assessment_id", "user_id", "concept_id", "session_id", "sha256", "state_hash", "registry_seed_version", or any similar internal term.
+- Never include citation or template markers such as {cluster:...}, [[ref]], or <placeholder>.
+- Refer to findings only by their human name and value (for example "your ApoB at 128 mg/dL"), never by any identifier.
+- A question containing an identifier is discarded entirely, so write it cleanly the first time.
+
 Return JSON: { "questions": ["q1", "q2", "q3", "q4"] }`;
 
 Deno.serve(async (req) => {
@@ -138,7 +145,12 @@ Deno.serve(async (req) => {
     const cacheKey = `${user_id}::${effectiveAssessmentId || "none"}::${terrainVersion}`;
     const cached = cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return new Response(JSON.stringify(cached.data), {
+      // Guard cached payloads as well: a response cached before this guard
+      // existed must never reach a patient with internal identifiers.
+      const cachedData = cached.data as { suggested_questions?: unknown };
+      const cachedGuard = sanitizeSuggestedQuestions(cachedData?.suggested_questions);
+      const safeCached = { ...(cachedData as Record<string, unknown>), suggested_questions: cachedGuard.questions };
+      return new Response(JSON.stringify(safeCached), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -358,10 +370,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fallback
-    if (suggestedQuestions.length === 0) {
-      suggestedQuestions = ["Tell me what I should be paying attention to right now"];
+    // Deterministic final-output guard: validate every question as a non-empty
+    // string and drop any that carries an internal identifier or technical
+    // marker. Witness grounding and evidence IDs are untouched internally.
+    const guard = sanitizeSuggestedQuestions(suggestedQuestions);
+    if (guard.dropped > 0 || guard.usedFallback) {
+      console.warn("suggested_questions guard:", JSON.stringify({ dropped: guard.dropped, used_fallback: guard.usedFallback }));
     }
+    suggestedQuestions = guard.questions;
 
     const result = {
       biomarker_chips: {
