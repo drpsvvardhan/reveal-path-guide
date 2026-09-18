@@ -75,13 +75,24 @@ const ExtractionSection: React.FC = () => {
     const load = async () => {
       if (!targetUserId) { setRows([]); setLoading(false); return; }
       setLoading(true);
-      const { data } = await supabase
-        .from("patient_lab_observations")
-        .select("id, upload_id, raw_name, canonical_name, display_name, value, unit, ref_low, ref_high, flag, collection_date, canonical_concept_id")
-        .eq("user_id", targetUserId)
-        .order("collection_date", { ascending: false });
+      // Paged read: a full lab history exceeds the single-request row cap, and
+      // a truncated read would understate what was actually extracted.
+      const page = 1000;
+      const all: ExtractedRow[] = [];
+      for (let from = 0; ; from += page) {
+        const { data, error } = await supabase
+          .from("patient_lab_observations")
+          .select("id, upload_id, raw_name, canonical_name, display_name, value, unit, ref_low, ref_high, flag, collection_date, canonical_concept_id")
+          .eq("user_id", targetUserId)
+          .order("collection_date", { ascending: false })
+          .range(from, from + page - 1);
+        if (error) break;
+        const batch = (data ?? []) as ExtractedRow[];
+        all.push(...batch);
+        if (batch.length < page) break;
+      }
       if (!cancelled) {
-        setRows((data ?? []) as ExtractedRow[]);
+        setRows(all);
         setLoading(false);
       }
     };
@@ -89,18 +100,30 @@ const ExtractionSection: React.FC = () => {
     return () => { cancelled = true; };
   }, [targetUserId]);
 
+  /**
+   * One marker can exist twice for the same draw: an older unbound row and a
+   * canonicalized one. Collapse them so the page reports markers, not rows,
+   * and prefer the bound row so "not yet recognised" stays truthful.
+   */
   const byUpload = useMemo(() => {
-    const map = new Map<string, ExtractedRow[]>();
+    const map = new Map<string, Map<string, ExtractedRow>>();
     for (const r of rows) {
-      const list = map.get(r.upload_id) ?? [];
-      list.push(r);
-      map.set(r.upload_id, list);
+      const perUpload = map.get(r.upload_id) ?? new Map<string, ExtractedRow>();
+      const key = `${r.canonical_name}|${r.collection_date}`;
+      const existing = perUpload.get(key);
+      if (!existing || (!existing.canonical_concept_id && r.canonical_concept_id)) {
+        perUpload.set(key, r);
+      }
+      map.set(r.upload_id, perUpload);
     }
-    return map;
+    const out = new Map<string, ExtractedRow[]>();
+    for (const [uploadId, markers] of map) out.set(uploadId, [...markers.values()]);
+    return out;
   }, [rows]);
 
-  const recognisedCount = rows.filter((r) => r.canonical_concept_id).length;
-  const unrecognisedCount = rows.length - recognisedCount;
+  const markers = useMemo(() => [...byUpload.values()].flat(), [byUpload]);
+  const recognisedCount = markers.filter((r) => r.canonical_concept_id).length;
+  const unrecognisedCount = markers.length - recognisedCount;
 
   const toggle = (id: string) =>
     setOpen((prev) => {
