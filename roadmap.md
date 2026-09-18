@@ -12,5 +12,13 @@
 - [x] Closed: generate-ask-anything-context identifier leak — prompt hardened + deterministic output guard (cached responses included), 33 tests, redeployed, live call clean
 - [x] Closed: package-lock.json reconciled for drizzle-kit/drizzle-orm/postgres (npm ci path valid again; dependencies unchanged)
 - [x] Closed: two temporary rollout accounts and their synthetic data removed (25 legacy CIE 2.2 assessments and all real patients preserved)
-- [ ] Clinician review workflow (CIE 3.3 safety holds): authority migration, engine permit + fresh recheck, cie33-safety-review / clinician-authorization functions, admin authority page, clinician queue page, patient recheck notice, engine/SQL/UI tests, deploy + publish
+- [x] Clinician review workflow for CIE 3.3 safety holds
+  - [x] Patient-scoped, expiring, revocable authority with credential reference + attestation and full grant/revoke audit (migration 0001); no real account auto-granted
+  - [x] Engine `permitResumption`: original positive answer kept, fresh linked safety question issued, hold returns on a fresh positive or unanswered recheck
+  - [x] `clinician-authorization` + `cie33-safety-review` functions (verified JWT, service-only transactional RPC, CAS + idempotent replay)
+  - [x] Admin authority page, clinician queue/detail/disposition page (routed), patient recheck notice with clinician instructions only
+  - [x] Private clinical notes unreadable by patients: column-level grants + invoker-security notice view (migration 0002)
+  - [x] 381 tests pass (engine 9, database/RLS 19, review screen 5); typecheck + build clean; security scan clean
+  - [x] Live rehearsal on synthetic accounts: hold, unauthorized queue/detail/submit refused, self-grant refused, keep-hold, permit, replay, stale rejection, recheck, re-hold, revocation, audit — accounts and data deleted afterwards
+  - [x] Deployed: clinician-authorization, cie33-safety-review, cie-v33; frontend published
 - [x] PPE comparator failure resolved by evidence (fixture was mislabelled; thresholds unchanged)
