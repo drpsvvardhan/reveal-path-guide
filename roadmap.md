@@ -12,3 +12,5 @@
 - [x] Closed: generate-ask-anything-context identifier leak — prompt hardened + deterministic output guard (cached responses included), 33 tests, redeployed, live call clean
 - [x] Closed: package-lock.json reconciled for drizzle-kit/drizzle-orm/postgres (npm ci path valid again; dependencies unchanged)
 - [x] Closed: two temporary rollout accounts and their synthetic data removed (25 legacy CIE 2.2 assessments and all real patients preserved)
+- [ ] Clinician review workflow (CIE 3.3 safety holds): authority migration, engine permit + fresh recheck, cie33-safety-review / clinician-authorization functions, admin authority page, clinician queue page, patient recheck notice, engine/SQL/UI tests, deploy + publish
+- [x] PPE comparator failure resolved by evidence (fixture was mislabelled; thresholds unchanged)
