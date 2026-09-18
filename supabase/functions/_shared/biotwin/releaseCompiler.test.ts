@@ -247,5 +247,5 @@ Deno.test("measurement plan is recommendation-only", () => {
 });
 
 Deno.test("compiler version is frozen", () => {
-  assertEquals(RELEASE_COMPILER_VERSION, "biotwin_release_compiler_v1");
+  assertEquals(RELEASE_COMPILER_VERSION, "biotwin_release_compiler_v2_evidence_plane");
 });
