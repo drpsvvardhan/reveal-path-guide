@@ -172,12 +172,16 @@ export async function checkContentDuplicate(
   userId: string,
   contentSha256: string,
 ): Promise<DedupCheckResult> {
+  // A prior upload only counts as a duplicate if it actually produced data.
+  // If the earlier attempt yielded nothing (or its results were deleted), the
+  // patient must be able to re-upload the same file and get it extracted.
   const { data, error } = await sb
     .from("patient_lab_uploads")
-    .select("id, created_at, status")
+    .select("id, created_at, status, observations_inserted")
     .eq("user_id", userId)
     .eq("content_sha256", contentSha256)
     .not("status", "in", "(rejected_identity,rejected_duplicate,failed)")
+    .gt("observations_inserted", 0)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
