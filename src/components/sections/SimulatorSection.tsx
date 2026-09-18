@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Brain, FlaskConical, GraduationCap, Loader2, Sparkles, Telescope } from "lucide-react";
+import { Brain, FlaskConical, GraduationCap, ListChecks, Loader2, Sparkles, Telescope } from "lucide-react";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import TappableProse from "@/components/terrain/TappableProse";
 import { SimulatorProvider, useSimulator } from "@/context/SimulatorContext";
@@ -9,6 +9,8 @@ import ExperimentCard from "@/components/simulator/ExperimentCard";
 import ProtocolBuilderModal from "@/components/simulator/ProtocolBuilderModal";
 import DailyCheckInCard from "@/components/simulator/DailyCheckInCard";
 import ClinicianReviewPanel from "@/components/simulator/ClinicianReviewPanel";
+import { ACTION_TEMPLATES, type ActionTemplate } from "@/lib/autonomy/templates";
+import type { ServerAdmission } from "@/context/SimulatorContext";
 
 // The Loop: Observe → Explain → Simulate → Choose → Act → Compare → Learn → Internalize
 const LOOP_STEPS = [
@@ -49,6 +51,9 @@ const SimulatorInner: React.FC = () => {
   } = useSimulator();
 
   const [designCard, setDesignCard] = useState<WhatIfCardType | null>(null);
+  const [designTemplate, setDesignTemplate] = useState<ActionTemplate | null>(null);
+  const [designAdmission, setDesignAdmission] = useState<ServerAdmission | null>(null);
+  const [designMessage, setDesignMessage] = useState<string | null>(null);
   const [designing, setDesigning] = useState(false);
   const [loggingObs, setLoggingObs] = useState(false);
   const [runningCheckpointId, setRunningCheckpointId] = useState<string | null>(null);
@@ -75,14 +80,41 @@ const SimulatorInner: React.FC = () => {
       ? "simulate"
       : activeExperiments.length > 0 ? "act" : "choose";
 
+  const closeBuilder = () => {
+    setDesignCard(null);
+    setDesignTemplate(null);
+    setDesignAdmission(null);
+    setDesignMessage(null);
+  };
+
   const handleConfirmDesign = async (payload: any) => {
     setDesigning(true);
+    setDesignMessage(null);
     const res = await designProtocol(payload);
-    setDesigning(false);
-    if (res) {
-      await advancePhase(res.experiment.id, "run_in");
-      setDesignCard(null);
+    if (!res.ok) {
+      // The plan is saved; it simply cannot start. Show why, and keep it open
+      // so the patient can revise it.
+      setDesignAdmission(res.admission ?? null);
+      setDesignMessage(res.message);
+      setDesigning(false);
+      return;
     }
+    setDesignAdmission(res.admission ?? null);
+
+    if (res.admission && res.admission.activation_allowed === false) {
+      setDesignMessage(res.admission.patient_message);
+      setDesigning(false);
+      return;
+    }
+
+    const started = await advancePhase(res.experiment.id, "run_in");
+    setDesigning(false);
+    if (!started.ok) {
+      setDesignAdmission(started.admission ?? res.admission ?? null);
+      setDesignMessage(started.message ?? "This plan is saved, but it did not start.");
+      return;
+    }
+    closeBuilder();
   };
 
   const handleLogObs = async (payload: any) => {
@@ -172,6 +204,34 @@ const SimulatorInner: React.FC = () => {
           </div>
         </section>
       )}
+
+      <section className="space-y-3 pt-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <ListChecks className="h-4 w-4 text-signature shrink-0" />
+          <h2 className="font-serif text-xl text-foreground break-words">Ready-made plans you can start yourself</h2>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed break-words">
+          Everyday changes with set options and a fixed way of tracking them. You
+          choose one and start it — no appointment needed. If something about your
+          current health means a plan should wait, we say so on the spot and tell
+          you what still works.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2 min-w-0">
+          {ACTION_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { setDesignAdmission(null); setDesignMessage(null); setDesignTemplate(t); }}
+              className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/40 min-w-0 min-h-[44px]"
+            >
+              <p className="font-serif text-base text-foreground break-words leading-snug">{t.label}</p>
+              <p className="mt-1 text-sm text-muted-foreground leading-relaxed break-words">{t.summary}</p>
+              <p className="mt-2 text-[10px] font-sans uppercase tracking-wider text-muted-foreground break-words">
+                {t.category} · tracks {t.primary_outcome.name}
+              </p>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="space-y-3 pt-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -280,10 +340,13 @@ const SimulatorInner: React.FC = () => {
       )}
 
       <ProtocolBuilderModal
-        open={!!designCard}
+        open={!!designCard || !!designTemplate}
         card={designCard}
+        template={designTemplate}
+        admission={designAdmission}
+        serverMessage={designMessage}
         submitting={designing}
-        onClose={() => setDesignCard(null)}
+        onClose={closeBuilder}
         onConfirm={handleConfirmDesign}
       />
     </PatientSectionLayout>
