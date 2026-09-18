@@ -33,6 +33,7 @@ export type RiskClass =
   | "self_manageable"
   | "evidence_uncertain"
   | "outside_template_bounds"
+  | "context_unavailable"
   | "clinician_scope";
 
 export type TemplateCategory =
