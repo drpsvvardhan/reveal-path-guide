@@ -35,7 +35,7 @@ Reveal Path supports four primary workflows. Each is a composition of smaller st
 
 The ingestion workflow is the highest-volume path in the system. Every PDF a patient uploads flows through it. The LLM at the extraction step is doing three distinct jobs simultaneously — OCR recovery, canonicalization against the ontology, and unit conversion. All three are driven by a single prompt that includes the ontology as a constrained vocabulary.
 
-Confidence thresholding at 0.80 is the primary quality gate. Observations above threshold flow straight into the patient record. Observations below threshold accumulate in the review queue for human triage. The threshold is tunable and lives in `supabase/functions/_shared/ontology.ts`.
+Confidence thresholding at 0.80 is the primary quality gate. Observations above threshold flow straight into the patient record. Observations below threshold accumulate in the review queue for human triage. The threshold is currently hardcoded at the ingest site (`supabase/functions/process-lab-pdf/index.ts`, `confidence < 0.80`) and mirrored as `CONFIDENCE_THRESHOLD = 0.80` in `supabase/functions/export-celf-bundle/index.ts`. It is not yet centralized in a single tunable constant — changing the gate means editing both sites.
 
 ### Workflow B — Human review and ontology growth
 
@@ -209,7 +209,7 @@ This section documents what we know is incomplete. Writing it down is a commitme
 
 - **No deep linking into patient workflows.** The patient shell is a single page that swaps sections internally. A clinician sharing a specific finding can't send a URL that opens to that finding. Considered; deliberately deferred; may revisit.
 - **No outcome instrumentation.** We don't currently measure whether patients queue better questions, whether clinicians actually use the handoff links, or whether review queue corrections reduce future misclassification rates. These are the metrics that would prove the system is doing what it claims. Instrumentation work is planned but not started.
-- **Testing coverage is incomplete.** The edge functions have no automated test suite. High-value targets for initial tests: the CELF export function's subject identity gate, the review queue resolution atomicity, the admin view-as permission check, and the ingestion pipeline's confidence gating.
+- **Testing coverage is partial.** The shared edge-function logic now has automated coverage — ~38 `*.test.ts` files spanning the Vitest unit suite and the Deno suites under `supabase/functions/_shared/` (including the whole `rae/` tree), plus the RAE SQL-layer integration harness (`scripts/test-integration.sh`) wired into CI via `.github/workflows/rae-integration.yml`. What remains uncovered is the edge functions' HTTP surface and RLS policy behavior: there is still no end-to-end test of the CELF export subject identity gate, the review-queue resolution atomicity at the HTTP layer, or the admin view-as permission check as exercised through a real request.
 
 ---
 
@@ -221,4 +221,4 @@ The commitment is that the document stays synchronized with the code. If you're 
 
 ---
 
-*Last substantive revision: April 2026 — added admin view-as hardening (Boundary 2), review queue atomic function, README.*
+*Last substantive revision: June 2026 — corrected the ingest-threshold location (it is not in `_shared/ontology.ts`), refreshed the testing-coverage gap to reflect the Vitest/Deno suites and RAE integration harness now in CI.*

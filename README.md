@@ -104,18 +104,19 @@ Internal/experimental:
 This is a Vite + React + TypeScript application backed by Supabase (Postgres, Auth, Storage, Edge Functions).
 
 ```bash
-# install
-pnpm install
+# install (repo ships bun.lock and package-lock.json; use npm or bun)
+npm install
 
-# set environment variables (see .env.example)
+# set environment variables — see the committed .env for the required keys:
 # VITE_SUPABASE_URL=...
-# VITE_SUPABASE_ANON_KEY=...
+# VITE_SUPABASE_PUBLISHABLE_KEY=...
 
-# run dev server
-pnpm dev
+# run dev server (Vite, port 8080)
+npm run dev
 
-# run type checks and linter
-pnpm check
+# lint and unit tests
+npm run lint
+npm test
 ```
 
 Supabase migrations are in `supabase/migrations/`. Apply them with the Supabase CLI or the Lovable deployment workflow. Edge functions are in `supabase/functions/` and deploy as individual Deno workers.
