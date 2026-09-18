@@ -581,6 +581,7 @@ export type Database = {
           created_at: string
           full_completed_at: string | null
           id: string
+          instrument_version: string
           layer1_completed_at: string | null
           layer2_completed_at: string | null
           status: string
@@ -594,6 +595,7 @@ export type Database = {
           created_at?: string
           full_completed_at?: string | null
           id?: string
+          instrument_version?: string
           layer1_completed_at?: string | null
           layer2_completed_at?: string | null
           status?: string
@@ -607,6 +609,7 @@ export type Database = {
           created_at?: string
           full_completed_at?: string | null
           id?: string
+          instrument_version?: string
           layer1_completed_at?: string | null
           layer2_completed_at?: string | null
           status?: string
@@ -760,6 +763,82 @@ export type Database = {
             foreignKeyName: "cie_responses_assessment_id_fkey"
             columns: ["assessment_id"]
             isOneToOne: false
+            referencedRelation: "cie_assessments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cie33_events: {
+        Row: {
+          created_at: string
+          event: Json
+          request_hash: string
+          request_id: string
+          result_revision: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event: Json
+          request_hash: string
+          request_id: string
+          result_revision: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event?: Json
+          request_hash?: string
+          request_id?: string
+          result_revision?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie33_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "cie33_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cie33_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          published_state: Json | null
+          revision: number
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          published_state?: Json | null
+          revision: number
+          state: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          published_state?: Json | null
+          revision?: number
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie33_sessions_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
             referencedRelation: "cie_assessments"
             referencedColumns: ["id"]
           },
@@ -2971,6 +3050,18 @@ export type Database = {
       }
     }
     Functions: {
+      cie33_commit: {
+        Args: {
+          p_action: string
+          p_expected_hash: string
+          p_expected_revision: number
+          p_request_hash: string
+          p_request_id: string
+          p_state: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
       fn_name_match_score: {
         Args: { p_account_name: string; p_extracted_name: string }
         Returns: number
