@@ -2,28 +2,70 @@
 // Trusted admission context
 // ----------------------------------------------------------------------------
 // The context an admission decision is computed against is read from the
-// patient's own stored data with service credentials. It is never accepted
+// patient's own admitted data with service credentials. It is never accepted
 // from the request body, because a request body is not evidence.
 //
-// Limitation, stated plainly: the condition flags below are derived by keyword
-// scan over this person's stored clusters and profile. They are a conservative
-// screen, not a clinical assessment, and are not clinically validated.
+// Two properties this file exists to guarantee:
+//
+//   1. IT USES THE TRUSTED SUBSTRATE. Biomarkers and safety flags come from
+//      `loadPatientContext` (witness_objects + published CIE 3.3 evidence) and
+//      the shared `derivePatientGuards` rules — the same ones simulate-what-if
+//      uses. No ad-hoc reads of raw observation tables, no invented columns,
+//      no keyword-derived diagnoses.
+//
+//   2. A FAILED READ IS "UNKNOWN", NEVER "CLEAR". If the context cannot be
+//      read, `available` is false. The policy then refuses to auto-activate
+//      anything that changes the body, while observation-only tracking still
+//      proceeds — because tracking needs no clinical clearance.
+//
+// Conditions that are absent from structured sources stay UNKNOWN. Absence is
+// never reported as exclusion, and nothing here is clinically validated.
 // ============================================================================
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { loadPatientContext } from "../contextLoader.ts";
+import { derivePatientGuards } from "../aae/patientGuards.ts";
 import type { AdmissionContext } from "./actionPolicy.ts";
-
-const FLAG_KEYWORDS: [string, RegExp][] = [
-  ["cardiac_risk", /\b(cardiac|coronary|atheroscler\w*|heart failure|arrhythm\w*|angina|myocardial)\b/i],
-  ["low_hrv", /\b(hrv|autonomic (?:load|dysregulation)|poor recovery|sympathetic dominan\w*)\b/i],
-  ["ed_history", /\b(disordered eating|eating disorder|anorexi\w*|bulimi\w*|binge eating)\b/i],
-  ["ckd", /\b(chronic kidney|ckd|renal impair\w*|reduced egfr)\b/i],
-  ["pregnancy", /\b(pregnan\w*|gestation\w*|postpartum)\b/i],
-  ["underweight", /\b(underweight|low body mass|sarcopeni\w*)\b/i],
-];
+import { sha256Hex } from "./protocolContent.ts";
 
 export interface LoadedAdmissionContext extends AdmissionContext {
-  sources: { lab_observations: number; domain_scores: number; clusters: number };
+  /** Fingerprint of everything the decision was computed from (for CAS). */
+  fingerprint: string;
+  sources: {
+    lab_observations: number;
+    inbody_observations: number;
+    fibroscan_observations: number;
+    cie_domain_scores: number;
+    cie_gate_scores: number;
+    cie33_sessions_inspected: number;
+  };
+  /** Human-readable reason the context could not be read, when it could not. */
+  unavailable_reason: string | null;
+}
+
+/**
+ * CIE 3.3 safety state, read from the live session rows — including sessions
+ * that are still in progress. A positive sentinel that has not been resolved
+ * holds the relevant interventions even if no assessment has been completed.
+ */
+async function readCie33SafetyState(
+  service: SupabaseClient,
+  userId: string,
+): Promise<{ hold: boolean; recheckPending: boolean; inspected: number }> {
+  const { data, error } = await service
+    .from("cie33_sessions")
+    .select("state")
+    .eq("user_id", userId);
+  if (error) throw new Error(`cie33_sessions unreadable: ${error.message}`);
+  const rows = (data ?? []) as { state: Record<string, unknown> | null }[];
+  let hold = false;
+  let recheckPending = false;
+  for (const row of rows) {
+    const safety = String((row.state ?? {})["safety"] ?? "");
+    if (safety === "handoff_required") hold = true;
+    if (safety === "recheck_required") recheckPending = true;
+  }
+  return { hold, recheckPending, inspected: rows.length };
 }
 
 export async function loadAdmissionContext(
@@ -31,40 +73,70 @@ export async function loadAdmissionContext(
   userId: string,
   options: { isViewAs?: boolean } = {},
 ): Promise<LoadedAdmissionContext> {
-  const [obsRes, domainRes, clusterRes] = await Promise.all([
-    service
-      .from("patient_lab_observations")
-      .select("canonical_concept_id, raw_name")
-      .eq("user_id", userId)
-      .limit(1000),
-    service.from("cie_domain_scores").select("domain").eq("user_id", userId).limit(200),
-    service.from("clusters").select("*").eq("user_id", userId).limit(50),
-  ]);
-
-  const biomarkers = new Set<string>();
-  for (const row of (obsRes.data ?? []) as Record<string, string | null>[]) {
-    if (row.canonical_concept_id) biomarkers.add(row.canonical_concept_id);
-    if (row.raw_name) biomarkers.add(row.raw_name);
-  }
-  for (const row of (domainRes.data ?? []) as Record<string, string | null>[]) {
-    if (row.domain) biomarkers.add(row.domain);
-  }
-
-  const clusterRows = (clusterRes.data ?? []) as Record<string, unknown>[];
-  const haystack = JSON.stringify(clusterRows);
-  const flags = new Set<string>();
-  for (const [flag, pattern] of FLAG_KEYWORDS) {
-    if (pattern.test(haystack)) flags.add(flag);
-  }
-
-  return {
-    biomarkers: [...biomarkers],
-    flags: [...flags],
+  const empty: LoadedAdmissionContext = {
+    biomarkers: [],
+    flags: [],
+    available: false,
+    cieSafetyHold: false,
+    cieRecheckPending: false,
     isViewAs: options.isViewAs ?? false,
+    fingerprint: "unavailable",
     sources: {
-      lab_observations: (obsRes.data ?? []).length,
-      domain_scores: (domainRes.data ?? []).length,
-      clusters: clusterRows.length,
+      lab_observations: 0,
+      inbody_observations: 0,
+      fibroscan_observations: 0,
+      cie_domain_scores: 0,
+      cie_gate_scores: 0,
+      cie33_sessions_inspected: 0,
     },
+    unavailable_reason: null,
   };
+
+  try {
+    const [terrain, cie33] = await Promise.all([
+      loadPatientContext(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        userId,
+      ),
+      readCie33SafetyState(service, userId),
+    ]);
+
+    const { biomarkers, flags } = derivePatientGuards(terrain);
+    const sources = {
+      lab_observations: terrain.labs?.observations?.length ?? 0,
+      inbody_observations: terrain.inbody?.observations?.length ?? 0,
+      fibroscan_observations: (terrain as any).fibroscan?.observations?.length ?? 0,
+      cie_domain_scores: terrain.cie?.domain_scores?.length ?? 0,
+      cie_gate_scores: terrain.cie?.gate_scores?.length ?? 0,
+      cie33_sessions_inspected: cie33.inspected,
+    };
+
+    const fingerprint = `sha256:${await sha256Hex(
+      JSON.stringify({
+        biomarkers: [...biomarkers].sort(),
+        flags: [...flags].sort(),
+        cie_safety_hold: cie33.hold,
+        cie_recheck_pending: cie33.recheckPending,
+        sources,
+      }),
+    )}`;
+
+    return {
+      biomarkers: [...biomarkers],
+      flags: [...flags],
+      available: true,
+      cieSafetyHold: cie33.hold,
+      cieRecheckPending: cie33.recheckPending,
+      isViewAs: options.isViewAs ?? false,
+      fingerprint,
+      sources,
+      unavailable_reason: null,
+    };
+  } catch (e) {
+    // Unknown is not clearance. The policy treats this as "we cannot check".
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error("[loadAdmissionContext] context unreadable:", reason);
+    return { ...empty, unavailable_reason: reason };
+  }
 }
