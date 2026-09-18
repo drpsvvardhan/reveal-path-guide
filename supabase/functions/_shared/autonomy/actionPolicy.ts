@@ -255,29 +255,49 @@ export const CLINICIAN_SCOPE_RULES: ScopeRule[] = [
   },
 ];
 
-// Numeric limits that make an otherwise ordinary field extreme.
-const NUMERIC_LIMITS: { path: string; max: number; scope: string; reason: string }[] = [
+// ── Numeric limits for FREE-FORM proposals only ──────────────────────────────
+// These are not the authorization boundary and they are not clinically
+// validated thresholds. A free-form proposal is never auto-activatable anyway;
+// these rules only decide whether the honest explanation should say "this sits
+// with your clinician" instead of "this is your own idea, saved as a proposal".
+//
+// They are deliberately typed and scoped, so an ordinary value in one kind of
+// plan cannot be read as an extreme value in another: a 480-minute sleep window
+// is not a 480-minute training session.
+const FREEFORM_NUMERIC_LIMITS: {
+  path: string;
+  max: number;
+  categories: TemplateCategory[] | "any";
+  scope: string;
+  reason: string;
+}[] = [
   {
     path: "fasting_hours",
     max: 16,
+    categories: "any",
     scope: "extreme_restriction",
     reason: "A fasting window this long needs clinical involvement.",
   },
   {
     path: "duration_min",
     max: 180,
+    // Session length only. Sleep, recovery and timing plans measure a window,
+    // not exertion, so this rule does not apply to them.
+    categories: ["movement"],
     scope: "extreme_exertion",
-    reason: "A single session this long is beyond an everyday self-managed action.",
+    reason: "A single training session this long is beyond an everyday self-managed action.",
   },
   {
     path: "sessions_per_week",
     max: 10,
+    categories: ["movement"],
     scope: "extreme_exertion",
     reason: "This training frequency is beyond an everyday self-managed action.",
   },
   {
     path: "calorie_deficit",
     max: 750,
+    categories: "any",
     scope: "extreme_restriction",
     reason: "A deficit this large is not a self-managed everyday action.",
   },
@@ -307,15 +327,37 @@ export interface ProposalForReview {
   intervention_days: number;
   washout_days?: number | null;
   predicted_deltas?: { biomarker: string; confidence?: number }[];
+  /**
+   * Confidence recorded by the server when the source suggestion was generated.
+   * It expresses how sure the prediction is, and it NEVER decides whether the
+   * action is safe or "well supported" for activation purposes.
+   */
   confidence?: number | null;
   hypothesis_question?: string;
+  /** Patient's own words, kept for reading. Never part of executable content. */
+  patient_note?: string | null;
 }
 
 export interface AdmissionContext {
   biomarkers: string[];
   flags: string[];
+  /** False when the trusted context could not be read. Unknown, not clear. */
+  available: boolean;
+  /** An unresolved CIE 3.3 positive sentinel handoff. */
+  cieSafetyHold: boolean;
+  /** A clinician permitted resumption; the patient's safety recheck is pending. */
+  cieRecheckPending: boolean;
   /** An admin viewing a patient's account has access, never clinical authority. */
   isViewAs?: boolean;
+  /**
+   * The verdict already recorded on the owner-verified source suggestion. A
+   * template id can never launder a held suggestion into an executable plan.
+   */
+  sourceCard?: {
+    verdict?: string | null;
+    patient_safe?: boolean | null;
+    safety_flags?: string[] | null;
+  } | null;
 }
 
 export interface ActionAssessment {
@@ -334,6 +376,8 @@ export interface ActionAssessment {
   patient_message: string;
   /** What remains available regardless of this decision. */
   still_available: string[];
+  /** True when the decision was computed without readable clinical context. */
+  context_available: boolean;
 }
 
 const ALWAYS_AVAILABLE = [
@@ -346,9 +390,10 @@ const ALWAYS_AVAILABLE = [
 
 /**
  * Everything a reviewer must see: the lever, the rationale, every nested
- * intervention value, the stop criteria and the outcome. Editing a nested
- * field therefore changes the assessed text, so an edit cannot inherit the
- * previous decision.
+ * intervention value, the stop criteria, predictions and the outcome. Editing a
+ * nested field therefore changes the assessed text, so an edit cannot inherit
+ * the previous decision. This text EXPLAINS holds; it does not authorize
+ * anything — authorization comes from the canonical template path below.
  */
 export function collectProposalText(p: ProposalForReview): string {
   const parts: string[] = [
@@ -356,6 +401,7 @@ export function collectProposalText(p: ProposalForReview): string {
     p.rationale ?? "",
     p.hypothesis_question ?? "",
     p.perturbation_category ?? "",
+    p.patient_note ?? "",
   ];
   const walk = (value: unknown) => {
     if (value == null) return;
@@ -379,98 +425,191 @@ export function collectProposalText(p: ProposalForReview): string {
   walk(p.secondary_outcomes ?? []);
   walk(p.primary_outcome ?? {});
   walk(p.contraindications ?? []);
+  walk(p.predicted_deltas ?? []);
   return parts.filter(Boolean).join(" \n ");
 }
 
-function numericViolations(p: ProposalForReview) {
+function freeformNumericViolations(p: ProposalForReview) {
   const hits: { scope: string; reason: string }[] = [];
   const intervention = (p.intervention ?? {}) as Record<string, unknown>;
-  for (const limit of NUMERIC_LIMITS) {
-    const raw = intervention[limit.path];
-    const value = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
-    if (Number.isFinite(value) && value > limit.max) {
+  const category = p.perturbation_category as TemplateCategory;
+  for (const limit of FREEFORM_NUMERIC_LIMITS) {
+    if (limit.categories !== "any" && !limit.categories.includes(category)) continue;
+    const value = exactNumber(intervention[limit.path]);
+    if (value != null && value > limit.max) {
       hits.push({ scope: limit.scope, reason: limit.reason });
     }
   }
   return hits;
 }
 
-export interface TemplateConformance {
+/**
+ * Exact numeric parsing. `"20 arbitrary text"` is NOT twenty — it is invalid.
+ * Only a finite number, or a string that is entirely a number, is accepted.
+ */
+export function exactNumber(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw === "string" && /^-?\d+(\.\d+)?$/.test(raw.trim())) {
+    const n = Number(raw.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+// ── Canonical, server-owned executable actions ───────────────────────────────
+// Automatic execution is only ever a canonical action the server itself built
+// from a catalogue entry plus strictly typed bounded parameters. The patient
+// chooses a template and its parameters; the server writes the words.
+
+export interface CanonicalActionRequest {
+  template_id: string;
+  intervention: Record<string, unknown>;
+  primary_outcome: { source?: unknown; name?: unknown; direction?: unknown; cadence?: unknown };
+  intervention_days?: unknown;
+  run_in_days?: unknown;
+  /** The patient's own wording, preserved but never executable. */
+  patient_note?: string | null;
+}
+
+export interface CanonicalActionResult {
   ok: boolean;
+  /** Present when ok: the executable proposal, authored by the server. */
+  proposal: ProposalForReview | null;
   problems: string[];
 }
 
-export function conformsToTemplate(
-  template: ActionTemplate,
-  p: ProposalForReview,
-): TemplateConformance {
+const ALLOWED_DIRECTIONS = new Set(["increase", "decrease", "stabilize"]);
+const ALLOWED_CADENCES = new Set(["daily", "per_session", "weekly"]);
+
+export function buildCanonicalAction(req: CanonicalActionRequest): CanonicalActionResult {
   const problems: string[] = [];
-  if (p.perturbation_category !== template.category) {
-    problems.push(
-      `This ready-made plan is a ${template.category} plan, but the proposal is marked ${p.perturbation_category || "unset"}.`,
-    );
+  const template = findTemplate(req.template_id);
+  if (!template) {
+    return { ok: false, proposal: null, problems: ["That ready-made plan does not exist."] };
   }
-  const intervention = (p.intervention ?? {}) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(intervention)) {
-    const field = template.fields[key];
-    if (!field) {
+
+  // 1. Parameters: only the template's own fields, strictly typed and bounded.
+  const supplied = (req.intervention ?? {}) as Record<string, unknown>;
+  for (const key of Object.keys(supplied)) {
+    if (!template.fields[key]) {
       problems.push(`"${key.replace(/_/g, " ")}" is not part of this ready-made plan.`);
+    }
+  }
+  const intervention: Record<string, string | number> = {};
+  for (const [key, field] of Object.entries(template.fields)) {
+    const value = supplied[key];
+    if (value == null) {
+      if (field.required) problems.push(`${key.replace(/_/g, " ")} is missing.`);
       continue;
     }
     if (field.choices) {
-      if (!field.choices.some((choice) => String(choice) === String(value))) {
+      const match = field.choices.find((choice) => String(choice) === String(value));
+      if (match == null) {
         problems.push(`"${String(value)}" is not one of the allowed options for ${key.replace(/_/g, " ")}.`);
+        continue;
       }
+      intervention[key] = match as string | number;
       continue;
     }
-    const numeric = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
-    if (!Number.isFinite(numeric)) {
-      problems.push(`${key.replace(/_/g, " ")} needs a number.`);
+    const numeric = exactNumber(value);
+    if (numeric == null) {
+      problems.push(`${key.replace(/_/g, " ")} needs to be a plain number.`);
       continue;
     }
     if (field.min != null && numeric < field.min) {
       problems.push(`${key.replace(/_/g, " ")} is below the range of this ready-made plan.`);
+      continue;
     }
     if (field.max != null && numeric > field.max) {
       problems.push(`${key.replace(/_/g, " ")} is above the range of this ready-made plan.`);
+      continue;
     }
+    intervention[key] = numeric;
   }
-  for (const [key, field] of Object.entries(template.fields)) {
-    if (field.required && intervention[key] == null) {
-      problems.push(`${key.replace(/_/g, " ")} is missing.`);
-    }
+
+  // 2. Outcome: from the template's own allowed set only.
+  const source = String(req.primary_outcome?.source ?? "manual") as OutcomeSource;
+  const name = String(req.primary_outcome?.name ?? "");
+  if (!template.allowedOutcomeSources.includes(source)) {
+    problems.push("The thing being watched is not one this ready-made plan supports.");
   }
-  if (
-    p.intervention_days < template.minInterventionDays ||
-    p.intervention_days > template.maxInterventionDays
-  ) {
+  if (source === "manual" && !template.manualOutcomes.includes(name)) {
+    problems.push(`"${name}" is not one of the things this ready-made plan tracks.`);
+  }
+  const direction = String(req.primary_outcome?.direction ?? "stabilize");
+  const cadence = String(req.primary_outcome?.cadence ?? "daily");
+  if (!ALLOWED_DIRECTIONS.has(direction)) problems.push("That direction is not one we can track.");
+  if (!ALLOWED_CADENCES.has(cadence)) problems.push("That logging rhythm is not one we support.");
+
+  // 3. Duration: inside the template's own window.
+  const days = exactNumber(req.intervention_days) ?? template.minInterventionDays;
+  if (days < template.minInterventionDays || days > template.maxInterventionDays) {
     problems.push(
       `This plan runs between ${template.minInterventionDays} and ${template.maxInterventionDays} days.`,
     );
   }
-  if ((p.run_in_days ?? 0) > template.maxRunInDays) {
+  const runIn = exactNumber(req.run_in_days) ?? 0;
+  if (runIn < 0 || runIn > template.maxRunInDays) {
     problems.push(`The settling-in period for this plan is at most ${template.maxRunInDays} days.`);
   }
-  const outcome = p.primary_outcome;
-  if (!outcome || !template.allowedOutcomeSources.includes(outcome.source)) {
-    problems.push("The thing being watched is not one this ready-made plan supports.");
-  } else if (outcome.source === "manual" && !template.manualOutcomes.includes(outcome.name)) {
-    problems.push(`"${outcome.name}" is not one of the things this ready-made plan tracks.`);
-  }
-  const stops = new Set((p.stop_criteria ?? []).map((s) => s.trim().toLowerCase()));
-  for (const required of template.defaultStopCriteria) {
-    if (!stops.has(required.toLowerCase())) {
-      problems.push("The plan's own stop conditions have been removed.");
-      break;
-    }
-  }
-  return { ok: problems.length === 0, problems };
+
+  if (problems.length > 0) return { ok: false, proposal: null, problems };
+
+  // 4. The server authors every word of the executable content.
+  const proposal: ProposalForReview = {
+    template_id: template.id,
+    lever: template.label,
+    rationale: template.summary,
+    hypothesis_question: `What happens to ${name.replace(/_/g, " ")} when I follow "${template.label}"?`,
+    perturbation_category: template.category,
+    intervention,
+    primary_outcome: {
+      source,
+      name,
+      unit: null,
+      direction: direction as ProposalPrimaryOutcome["direction"],
+      cadence: cadence as ProposalPrimaryOutcome["cadence"],
+    },
+    secondary_outcomes: [],
+    hold_stable: [],
+    allowed_cointerventions: [],
+    stop_criteria: [...template.defaultStopCriteria],
+    contraindications: [],
+    run_in_days: runIn,
+    intervention_days: days,
+    washout_days: null,
+    predicted_deltas: [],
+    confidence: null,
+    patient_note: typeof req.patient_note === "string" ? req.patient_note.slice(0, 2000) : null,
+  };
+  return { ok: true, proposal, problems: [] };
 }
 
-export function assessProposal(
-  p: ProposalForReview,
-  ctx: AdmissionContext,
-): ActionAssessment {
+/**
+ * A stored protocol is executable only if it is byte-identical to what the
+ * server would author today for the same template and parameters. This is the
+ * authorization boundary — not a regex over prose.
+ */
+export function matchesCanonicalAction(p: ProposalForReview): { ok: boolean; problems: string[] } {
+  if (!p.template_id) return { ok: false, problems: ["This is not a ready-made plan."] };
+  const rebuilt = buildCanonicalAction({
+    template_id: p.template_id,
+    intervention: p.intervention ?? {},
+    primary_outcome: p.primary_outcome ?? ({} as ProposalPrimaryOutcome),
+    intervention_days: p.intervention_days,
+    run_in_days: p.run_in_days,
+    patient_note: p.patient_note ?? null,
+  });
+  if (!rebuilt.ok || !rebuilt.proposal) return { ok: false, problems: rebuilt.problems };
+  const strip = (x: ProposalForReview) => ({ ...x, patient_note: null, confidence: null, predicted_deltas: [] });
+  const same = JSON.stringify(strip(rebuilt.proposal)) === JSON.stringify(strip(p));
+  return {
+    ok: same,
+    problems: same ? [] : ["This plan's content no longer matches the ready-made plan it claims to be."],
+  };
+}
+
+export function assessProposal(p: ProposalForReview, ctx: AdmissionContext): ActionAssessment {
   const text = collectProposalText(p);
   const biomarkers = new Set(ctx.biomarkers ?? []);
   const flags = new Set(ctx.flags ?? []);
@@ -487,16 +626,24 @@ export function assessProposal(
         confidence: d.confidence,
       })),
       horizon_days: p.intervention_days ?? 0,
-      confidence: typeof p.confidence === "number" ? p.confidence : 0.5,
+      // Deliberately fixed: a confidence number must never be able to buy a
+      // stronger evidence label for activation purposes.
+      confidence: 0.5,
     },
     biomarkers,
     flags,
   );
 
   const scopeHits = CLINICIAN_SCOPE_RULES.filter((rule) => rule.pattern.test(text));
-  const numericHits = numericViolations(p);
   const template = findTemplate(p.template_id);
-  const conformance = template ? conformsToTemplate(template, p) : null;
+  const numericHits = template ? [] : freeformNumericViolations(p);
+  const canonical = template ? matchesCanonicalAction(p) : null;
+  const sourceCardHeld = Boolean(
+    ctx.sourceCard &&
+      (ctx.sourceCard.verdict === "BLOCK" ||
+        ctx.sourceCard.patient_safe === false ||
+        (ctx.sourceCard.safety_flags ?? []).length > 0),
+  );
 
   const outcome = p.primary_outcome;
   const unbound_outcomes: string[] = [];
@@ -516,9 +663,54 @@ export function assessProposal(
     evidence_label: eae.evidence_label,
     unbound_outcomes,
     still_available: ALWAYS_AVAILABLE,
+    context_available: ctx.available,
   };
 
-  // 1. Contraindicated by this person's own data — never auto-activated.
+  // 0. An unresolved CIE 3.3 positive sentinel holds anything that changes the
+  //    body. Tracking, reading and asking are untouched.
+  if (ctx.cieSafetyHold && !template?.observationOnly) {
+    return {
+      ...base,
+      verdict: "BLOCK",
+      activation_allowed: false,
+      clinician_review_required: true,
+      risk_class: "clinician_scope",
+      scope: "cie_safety_handoff",
+      reasons: [
+        "Your intake raised something that is being handed to a clinician, so new plans that change anything are on hold.",
+      ],
+      next_steps: [
+        "Follow the safety instructions already shown to you.",
+        "Tracking, reading and asking questions all stay open.",
+      ],
+      patient_message:
+        "While that safety item is open, starting a plan that changes something is on hold. Everything you read, ask and track continues.",
+    };
+  }
+
+  // 1. A held suggestion stays held, whatever it is turned into.
+  if (sourceCardHeld) {
+    return {
+      ...base,
+      verdict: "BLOCK",
+      activation_allowed: false,
+      clinician_review_required: true,
+      risk_class: "clinician_scope",
+      scope: "source_suggestion_held",
+      safety_flags: [...new Set([...(ctx.sourceCard?.safety_flags ?? []), ...eae.safety_flags])],
+      reasons: [
+        "The suggestion this came from is already held for safety, so building a plan from it does not release it.",
+      ],
+      next_steps: [
+        "Keep it saved and bring it to your clinician.",
+        "You can start any of the ready-made plans right now instead.",
+      ],
+      patient_message:
+        "This one came from a suggestion that is held for safety, so it is saved rather than started. Only this action is affected.",
+    };
+  }
+
+  // 2. Contraindicated by this person's own data — never auto-activated.
   if (eae.safety_flags.length > 0) {
     return {
       ...base,
@@ -530,7 +722,7 @@ export function assessProposal(
       reasons: eae.safety_flags,
       next_steps: [
         "Keep this saved — it stays here as a proposal.",
-        "Bring it to your clinician, who can release it or adjust it.",
+        "Bring it to your clinician before starting it.",
         "Meanwhile you can still track the same thing by hand.",
       ],
       patient_message:
@@ -538,7 +730,7 @@ export function assessProposal(
     };
   }
 
-  // 2. Inside a clinician's scope — saved and discussable, not activatable.
+  // 3. Inside a clinician's scope — saved and discussable, not activatable.
   if (scopeHits.length > 0 || numericHits.length > 0) {
     return {
       ...base,
@@ -550,15 +742,15 @@ export function assessProposal(
       reasons: [...scopeHits.map((s) => s.reason), ...numericHits.map((n) => n.reason)],
       next_steps: [
         "This is saved exactly as you wrote it — nothing was changed or deleted.",
-        "Discuss it with your clinician; they can release it here.",
+        "Discuss it with your clinician before doing it.",
         "You can start any of the ready-made plans right now instead.",
       ],
       patient_message:
-        "This one sits with your clinician, so it is not something to start here. Only this action is held — reading, asking, tracking and your other plans all continue.",
+        "This one belongs in a conversation with your clinician, so it is not something to start here. Only this action is held — reading, asking, tracking and your other plans all continue.",
     };
   }
 
-  // 3. An admin looking at this account can read and prepare, never activate.
+  // 4. An admin looking at this account can read and prepare, never activate.
   if (ctx.isViewAs) {
     return {
       ...base,
@@ -573,49 +765,35 @@ export function assessProposal(
     };
   }
 
-  // 4. Not a bounded, server-owned action — savable and discussable, but the
-  //    patient cannot flag arbitrary text into an executable plan.
-  if (!template) {
+  // 5. Not a canonical, server-authored action — savable and discussable, but
+  //    never executable. Flags and free text cannot promote it.
+  if (!template || !canonical?.ok) {
     return {
       ...base,
       verdict: "ADMIT_WITH_REVIEW",
       activation_allowed: false,
       clinician_review_required: false,
-      risk_class: "evidence_uncertain",
-      scope: "not_a_ready_made_plan",
-      reasons: [
-        "This is your own idea rather than one of the ready-made plans, so it is saved as a proposal rather than started automatically.",
-      ],
+      risk_class: template ? "outside_template_bounds" : "evidence_uncertain",
+      scope: template ? "outside_ready_made_bounds" : "not_a_ready_made_plan",
+      reasons:
+        canonical?.problems?.length
+          ? canonical.problems
+          : [
+              "This is your own idea rather than one of the ready-made plans, so it is saved as a proposal rather than started automatically.",
+            ],
       next_steps: [
-        "Keep it as a proposal and ask questions about it here.",
-        "Start a ready-made plan that is closest to it.",
-        "Or just track the thing you care about for a while and revisit.",
+        "Keep it as a proposal, read it back and ask questions about it here.",
+        "Edit it and submit again — that re-checks it from scratch.",
+        "Or start a ready-made plan right away.",
       ],
-      patient_message:
-        "Saved as your proposal. You can discuss it, edit it, or start one of the ready-made plans right away.",
+      patient_message: template
+        ? "This version sits outside the ready-made plan's range, so it is saved as your proposal rather than started. Bring the settings back inside the range and it can start immediately."
+        : "Saved as your proposal — yours to read, edit and ask about. It is not running. You can start one of the ready-made plans whenever you like.",
     };
   }
 
-  // 5. A ready-made plan, edited outside its bounds.
-  if (conformance && !conformance.ok) {
-    return {
-      ...base,
-      verdict: "ADMIT_WITH_REVIEW",
-      activation_allowed: false,
-      clinician_review_required: false,
-      risk_class: "outside_template_bounds",
-      scope: "outside_ready_made_bounds",
-      reasons: conformance.problems,
-      next_steps: [
-        "Bring the settings back inside the plan's range and start it.",
-        "Or keep this version as a proposal to discuss.",
-      ],
-      patient_message:
-        "Your edits put this outside the ready-made plan's range, so it is saved rather than started. Nudge the settings back and it can start immediately.",
-    };
-  }
-
-  // 6. Observation-only plans need nothing from anyone. Missing data included.
+  // 6. Observation-only plans need nothing from anyone — including readable
+  //    clinical context. Watching changes nothing.
   if (template.observationOnly) {
     return {
       ...base,
@@ -630,8 +808,29 @@ export function assessProposal(
     };
   }
 
-  // 7. Bounded everyday action with an outcome we cannot yet read from data.
-  //    Honest state, usable path, no doctor gate.
+  // 7. Context could not be read. Unknown is not clearance, and it is not a
+  //    doctor gate either: tracking is still open and this is retryable.
+  if (!ctx.available) {
+    return {
+      ...base,
+      verdict: "ADMIT_WITH_REVIEW",
+      activation_allowed: false,
+      clinician_review_required: false,
+      risk_class: "context_unavailable",
+      scope: "safety_check_unavailable",
+      reasons: [
+        "We could not read your own information just now, so the safety check for this plan could not be completed.",
+      ],
+      next_steps: [
+        "Try again in a few minutes — this is usually temporary.",
+        "You can start tracking the same thing today; that needs no check.",
+      ],
+      patient_message:
+        "We could not complete the safety check because your information could not be read just now. It is saved, and you can try again shortly.",
+    };
+  }
+
+  // 8. A bounded everyday action whose outcome we cannot yet read from data.
   if (unbound_outcomes.length > 0) {
     return {
       ...base,
@@ -652,7 +851,7 @@ export function assessProposal(
     };
   }
 
-  // 8. Ready to start, with honest calibration about how sure we are.
+  // 9. Ready to start, with honest calibration about how sure we are.
   return {
     ...base,
     verdict: "ADMIT",
@@ -661,10 +860,8 @@ export function assessProposal(
     risk_class: "self_manageable",
     scope: "none",
     reasons: [
-      `Everyday, reversible, and inside the bounds of "${template.label}".`,
-      eae.evidence_label === "well_supported"
-        ? "Your own information supports the direction we expect."
-        : "How much this moves for you is genuinely uncertain — that is what we are finding out.",
+      `Everyday, reversible, and exactly as written in "${template.label}".`,
+      "How much this moves for you is genuinely uncertain — that is what we are finding out.",
     ],
     next_steps: [
       "Start it, log each day, and we compare when there is enough to read.",
