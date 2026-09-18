@@ -137,7 +137,7 @@ const ExtractionSection: React.FC = () => {
       title="What has been read"
       items={[
         { label: "Files", value: uploads.length.toString() },
-        { label: "Values read", value: rows.length.toString(), tone: "accent" },
+        { label: "Values read", value: markers.length.toString(), tone: "accent" },
         { label: "Used by your Twin", value: recognisedCount.toString() },
         { label: "Not yet recognised", value: unrecognisedCount.toString() },
       ]}
