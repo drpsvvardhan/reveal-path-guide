@@ -322,14 +322,25 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [uid, refresh]);
 
   const advancePhase = useCallback(async (experimentId: string, target?: string, stoppedReason?: string) => {
+    // Every transition — including stopping — goes through the server. Stopping
+    // is always permitted there; starting is re-checked against current data.
     try {
-      const { error: err } = await supabase.functions.invoke("start-experiment-phase", {
+      const { data, error: err } = await supabase.functions.invoke("start-experiment-phase", {
         body: { experiment_id: experimentId, target_phase: target, stopped_reason: stoppedReason },
       });
-      if (err) throw err;
+      const body = (data ?? {}) as any;
+      if (err || body?.error) {
+        const message = body?.message || err?.message || "That step did not go through.";
+        setError(message);
+        await refresh();
+        return { ok: false, admission: body?.admission, message };
+      }
       await refresh();
+      return { ok: true, admission: body?.admission };
     } catch (e: any) {
-      setError(e.message || "Failed to advance phase");
+      const message = e.message || "That step did not go through.";
+      setError(message);
+      return { ok: false, message };
     }
   }, [refresh]);
 
