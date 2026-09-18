@@ -1,0 +1,30 @@
+{
+  "assessment_type": "source_inventory_not_clinical_study",
+  "clinical_validation_status": "NOT_ESTABLISHED",
+  "human_participants_evaluated_in_this_assessment": 0,
+  "independent_clinician_reviews_completed_in_this_assessment": 0,
+  "source": "supabase/functions/_shared/cie33/foundation.ts",
+  "source_sha256": "1f8addab5902865bd67d1375ee2541c85b363662190ae843ece792d159938e22",
+  "instrument_version": "3.3.0",
+  "profile_version": "vizzhy-foundation@1.0.0",
+  "total_templates": 37,
+  "core_templates": 32,
+  "conditional_templates": 3,
+  "opt_in_templates": 2,
+  "locked_sentinels": 4,
+  "response_types": {
+    "boolean": 4,
+    "short_text": 31,
+    "single_select": 2
+  },
+  "checks": {
+    "unique_keys": true,
+    "unique_concept_codes": true,
+    "nonempty_prompts": true,
+    "valid_bounded_windows": true,
+    "condition_targets_exist_and_are_boolean": true,
+    "single_select_options_have_unique_ids": true,
+    "all_items_have_desk_review_notes": true
+  },
+  "note": "Passing these checks verifies structural properties only. Blank human review fields intentionally contain no simulated ratings."
+}

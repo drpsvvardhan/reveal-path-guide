@@ -1,0 +1,47 @@
+form,field,type,required,definition
+study,protocol_version,text,yes,Frozen approved study version
+study,application_commit,text,yes,Exact deployed application commit for this phase
+study,instrument_profile_version,text,yes,Instrument and Foundation profile identifiers
+study,question_source_sha256,text,yes,Hash from the source inventory
+study,model_prompt_policy_versions,text,yes,Versions used for generated content and review routing
+study,principal_investigator,text,yes,Actual responsible human investigator; not prefilled
+study,ethics_determination_reference,text,yes,Responsible organization determination before recruitment
+participant,participant_code,text,yes,Pseudonymous code only; keep linkage outside this repository
+participant,consent_reference,text,yes,Private consent record reference
+participant,eligibility_confirmed,boolean,yes,Adult English self-report and study eligibility checked
+participant,administration_mode,text,yes,Device and setting; document assistance/accessibility
+participant,withdrawal_status,text,yes,Retain withdrawal in feasibility denominator as prespecified
+interview,participant_code,text,yes,Link by study code only
+interview,question_key,text,yes,Question identifier from frozen item inventory
+interview,branch_eligible,boolean,yes,Whether participant was eligible for the question
+interview,branch_presented,boolean,yes,Whether the item was actually shown
+interview,paraphrase_correct,boolean,yes,Independent coded interpretation; not AI-assigned
+interview,time_window_understood,boolean,yes,Participant understood intended recall period
+interview,response_choice_understood,boolean,yes,Response matched intended meaning including missingness
+interview,misunderstanding_severity,text,no,None/minor/material/safety-critical with explicit rationale
+interview,private_transcript_reference,text,no,Approved private source reference; do not paste transcript here
+interview,rater_codes,text,yes,Actual independent human raters
+interview,adjudication,text,no,Resolution that preserves original disagreement
+pilot,participant_code,text,yes,Pseudonymous participant code
+pilot,administration_order,text,yes,CIE-first or independent-interview-first
+pilot,elapsed_minutes,number,yes,Observed completion duration excluding declared breaks
+pilot,assistance_required,boolean,yes,Whether assistance was actually required
+pilot,completion_state,text,yes,Completed/paused/held/withdrawn/technical-failure
+pilot,missingness_by_kind,text,yes,Counts by eligible item and distinct reason
+assertion,participant_code,text,yes,Patient-level clustering key
+assertion,assertion_code,text,yes,Local study assertion identifier
+assertion,source_reference,text,yes,Approved private exact testimony reference
+assertion,rating,text,yes,Supported/unsupported/distorted/temporal-error/unresolved
+assertion,clinically_important_omission,boolean,yes,Prespecified topic captured or omitted
+assertion,error_stage,text,yes,Acquisition/serialization/summarization/reasoning/uncertain
+assertion,safety_critical,boolean,yes,Human adjudication against prespecified critical-error taxonomy
+assertion,rater_codes,text,yes,Independent human raters
+workflow,case_code,text,yes,Synthetic scenario or separately consented study case
+workflow,scenario,text,yes,Authorization/expiry/revocation/replay/stale-state/recheck/re-hold
+workflow,expected_behavior,text,yes,Prespecified expected outcome
+workflow,observed_behavior,text,yes,Actual observed outcome
+workflow,evidence_reference,text,yes,Private run log or source-controlled synthetic test report
+workflow,pass_fail,text,yes,Pass/fail/not-run; never infer a clinical result from a software pass
+deviation,deviation_code,text,yes,Unique study deviation identifier
+deviation,description,text,yes,What differed from the frozen protocol
+deviation,impact_and_response,text,yes,Actual safety/data response and responsible human
