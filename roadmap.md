@@ -1,5 +1,5 @@
 # Roadmap
 
-- [ ] export-celf-bundle v1.7 in place + redeploy
-- [ ] VV-001 witness reset: delete `p1a_initial` witnesses for d75365ce, redeploy witnessify-observations, run backfill twice, report totals
-- [ ] Answer: why the connected Supabase account can't deploy to Patient Reveal's Lovable-managed backend (CIE v3.3 PR #3)
+- [x] export-celf-bundle v1.7 in place + redeployed
+- [x] VV-001 witness reset: 184 deleted, function redeployed, backfill run twice (184 inserted / 184 skipped)
+- [x] Answered: external Supabase account cannot deploy into the Lovable-managed backend; CIE v3.3 migration + deploy must run from here
