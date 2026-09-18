@@ -20,3 +20,8 @@
 - [x] Reconciled managed migration collision: preserved applied notice security migration 0002, moved pending consistency migration to 0003, retained both branch histories; 399 tests passed
 - [ ] Resolve dependency audit findings separately: 12 affected package nodes in existing lockfile; static applicability and update targets recorded in docs/validation/CIE33_DEPENDENCY_REVIEW.md
 - [ ] Human clinical panel, patient comprehension study and paired clinical-information pilot; clinical validity remains NOT_ESTABLISHED
+
+## Patient autonomy pass (tests/docs only, Sep 18)
+- [ ] tests/autonomy/ handler + policy + import regression tests
+- [ ] docs/PATIENT_AUTONOMY.md D2C principle and actual limits
+- Runtime/SQL fixes are owned externally; no deploy/publish/apply in this pass.
