@@ -1,3 +1,4 @@
+import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 // ============================================================================
 // simulate-what-if
 // ----------------------------------------------------------------------------
@@ -159,7 +160,7 @@ function derivePatientGuards(wc: any): { biomarkers: Set<string>; flags: Set<str
   return { biomarkers, flags };
 }
 
-async function callClaude(ctx: any, focus: string | null): Promise<GeneratedCard[] | null> {
+async function callClaude(ctx: any, focus: string | null, subjectiveEvidence = ""): Promise<GeneratedCard[] | null> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
 
@@ -190,7 +191,7 @@ RULES:
     focus: focus,
   };
 
-  const user = `Patient context:\n${JSON.stringify(compact, null, 2)}\n\nReturn JSON only.`;
+  const user = `Patient context:\n${JSON.stringify(compact, null, 2)}\n${subjectiveEvidence}\nReturn JSON only.`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -251,8 +252,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const witnessCtx = await loadPatientContext(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      user_id,
+    );
     const ctx = await loadCompactContext(supabase, user_id);
-    let cards = await callClaude(ctx, focus ?? null);
+    ctx.cie = witnessCtx.cie.domain_scores;
+    let cards = await callClaude(ctx, focus ?? null, formatCIE33Evidence(witnessCtx.cie.v33));
     if (!cards || cards.length === 0) cards = fallbackCards();
 
     // ── EXPERIMENT ADMISSION GATE (EAE) ──
@@ -265,11 +272,7 @@ Deno.serve(async (req) => {
     // admitted, RAE-witnessed view that includes labs + InBody + FibroScan + CIE.
     // This is what makes Phase Angle / Visceral Fat bind correctly: they are
     // InBody observations, absent from a raw patient_lab_observations read.
-    const witnessCtx = await loadPatientContext(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      user_id,
-    );
+
     const { biomarkers, flags } = derivePatientGuards(witnessCtx);
     const { results, ledger } = admitExperiments(cards as any[], biomarkers, flags);
 

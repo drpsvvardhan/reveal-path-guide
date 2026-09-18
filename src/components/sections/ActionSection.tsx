@@ -308,17 +308,18 @@ const ActionSection: React.FC = () => {
       // Substrate presence is determined by the union of: lab uploads, lab
       // observations, CIE intake responses, and witness objects. Absence of
       // ALL signals is the only state that counts as "no substrate".
-      const [labUploads, labObs, intake, witnesses] = await Promise.all([
+      const [labUploads, labObs, intake, witnesses, cie33] = await Promise.all([
         supabase.from("patient_lab_uploads").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("patient_lab_observations").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("cie_responses").select("id", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("witness_objects").select("id", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("cie_assessments").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("instrument_version", "3.3.0").eq("status", "complete"),
       ]);
       const hasSubstrate =
         (labUploads.count ?? 0) > 0 ||
         (labObs.count ?? 0) > 0 ||
         (intake.count ?? 0) > 0 ||
-        (witnesses.count ?? 0) > 0;
+        (witnesses.count ?? 0) > 0 || (cie33.count ?? 0) > 0;
 
       if (!hasSubstrate) {
         setSurfaceKind("no_substrate");

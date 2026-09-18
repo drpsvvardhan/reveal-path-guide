@@ -73,6 +73,12 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (assessment.instrument_version === "3.3.0") {
+      return new Response(JSON.stringify({ error: "CIE 3.3 preserves testimony and cannot be processed by the legacy numeric scorer." }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch all responses
     const { data: responses, error: rErr } = await supabase
       .from("cie_responses")

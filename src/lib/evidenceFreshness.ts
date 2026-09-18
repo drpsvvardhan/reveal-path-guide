@@ -19,6 +19,8 @@ import {
 
 /** Minimal query surface, so tests can pass a fake client. */
 export interface FreshnessQueryClient {
+  functions?: { invoke: (name: string, options: { body: Record<string, unknown> }) => Promise<{ data: { latest_capture_at?: string | null } | null; error: unknown }> };
+
   from: (table: string) => {
     select: (cols: string) => {
       eq: (
@@ -55,6 +57,14 @@ export async function fetchLatestEvidenceDate(
     .eq("registry_seed_version", ACTIVE_REGISTRY_SEED_VERSION)
     .order("biological_timestamp", { ascending: false })
     .limit(1);
-  if (error || !data) return null;
-  return deriveLatestBiologicalTimestamp(data);
+  const legacy = error || !data ? null : deriveLatestBiologicalTimestamp(data);
+  // CIE 3.3 is independently versioned; obtain its confirmed capture clock from
+  // the authenticated service so view-as authorization stays server enforced.
+  let cieCapture: string | null = null;
+  try {
+    const result = await client.functions?.invoke("cie-v33", { body: { action: "freshness", user_id: targetUserId } });
+    if (!result?.error) cieCapture = result?.data?.latest_capture_at ?? null;
+  } catch { /* A failed source cannot contribute a freshness claim. */ }
+  return deriveLatestBiologicalTimestamp([legacy, cieCapture].filter(Boolean).map(biological_timestamp => ({ biological_timestamp })));
+
 }

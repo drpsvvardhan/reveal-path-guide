@@ -1,3 +1,4 @@
+import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 // ============================================================================
 // supabase/functions/patient-chat/index.ts
 // ----------------------------------------------------------------------------
@@ -383,7 +384,7 @@ function buildPatientSystemPrompt(ctx: PatientTerrainContext, manifest: any, doc
   const doctorQuestions = manifest?.doctorQuestions ?? [];
 
   const clusterBlock = buildClusterContextBlock(manifest?.activeClusters ?? []);
-  const witnessLabBlock = buildWitnessLabHistoryBlock(ctx);
+  const witnessLabBlock = buildWitnessLabHistoryBlock(ctx) + formatCIE33Evidence(ctx.cie.v33);
 
   const documentsBlock =
     documents && documents.length > 0
@@ -1467,6 +1468,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const answerId = crypto.randomUUID();
 
     const contextWitnessIds: string[] = [
+      ...(witnessContext.cie.v33?.witnesses.map(w => w.witness_id) ?? []),
       ...witnessContext.labs.observations.map((o) => o.observation_id),
       ...witnessContext.inbody.observations.map((o) => o.observation_id),
       ...witnessContext.fibroscan.observations.map((o) => o.observation_id),
@@ -1495,8 +1497,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // the grounding partitions only if the provenance clock is absent.
     const twinStateAsOf = biotwinPacket.has_report ? biotwinPacket.generated_date : null;
     const latestWitnessAsOf =
-      witnessContext.witness_provenance.latest_biological_timestamp ??
       latestWitnessDate([
+        witnessContext.witness_provenance.latest_biological_timestamp,
+        witnessContext.witness_provenance.latest_cie_capture_timestamp,
         ...witnessContext.labs.observations.map((o) => o.collection_date),
         ...witnessContext.inbody.observations.map((o) => o.collection_date),
         ...witnessContext.fibroscan.observations.map((o) => o.collection_date),

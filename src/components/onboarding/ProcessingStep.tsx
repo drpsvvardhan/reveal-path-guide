@@ -3,7 +3,6 @@ import OnboardingLayout from "./OnboardingLayout";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { useDerivedPatterns } from "@/context/DerivedPatternsContext";
 import { useNarrative } from "@/context/NarrativeContext";
-import { useIntake } from "@/context/IntakeContext";
 import { useCIEAssessment } from "@/context/CIEAssessmentContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
@@ -14,21 +13,23 @@ const ProcessingStep: React.FC = () => {
   const { advanceToStep, markProcessingMilestone, processingState } = useOnboarding();
   const { runDerivation } = useDerivedPatterns();
   const { generateNarrative } = useNarrative();
-  const { currentAssessmentId } = useIntake();
-  const { refresh: refreshCIE } = useCIEAssessment();
+  const { currentAssessment, isLoading: assessmentLoading, refresh: refreshCIE } = useCIEAssessment();
+  const currentAssessmentId = currentAssessment?.id;
+  const isCIE33 = currentAssessment?.instrument_version === "3.3.0";
+  const [attempt, setAttempt] = useState(0);
   const { user } = useAuth();
   const [step, setStep] = useState<"idle" | "scoring" | "deriving" | "generating" | "rendering" | "planning" | "done" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    if (hasStartedRef.current) return;
+    if (hasStartedRef.current || assessmentLoading || !user) return;
     hasStartedRef.current = true;
 
     (async () => {
       try {
         // Step 0: Score the CIE assessment if one exists
-        if (currentAssessmentId && user) {
+        if (currentAssessmentId && user && !isCIE33) {
           setStep("scoring");
           markProcessingMilestone({ current_status: "Scoring your intake assessment" });
 
@@ -42,6 +43,8 @@ const ProcessingStep: React.FC = () => {
           await refreshCIE();
           await new Promise((r) => setTimeout(r, 600));
         }
+
+        if (isCIE33) markProcessingMilestone({ intake_scored: true, current_status: "Your source-backed intake is ready" });
 
         // Step 1: Run derivation
         setStep("deriving");
@@ -74,30 +77,22 @@ const ProcessingStep: React.FC = () => {
         // Step 3: Generate terrain render
         setStep("rendering");
         markProcessingMilestone({ current_status: "Rendering your terrain portrait" });
-        try {
-          await supabase.functions.invoke("generate-terrain-render", {
-            body: { user_id: user.id, assessment_id: currentAssessmentId },
-          });
-          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain portrait complete" });
-        } catch (terrainErr) {
-          console.warn("Terrain render warning:", terrainErr);
-          markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain render skipped" });
-        }
+        const { data: terrainResult, error: terrainError } = await supabase.functions.invoke("generate-terrain-render", {
+          body: { user_id: user.id, assessment_id: currentAssessmentId },
+        });
+        if (terrainError || !terrainResult?.success) throw new Error(terrainResult?.error || terrainError?.message || "Terrain generation failed");
+        markProcessingMilestone({ terrain_render_complete: true, current_status: "Terrain portrait complete" });
 
         await new Promise((r) => setTimeout(r, 600));
 
         // Step 4: Generate action plan
         setStep("planning");
         markProcessingMilestone({ current_status: "Matching interventions to your findings" });
-        try {
-          await supabase.functions.invoke("generate-action-plan", {
-            body: { user_id: user.id, assessment_id: currentAssessmentId },
-          });
-          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan ready" });
-        } catch (planErr) {
-          console.warn("Action plan warning:", planErr);
-          markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan skipped" });
-        }
+        const { data: planResult, error: planError } = await supabase.functions.invoke("generate-action-plan", {
+          body: { user_id: user.id, assessment_id: currentAssessmentId },
+        });
+        if (planError || !planResult?.success) throw new Error(planResult?.error || planError?.message || "Action plan generation failed");
+        markProcessingMilestone({ action_plan_complete: true, current_status: "Action plan ready" });
 
         await new Promise((r) => setTimeout(r, 800));
         markProcessingMilestone({ current_status: "Your twin is ready" });
@@ -110,12 +105,13 @@ const ProcessingStep: React.FC = () => {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [assessmentLoading, user?.id, attempt]);
 
   const handleRetry = () => {
     hasStartedRef.current = false;
     setStep("idle");
     setErrorMessage(null);
+    setAttempt(value => value + 1);
   };
 
   const isAfterScoring = step === "deriving" || step === "generating" || step === "rendering" || step === "planning" || step === "done";
@@ -135,12 +131,12 @@ const ProcessingStep: React.FC = () => {
       <div className="space-y-4 mt-2">
         {currentAssessmentId && (
           <ProcessingMilestone
-            label="Intake scored"
+            label={isCIE33 ? "Your account preserved" : "Legacy intake scored"}
             sublabel={
               step === "scoring"
                 ? "Computing domain and gate scores from your answers"
                 : isAfterScoring
-                ? "9 gates and 25 domains scored"
+                ? isCIE33 ? "Your words, time windows, and missing answers are preserved" : "9 gates and 25 domains scored"
                 : "Waiting"
             }
             state={

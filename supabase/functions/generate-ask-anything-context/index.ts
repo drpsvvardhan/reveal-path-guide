@@ -1,3 +1,4 @@
+import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
@@ -315,6 +316,7 @@ Deno.serve(async (req) => {
       contextParts.push(`Active Patterns: ${patterns.map((p: any) => `[${p.severity}] ${p.title}: ${p.summary}`).join("; ").slice(0, 1000)}`);
     }
 
+    contextParts.push(formatCIE33Evidence(witnessContext.cie.v33));
     const terrainContext = contextParts.join("\n\n");
 
     // Generate suggested questions via Lovable AI gateway

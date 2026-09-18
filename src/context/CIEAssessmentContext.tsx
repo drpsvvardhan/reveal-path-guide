@@ -23,6 +23,7 @@ interface CIEGateScore {
 interface CIEAssessment {
   id: string;
   version: number;
+  instrument_version: string;
   status: string;
   total_questions_answered: number;
   triggered_domains: string[];
@@ -84,12 +85,19 @@ export const CIEAssessmentProvider: React.FC<{ children: React.ReactNode }> = ({
       setCurrentAssessment({
         id: assessment.id,
         version: assessment.version,
+        instrument_version: assessment.instrument_version,
         status: assessment.status,
         total_questions_answered: assessment.total_questions_answered,
         triggered_domains: assessment.triggered_domains,
         created_at: assessment.created_at,
         full_completed_at: assessment.full_completed_at,
       });
+
+      if (assessment.instrument_version === "3.3.0") {
+        setDomainScores({});
+        setGateScores({});
+        return;
+      }
 
       // Fetch domain scores
       const { data: domains } = await supabase

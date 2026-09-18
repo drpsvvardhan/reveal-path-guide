@@ -1,1 +1,4 @@
 project_id = "qvkekmdzgjgfaiyboozo"
+# JWT is verified with auth.getUser inside the function.
+[functions.cie-v33]
+verify_jwt = false
