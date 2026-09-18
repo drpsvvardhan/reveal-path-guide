@@ -61,17 +61,17 @@ npx vite --config tests/cie33/browser/vite.config.ts
 
 The lockfile was reconciled because the baseline `npm ci` failed on missing dependency entries. PGlite 0.5.8 is an exact development dependency used only for database tests.
 
-## Deployment order and current access limit
+## Deployment result (Lovable-managed path)
 
-Target: Patient Reveal, Lovable project `14971e66-0cd0-4af1-ab6e-16805aa9af66`; Supabase project **`qvkekmdzgjgfaiyboozo`**. Do not deploy this change to the separate `igjpoyxdigtnyscoleug` Supabase project.
+Target: Patient Reveal, Lovable project `14971e66-0cd0-4af1-ab6e-16805aa9af66`; Supabase project **`qvkekmdzgjgfaiyboozo`**. The separate `igjpoyxdigtnyscoleug` project is not a deployment target. The earlier external-access blocker no longer applies: this project's backend is Lovable-managed, and the migration and function deployments were executed from inside the project. No external Supabase credentials were used.
 
-The connected Supabase account lists only the separate project and explicitly denied the security-advisor request for Patient Reveal's project. Lovable allowed read-only schema verification. **No production schema, function, patient record or deployment was changed during implementation.** The PR is the reviewable implementation; it is not a claim of a live cutover.
+Completed on 2026-09-18, in this order:
 
-Once deployment access for the actual target is available:
-
-1. Apply `supabase/migrations/20260918031800_cie_v33_patient_intake.sql` through the project's normal migration mechanism. It was created with `supabase migration new`.
-2. Deploy `cie-v33` and updated shared dependencies. Deploy `cie-score-assessment`, `generate-terrain-render`, `generate-narrative`, `generate-ask-anything-context`, `patient-chat`, `generate-action-plan`, `generate-clusters` and `simulate-what-if`; the last two depend on the changed context loader even when their entry point changes are small or absent.
-3. Verify authenticated start/save/resume/correction and a synthetic confirmed-intake-to-terrain/chat round trip in the target environment. Run project security/performance advisors; these could not be run with current access.
-4. Release the frontend from the same commit. The frontend depends on the new schema/function; publishing it first will break the intake.
+1. **Migration applied.** The additive migration `supabase/migrations/20260918031800_cie_v33_patient_intake.sql` was applied through the managed tracked workflow as `drizzle/migrations/0000_cie_v33_patient_intake.sql`: `cie_assessments.instrument_version` (constrained to `2.2.0` / `3.3.0`), `cie33_sessions`, append-only `cie33_events`, owner-scoped RLS, the `cie33_guard_assessment` trigger and the service-only `cie33_commit` routine. Generated Supabase types were refreshed. Existing CIE 2.2 assessments, answers and scores were untouched.
+2. **Functions deployed.** `cie-v33`, `cie-score-assessment`, `generate-terrain-render`, `generate-narrative`, `generate-ask-anything-context`, `patient-chat`, `generate-action-plan`, `generate-clusters`, `simulate-what-if` — all deployed successfully. Existing authentication is preserved; `cie-v33` verifies the JWT via the shared `auth.getUser` helper.
+3. **Live verification passed.** See the live round-trip and consumer entries under Verification.
+4. **Frontend released** from the same commit, after the backend checks passed.
 
 Rollback is a coordinated application/function rollback. Preserve the additive v3.3 tables and event history; do not delete or reinterpret patient answers to roll back a UI. An older loader must not silently treat a v3.3 assessment as scored v2.2.
+
+Still outstanding, unchanged by this rollout: clinical/psychometric validity is not established, and this release has no clinician clearance endpoint — an operational care-team handoff workflow must be supplied separately before relying on the safety hold for clinical triage.
