@@ -806,6 +806,84 @@ export type Database = {
           },
         ]
       }
+      cie33_safety_reviews: {
+        Row: {
+          assessment_note: string
+          authorization_id: string
+          clinician_user_id: string
+          created_at: string
+          disposition: string
+          encounter_at: string
+          id: string
+          patient_instructions: string
+          patient_user_id: string
+          rationale: string
+          request_hash: string
+          request_id: string
+          result_revision: number | null
+          result_state_hash: string | null
+          session_id: string
+          source_revision: number
+          source_state_hash: string
+          source_witness_id: string
+        }
+        Insert: {
+          assessment_note: string
+          authorization_id: string
+          clinician_user_id: string
+          created_at?: string
+          disposition: string
+          encounter_at: string
+          id?: string
+          patient_instructions: string
+          patient_user_id: string
+          rationale: string
+          request_hash: string
+          request_id: string
+          result_revision?: number | null
+          result_state_hash?: string | null
+          session_id: string
+          source_revision: number
+          source_state_hash: string
+          source_witness_id: string
+        }
+        Update: {
+          assessment_note?: string
+          authorization_id?: string
+          clinician_user_id?: string
+          created_at?: string
+          disposition?: string
+          encounter_at?: string
+          id?: string
+          patient_instructions?: string
+          patient_user_id?: string
+          rationale?: string
+          request_hash?: string
+          request_id?: string
+          result_revision?: number | null
+          result_state_hash?: string | null
+          session_id?: string
+          source_revision?: number
+          source_state_hash?: string
+          source_witness_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie33_safety_reviews_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "clinician_patient_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cie33_safety_reviews_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "cie33_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cie33_sessions: {
         Row: {
           created_at: string
@@ -843,6 +921,83 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      clinician_authorization_audit: {
+        Row: {
+          action: string
+          actor_user_id: string
+          authorization_id: string
+          detail: Json
+          id: string
+          occurred_at: string
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          authorization_id: string
+          detail?: Json
+          id?: string
+          occurred_at?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          authorization_id?: string
+          detail?: Json
+          id?: string
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinician_authorization_audit_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "clinician_patient_authorizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinician_patient_authorizations: {
+        Row: {
+          clinician_user_id: string
+          credential_attestation: string
+          credential_reference: string
+          expires_at: string
+          granted_at: string
+          granted_by: string
+          id: string
+          patient_user_id: string
+          revocation_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+        }
+        Insert: {
+          clinician_user_id: string
+          credential_attestation: string
+          credential_reference: string
+          expires_at: string
+          granted_at?: string
+          granted_by: string
+          id?: string
+          patient_user_id: string
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+        }
+        Update: {
+          clinician_user_id?: string
+          credential_attestation?: string
+          credential_reference?: string
+          expires_at?: string
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          patient_user_id?: string
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+        }
+        Relationships: []
       }
       cluster_evidence: {
         Row: {
@@ -3019,6 +3174,44 @@ export type Database = {
       }
     }
     Views: {
+      cie33_safety_review_notices: {
+        Row: {
+          created_at: string | null
+          disposition: string | null
+          encounter_at: string | null
+          id: string | null
+          patient_instructions: string | null
+          patient_user_id: string | null
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          disposition?: string | null
+          encounter_at?: string | null
+          id?: string | null
+          patient_instructions?: string | null
+          patient_user_id?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          disposition?: string | null
+          encounter_at?: string | null
+          id?: string | null
+          patient_instructions?: string | null
+          patient_user_id?: string | null
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cie33_safety_reviews_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "cie33_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_witness_coverage: {
         Row: {
           compression_depth: number | null
@@ -3061,6 +3254,76 @@ export type Database = {
           p_user_id: string
         }
         Returns: Json
+      }
+      cie33_submit_safety_review: {
+        Args: {
+          p_assessment_note: string
+          p_clinician: string
+          p_disposition: string
+          p_encounter_at: string
+          p_expected_hash: string
+          p_expected_revision: number
+          p_patient: string
+          p_patient_instructions: string
+          p_rationale: string
+          p_request_hash: string
+          p_request_id: string
+          p_session_id: string
+          p_source_witness_id: string
+          p_state: Json
+        }
+        Returns: Json
+      }
+      clinician_grant_authorization: {
+        Args: {
+          p_actor: string
+          p_clinician: string
+          p_credential_attestation: string
+          p_credential_reference: string
+          p_expires_at: string
+          p_patient: string
+        }
+        Returns: {
+          clinician_user_id: string
+          credential_attestation: string
+          credential_reference: string
+          expires_at: string
+          granted_at: string
+          granted_by: string
+          id: string
+          patient_user_id: string
+          revocation_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clinician_patient_authorizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      clinician_revoke_authorization: {
+        Args: { p_actor: string; p_authorization_id: string; p_reason: string }
+        Returns: {
+          clinician_user_id: string
+          credential_attestation: string
+          credential_reference: string
+          expires_at: string
+          granted_at: string
+          granted_by: string
+          id: string
+          patient_user_id: string
+          revocation_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "clinician_patient_authorizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       fn_name_match_score: {
         Args: { p_account_name: string; p_extracted_name: string }
