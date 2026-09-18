@@ -35,16 +35,56 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const [{ data: exp }, { data: proto }, { data: obs }] = await Promise.all([
-      supabase.from("simulator_experiments").select("*").eq("id", experiment_id).single(),
-      supabase.from("simulator_experiment_protocols").select("*").eq("experiment_id", experiment_id).order("protocol_version", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("simulator_daily_observations").select("phase,intervention_performed,primary_value,confounders").eq("experiment_id", experiment_id),
-    ]);
+    const { data: exp } = await supabase
+      .from("simulator_experiments").select("*").eq("id", experiment_id).maybeSingle();
     if (!exp) throw new Error("experiment not found");
 
     const owner = await resolveTargetUserId(authRes.auth, (exp as { user_id: string }).user_id);
     if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
+    const ownerId = (exp as { user_id: string }).user_id;
+
+    const [{ data: proto }, { data: obs }] = await Promise.all([
+      supabase.from("simulator_experiment_protocols").select("*").eq("experiment_id", experiment_id).eq("user_id", ownerId).order("protocol_version", { ascending: false }).limit(1).maybeSingle(),
+      // Defence in depth: only the plan owner's own entries are ever compared,
+      // even if a row were somehow attached to this plan by someone else.
+      supabase
+        .from("simulator_daily_observations")
+        .select("phase,intervention_performed,primary_value,confounders,observed_on,user_id")
+        .eq("experiment_id", experiment_id)
+        .eq("user_id", ownerId)
+        .order("observed_on", { ascending: true }),
+    ]);
     if (!proto) throw new Error("protocol not found");
+
+    // Cycle identity: the exact entries this comparison was computed from. Two
+    // comparisons over the same entries are ONE cycle, however often the
+    // endpoint is called. This changes no comparator arithmetic.
+    const fingerprintSource = JSON.stringify(
+      ((obs || []) as Record<string, unknown>[]).map((o) => [
+        o.observed_on, o.phase, o.primary_value, o.intervention_performed,
+      ]),
+    );
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintSource));
+    const observationFingerprint = `sha256:${Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+
+    const { data: priorCmp } = await supabase
+      .from("simulator_experiment_comparisons")
+      .select("*")
+      .eq("experiment_id", experiment_id)
+      .eq("user_id", ownerId)
+      .eq("phase_a", phase_a)
+      .eq("phase_b", phase_b)
+      .eq("observation_fingerprint", observationFingerprint)
+      .maybeSingle();
+    if (priorCmp) {
+      // Same entries, same answer. No duplicate comparison, no duplicate
+      // learning, and therefore no way to manufacture a second cycle.
+      return new Response(
+        JSON.stringify({ comparison: priorCmp, next_phase: (exp as any).phase, replayed: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     const direction: Direction = (proto as any).primary_outcome?.direction || "decrease";
     const stopped_for_safety = (exp as any).stopped_reason?.startsWith?.("safety") ?? false;
@@ -76,6 +116,7 @@ Deno.serve(async (req) => {
         result: result.result,
         reasons: result.reasons,
         human_summary: result.human_summary,
+        observation_fingerprint: observationFingerprint,
       })
       .select()
       .single();
@@ -95,7 +136,9 @@ Deno.serve(async (req) => {
     // Provisional learning — never graduated on a single cycle.
     if (result.result === "SIGNAL_DETECTED" || result.result === "POSSIBLE_SIGNAL" || result.result === "NO_DETECTABLE_SIGNAL") {
       await supabase.from("simulator_learnings").insert({
-        user_id: (exp as any).user_id,
+        user_id: ownerId,
+        comparison_id: (cmpRow as any).id,
+        observation_fingerprint: observationFingerprint,
         experiment_id,
         kind: "n1_cycle_result",
         headline: `${(exp as any).lever} → ${result.result.replace(/_/g, " ").toLowerCase()}`,
