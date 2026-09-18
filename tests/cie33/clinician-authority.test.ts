@@ -600,6 +600,28 @@ describe("access control on review records", () => {
     expect(theirs).toHaveLength(0);
   });
 
+  it("denies the patient the clinician's private notes even when asked for by name", async () => {
+    await grant();
+    const held = await seedHeldSession();
+    await submit({ held });
+    await role("authenticated", patient);
+    for (const column of [
+      "rationale",
+      "assessment_note",
+      "clinician_user_id",
+      "credential_reference",
+    ]) {
+      await expect(
+        db.query(`select ${column} from public.cie33_safety_reviews`),
+      ).rejects.toThrow(/permission denied|does not exist/i);
+    }
+    // The instruction written for the patient is still readable.
+    const ok = await db.query(
+      "select patient_instructions from public.cie33_safety_reviews",
+    );
+    expect(ok.rows).toHaveLength(1);
+  });
+
   it("lets a clinician read their own grants but not another clinician's", async () => {
     const mineId = await grant(clinician, patient);
     await role("postgres");
