@@ -48,7 +48,7 @@ beforeAll(async () => {
       ('${expA}','${a}','Observe energy','Synthetic permission test'),
       ('${expB}','${b}','Observe sleep','Synthetic permission test');
   `);
-  await db.exec(read("docs/migrations-pending/20260919120000_patient_autonomy_authority.sql"));
+  await db.exec(read("drizzle/migrations/0005_patient_autonomy_authority.sql"));
   await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false)`);
 }, 60000);
 
