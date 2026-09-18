@@ -227,9 +227,17 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await role("postgres");
-  await db.exec("delete from public.cie33_safety_reviews");
-  await db.exec("delete from public.clinician_authorization_audit");
-  await db.exec("delete from public.clinician_patient_authorizations");
+  // The audit and review tables are append-only in production; the fixture
+  // resets them only by suspending those guards as the table owner.
+  await db.exec(`
+    alter table public.cie33_safety_reviews disable trigger cie33_safety_reviews_append_only;
+    alter table public.clinician_authorization_audit disable trigger clinician_authorization_audit_append_only;
+    delete from public.cie33_safety_reviews;
+    delete from public.clinician_authorization_audit;
+    delete from public.clinician_patient_authorizations;
+    alter table public.cie33_safety_reviews enable trigger cie33_safety_reviews_append_only;
+    alter table public.clinician_authorization_audit enable trigger clinician_authorization_audit_append_only;
+  `);
   await db.exec(
     "delete from public.cie_assessments where instrument_version = '3.3.0'",
   );

@@ -129,10 +129,12 @@ describe("CIE 3.3 clinician safety review — engine", () => {
 
   it("failure to answer the fresh recheck is NOT clearance — the hold returns", () => {
     const resumed = permit(heldIntake());
+    const options = resumed.current!.instance.missingnessOptions;
+    expect(options.length).toBeGreaterThan(0);
     const unanswered = respond(resumed, {
       semanticResponse: undefined,
       negativeCapabilityConfirmed: undefined,
-      missingness: { kind: "prefer_not_to_answer" },
+      missingness: { kind: options[0] },
     } as Partial<AnswerInput>);
     expect(unanswered.safety).toBe("handoff_required");
     expect(unanswered.phase).toBe("safety_hold");
