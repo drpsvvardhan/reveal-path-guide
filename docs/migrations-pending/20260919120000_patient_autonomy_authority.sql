@@ -1,9 +1,13 @@
 -- ============================================================================
 -- Patient Reveal — patient autonomy with server-held clinical authority
 -- ----------------------------------------------------------------------------
--- STATUS: NOT APPLIED. Held here deliberately, exactly like the BioTwin
--- governed-report migration. It is to be applied through this project's managed
--- migration workflow after independent review of the accompanying commit.
+-- STATUS: NOT APPLIED. This is the next ordered managed migration after 0004
+-- (0005). It is held here deliberately: this project's migration tool applies
+-- SQL in the same call that generates the journal entry and snapshot, and this
+-- task is explicitly "no production apply before independent review". At
+-- deployment time this exact file is passed to the migration tool byte-for-byte
+-- so generation and application happen atomically, and the journal/snapshot
+-- lineage continues from 0004 without a collision.
 --
 -- What it changes, and why:
 --   Patients keep every read and every genuinely patient-owned action. What
@@ -16,9 +20,9 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- 0. Remove every non-SELECT policy on the protected tables.
---    Owner SELECT is recreated explicitly below for tables whose read access
---    came from a FOR ALL policy.
+-- 0. Remove every non-SELECT policy on the protected tables, plus ALL policies
+--    on daily observations (old sdo_own_* included) so no leftover permissive
+--    policy can OR its way past the parent-ownership rules added below.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -43,6 +47,15 @@ BEGIN
   LOOP
     EXECUTE format('DROP POLICY %I ON public.%I', p.policyname, p.tablename);
   END LOOP;
+
+  FOR p IN
+    SELECT tablename, policyname
+      FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename = 'simulator_daily_observations'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.%I', p.policyname, p.tablename);
+  END LOOP;
 END $$;
 
 -- ---------------------------------------------------------------------------
@@ -57,10 +70,12 @@ GRANT SELECT ON public.biotwin_statements TO authenticated;
 GRANT ALL ON public.biotwin_reports TO service_role;
 GRANT ALL ON public.biotwin_statements TO service_role;
 
+DROP POLICY IF EXISTS "Users read their own biotwin reports" ON public.biotwin_reports;
 CREATE POLICY "Users read their own biotwin reports"
   ON public.biotwin_reports FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users read their own biotwin statements" ON public.biotwin_statements;
 CREATE POLICY "Users read their own biotwin statements"
   ON public.biotwin_statements FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
@@ -101,6 +116,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS biotwin_patient_submissions_user_content_uniq
 CREATE INDEX IF NOT EXISTS biotwin_patient_submissions_user_idx
   ON public.biotwin_patient_submissions (user_id, created_at DESC);
 
+-- Explicit, not inherited: reads only for clients, everything for the backend.
+REVOKE ALL ON public.biotwin_patient_submissions FROM anon;
+REVOKE ALL ON public.biotwin_patient_submissions FROM authenticated;
 GRANT SELECT ON public.biotwin_patient_submissions TO authenticated;
 GRANT ALL ON public.biotwin_patient_submissions TO service_role;
 
@@ -187,44 +205,101 @@ DROP POLICY IF EXISTS chk_select_own ON public.simulator_checkpoints;
 CREATE POLICY chk_select_own ON public.simulator_checkpoints FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
 
--- Daily self-logging stays a patient-owned write. It is the patient's own
--- observation of their own body, and it activates nothing.
-DROP POLICY IF EXISTS sdo_select_own ON public.simulator_daily_observations;
+-- Daily self-logging stays a patient-owned write: it is the patient's own
+-- observation of their own body and it activates nothing. What it may NOT do is
+-- attach to somebody else's plan, so every write also checks that the parent
+-- experiment belongs to the same person. Corrections (UPDATE) and removals
+-- (DELETE) of one's own entries are preserved.
 CREATE POLICY sdo_select_own ON public.simulator_daily_observations FOR SELECT TO authenticated
   USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS sdo_insert_own ON public.simulator_daily_observations;
-CREATE POLICY sdo_insert_own ON public.simulator_daily_observations FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = user_id);
-DROP POLICY IF EXISTS sdo_update_own ON public.simulator_daily_observations;
-CREATE POLICY sdo_update_own ON public.simulator_daily_observations FOR UPDATE TO authenticated
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-DROP POLICY IF EXISTS sdo_delete_own ON public.simulator_daily_observations;
+
+CREATE POLICY sdo_insert_own_parent ON public.simulator_daily_observations FOR INSERT TO authenticated
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.simulator_experiments e
+       WHERE e.id = simulator_daily_observations.experiment_id
+         AND e.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY sdo_update_own_parent ON public.simulator_daily_observations FOR UPDATE TO authenticated
+  USING (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.simulator_experiments e
+       WHERE e.id = simulator_daily_observations.experiment_id
+         AND e.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1 FROM public.simulator_experiments e
+       WHERE e.id = simulator_daily_observations.experiment_id
+         AND e.user_id = auth.uid()
+    )
+  );
+
 CREATE POLICY sdo_delete_own ON public.simulator_daily_observations FOR DELETE TO authenticated
   USING (auth.uid() = user_id);
+
+REVOKE ALL ON public.simulator_daily_observations FROM authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.simulator_daily_observations TO authenticated;
+GRANT ALL ON public.simulator_daily_observations TO service_role;
 
 -- ---------------------------------------------------------------------------
--- 5. Bind an admission decision to exact protocol content.
+-- 5. Bind an admission decision to exact executable content AND to the context
+--    fingerprint it was computed from.
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.simulator_experiment_protocols
   ADD COLUMN IF NOT EXISTS template_id text,
+  ADD COLUMN IF NOT EXISTS patient_note text,
   ADD COLUMN IF NOT EXISTS content_sha256 text,
+  ADD COLUMN IF NOT EXISTS executable_sha256 text,
   ADD COLUMN IF NOT EXISTS activation_allowed boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS admission_context jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS admission_context_fingerprint text,
   ADD COLUMN IF NOT EXISTS admission_computed_at timestamptz;
 
+-- A comparison is identified by the exact observations it was computed from, so
+-- calling the comparator again over the same entries cannot masquerade as a
+-- second cycle. This changes no comparator arithmetic.
+ALTER TABLE public.simulator_experiment_comparisons
+  ADD COLUMN IF NOT EXISTS observation_fingerprint text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS simulator_comparisons_cycle_uniq
+  ON public.simulator_experiment_comparisons (experiment_id, phase_a, phase_b, observation_fingerprint)
+  WHERE observation_fingerprint IS NOT NULL;
+
+ALTER TABLE public.simulator_learnings
+  ADD COLUMN IF NOT EXISTS comparison_id uuid,
+  ADD COLUMN IF NOT EXISTS observation_fingerprint text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS simulator_learnings_cycle_uniq
+  ON public.simulator_learnings (experiment_id, observation_fingerprint)
+  WHERE observation_fingerprint IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
--- 6. Transactional phase transition (service-only, CAS on phase + protocol).
---    Deliberately NOT security definer: it runs as the caller, and EXECUTE is
---    granted to service_role only, so a patient JWT cannot reach it.
+-- 6. Transactional phase transition (service-only).
+--    CAS over phase + protocol version + executable content hash + the context
+--    fingerprint the decision was computed from, all under a row lock, and the
+--    allowed transitions are validated here too rather than trusted from the
+--    caller. Deliberately NOT security definer: it runs as the caller and
+--    EXECUTE is granted to service_role only, so a patient JWT cannot reach it.
 -- ---------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.simulator_transition_phase(
+  uuid, uuid, text, text, uuid, text, jsonb, text);
+
 CREATE OR REPLACE FUNCTION public.simulator_transition_phase(
   p_user_id uuid,
   p_experiment_id uuid,
   p_from_phase text,
   p_to_phase text,
   p_protocol_id uuid,
-  p_protocol_sha text,
+  p_protocol_version integer,
+  p_executable_sha text,
+  p_context_fingerprint text,
   p_admission jsonb,
   p_stopped_reason text
 ) RETURNS jsonb
@@ -234,18 +309,29 @@ AS $$
 DECLARE
   exp public.simulator_experiments%ROWTYPE;
   proto public.simulator_experiment_protocols%ROWTYPE;
+  terminal text[] := ARRAY['stopped', 'completed', 'graduated', 'not_interpretable'];
+  allowed_next text;
 BEGIN
   SELECT * INTO exp FROM public.simulator_experiments
     WHERE id = p_experiment_id AND user_id = p_user_id FOR UPDATE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'EXPERIMENT_NOT_FOUND' USING ERRCODE = '42501';
   END IF;
-  IF coalesce(exp.phase, 'draft') IS DISTINCT FROM p_from_phase THEN
-    RAISE EXCEPTION 'STALE_PHASE' USING ERRCODE = '40001';
-  END IF;
 
-  -- Stopping and pausing are the patient's own, always.
+  -- Stopping and pausing are the patient's own, always, and are handled before
+  -- any staleness check. Stopping an already-stopped plan is a no-op, and a
+  -- finished plan is never reopened.
   IF p_to_phase IN ('stopped', 'paused') THEN
+    IF coalesce(exp.phase, 'draft') = p_to_phase THEN
+      RETURN jsonb_build_object('phase', exp.phase, 'activated', false, 'idempotent', true);
+    END IF;
+    IF p_to_phase = 'stopped' AND coalesce(exp.phase, 'draft') = ANY(terminal) THEN
+      RETURN jsonb_build_object('phase', exp.phase, 'activated', false, 'idempotent', true);
+    END IF;
+    IF p_to_phase = 'paused' AND coalesce(exp.phase, 'draft') = ANY(terminal) THEN
+      RAISE EXCEPTION 'TERMINAL_PHASE' USING ERRCODE = '22023';
+    END IF;
+
     UPDATE public.simulator_experiments
        SET phase = p_to_phase,
            phase_started_at = now(),
@@ -259,6 +345,28 @@ BEGIN
     RETURN jsonb_build_object('phase', p_to_phase, 'protocol_id', NULL, 'activated', false);
   END IF;
 
+  -- A finished plan cannot be started again, whatever the caller asks for.
+  IF coalesce(exp.phase, 'draft') = ANY(terminal) THEN
+    RAISE EXCEPTION 'TERMINAL_PHASE' USING ERRCODE = '22023';
+  END IF;
+
+  IF coalesce(exp.phase, 'draft') IS DISTINCT FROM p_from_phase THEN
+    RAISE EXCEPTION 'STALE_PHASE' USING ERRCODE = '40001';
+  END IF;
+
+  -- The lifecycle is validated here, not trusted from the caller.
+  allowed_next := CASE coalesce(exp.phase, 'draft')
+                    WHEN 'draft' THEN 'run_in'
+                    WHEN 'run_in' THEN 'intervention'
+                    WHEN 'intervention' THEN 'ready_to_compare'
+                    WHEN 'washout' THEN 'ready_to_compare'
+                    WHEN 'ready_to_compare' THEN 'completed'
+                    ELSE NULL
+                  END;
+  IF p_to_phase IS DISTINCT FROM allowed_next AND p_to_phase <> 'not_interpretable' THEN
+    RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE = '22023';
+  END IF;
+
   IF p_protocol_id IS NULL THEN
     RAISE EXCEPTION 'PROTOCOL_REQUIRED' USING ERRCODE = '22023';
   END IF;
@@ -269,15 +377,28 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'PROTOCOL_NOT_FOUND' USING ERRCODE = '42501';
   END IF;
+  IF p_protocol_version IS NULL OR proto.protocol_version IS DISTINCT FROM p_protocol_version THEN
+    RAISE EXCEPTION 'PROTOCOL_SUPERSEDED' USING ERRCODE = '40001';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM public.simulator_experiment_protocols
      WHERE experiment_id = p_experiment_id AND protocol_version > proto.protocol_version
   ) THEN
     RAISE EXCEPTION 'PROTOCOL_SUPERSEDED' USING ERRCODE = '40001';
   END IF;
-  IF proto.content_sha256 IS NULL OR proto.content_sha256 IS DISTINCT FROM p_protocol_sha THEN
+  IF proto.executable_sha256 IS NULL OR proto.executable_sha256 IS DISTINCT FROM p_executable_sha THEN
     RAISE EXCEPTION 'PROTOCOL_CHANGED' USING ERRCODE = '40001';
   END IF;
+
+  -- The decision must have been computed from the context recorded against this
+  -- protocol. If the person's own information moved on — a new safety hold, a
+  -- new result — the fingerprints differ and nothing is activated.
+  IF p_context_fingerprint IS NULL
+     OR proto.admission_context_fingerprint IS NULL
+     OR proto.admission_context_fingerprint IS DISTINCT FROM p_context_fingerprint THEN
+    RAISE EXCEPTION 'CONTEXT_CHANGED' USING ERRCODE = '40001';
+  END IF;
+
   IF coalesce((p_admission->>'activation_allowed')::boolean, false) = false
      OR coalesce(p_admission->>'verdict', '') = 'BLOCK' THEN
     RAISE EXCEPTION 'ADMISSION_REQUIRED' USING ERRCODE = '42501';
@@ -309,15 +430,17 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.simulator_transition_phase(
-  uuid, uuid, text, text, uuid, text, jsonb, text) FROM PUBLIC;
+  uuid, uuid, text, text, uuid, integer, text, text, jsonb, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.simulator_transition_phase(
-  uuid, uuid, text, text, uuid, text, jsonb, text) FROM anon, authenticated;
+  uuid, uuid, text, text, uuid, integer, text, text, jsonb, text) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.simulator_transition_phase(
-  uuid, uuid, text, text, uuid, text, jsonb, text) TO service_role;
+  uuid, uuid, text, text, uuid, integer, text, text, jsonb, text) TO service_role;
 
 -- ---------------------------------------------------------------------------
--- 7. Graduation gate (service-only). The replication requirement is computed
---    in SQL so it cannot be bypassed by a client write.
+-- 7. Graduation gate (service-only). "Replication" means two INDEPENDENT
+--    cycles: two comparisons computed from different sets of daily entries.
+--    Repeating the same comparison over the same entries is one cycle, counted
+--    once. This adds no claim about clinical efficacy.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.simulator_graduate_experiment(
   p_user_id uuid,
@@ -336,11 +459,14 @@ BEGIN
     RAISE EXCEPTION 'EXPERIMENT_NOT_FOUND' USING ERRCODE = '42501';
   END IF;
 
-  SELECT coalesce(sum(coalesce(cycle_count, 1)), 0) INTO cycles
-    FROM public.simulator_learnings
-   WHERE experiment_id = p_experiment_id AND user_id = p_user_id;
+  SELECT count(DISTINCT c.observation_fingerprint) INTO cycles
+    FROM public.simulator_experiment_comparisons c
+   WHERE c.experiment_id = p_experiment_id
+     AND c.user_id = p_user_id
+     AND c.observation_fingerprint IS NOT NULL
+     AND c.result IN ('SIGNAL_DETECTED', 'POSSIBLE_SIGNAL', 'NO_DETECTABLE_SIGNAL');
 
-  IF cycles < 2 THEN
+  IF coalesce(cycles, 0) < 2 THEN
     RAISE EXCEPTION 'REPLICATION_REQUIRED' USING ERRCODE = '22023';
   END IF;
 
@@ -351,7 +477,7 @@ BEGIN
      SET graduated = true, learning_status = 'replicated'
    WHERE experiment_id = p_experiment_id AND user_id = p_user_id;
 
-  RETURN jsonb_build_object('graduated', true, 'cycles', cycles);
+  RETURN jsonb_build_object('graduated', true, 'independent_cycles', cycles);
 END;
 $$;
 
