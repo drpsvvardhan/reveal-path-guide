@@ -56,7 +56,8 @@
       history is not truncated, markers deduped per draw.
 - [ ] Only 105 of 1028 extracted markers carry a canonical concept binding —
       ontology coverage is the real extraction gap to close next.
-- [ ] Wire extracted biomarkers and conditions into the CIE 3.3 recheck so labs affect the safety verdict
+- [x] Lab evidence now affects action safety in one direction only: `_shared/aae/labReassessment.ts` raises concerns or sustains existing restrictions, has no clearance output, treats missing/stale/conflicting data as concerns, and attaches an explanation plus resolution path. Wired into `simulate-what-if` (flags additive only), recorded per card in `simulator_what_if_cards.lab_concerns` (migration 0007), 8 regression tests passing, function deployed.
+- [ ] Clinician review walkthrough (authorize, review, hold + fresh sentinel, revoke) — blocked: need the clinician account email; no real grant will be created without it
 - [ ] Clinician review walkthrough on the real account: authorize clinician Vishnu Vardhan, submit review, confirm hold + fresh sentinel, revoke grant
 
 Patient autonomy post-release verification: the public custom-domain bundle was

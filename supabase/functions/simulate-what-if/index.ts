@@ -11,6 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { admitExperiments } from "../_shared/aae/experimentAdmission.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
 import { derivePatientGuards } from "../_shared/aae/patientGuards.ts";
+import { assessLabEvidence } from "../_shared/aae/labReassessment.ts";
 import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
@@ -237,6 +238,14 @@ Deno.serve(async (req) => {
     // InBody observations, absent from a raw patient_lab_observations read.
 
     const { biomarkers, flags } = derivePatientGuards(witnessCtx);
+
+    // ── LAB REASSESSMENT (raise-concern only) ──
+    // The person's own lab evidence can raise a concern or keep a restriction
+    // standing. It can never clear one: the assessment has no clearance output
+    // and flags are only ever added to the set the admission engine sees.
+    const labAssessment = assessLabEvidence(witnessCtx);
+    for (const flag of labAssessment.maintainFlags) flags.add(flag);
+
     const { results, ledger } = admitExperiments(cards as any[], biomarkers, flags);
 
     console.log(
@@ -274,6 +283,9 @@ Deno.serve(async (req) => {
         patient_safe: a.patient_safe,
         safety_flags: a.safety_flags,
         unbound_biomarkers: a.unbound_biomarkers,
+        // Recorded with the card so the reason for a restriction, and what
+        // could change it, stays attached to the decision it shaped.
+        lab_concerns: labAssessment.concerns,
       };
     });
 
@@ -297,6 +309,11 @@ Deno.serve(async (req) => {
           blocked: ledger.blocked,
           blocked_unsafe: ledger.blocked_unsafe,
           blocked_unbound: ledger.blocked_unbound,
+        },
+        lab_reassessment: {
+          concerns: labAssessment.concerns,
+          insufficient_evidence: labAssessment.insufficientEvidence,
+          evaluated_markers: labAssessment.evaluatedMarkers,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
