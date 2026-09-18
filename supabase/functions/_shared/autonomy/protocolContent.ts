@@ -77,5 +77,32 @@ export function proposalFromProtocolRow(
     washout_days: (row.washout_days as number | null) ?? null,
     predicted_deltas: (experiment.predicted_deltas as ProposalForReview["predicted_deltas"]) ?? [],
     confidence: null,
+    patient_note: (row.patient_note as string | null) ?? null,
   };
+}
+
+/**
+ * The full executable content a decision is bound to: the protocol's governed
+ * fields PLUS the experiment-level content a reviewer would read (the lever,
+ * the reasoning, the predictions) and the source suggestion's own version. A
+ * change to any of them invalidates the decision.
+ */
+export async function executableContentHash(args: {
+  proposal: ProposalForReview;
+  experiment: Record<string, unknown>;
+}): Promise<string> {
+  const { proposal, experiment } = args;
+  return `sha256:${await sha256Hex(
+    JSON.stringify(
+      stable({
+        protocol: JSON.parse(canonicalProtocolContent(proposal)),
+        lever: experiment.lever ?? "",
+        rationale: experiment.rationale ?? "",
+        predicted_deltas: experiment.predicted_deltas ?? [],
+        source_card_id: experiment.source_card_id ?? null,
+        source_cluster_ids: experiment.source_cluster_ids ?? [],
+        source_terrain_render_id: experiment.source_terrain_render_id ?? null,
+      }),
+    ),
+  )}`;
 }
