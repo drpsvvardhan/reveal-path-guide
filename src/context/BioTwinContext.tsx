@@ -9,6 +9,7 @@ import React, {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
+import { invokeClinicalResult } from "@/lib/clinicalFunctions";
 import {
   looksLikeBiotwinReport,
   type BiotwinImportResult,
@@ -22,11 +23,26 @@ import {
 // deno-lint-ignore no-explicit-any
 const db = supabase as any;
 
+/** A file the patient contributed themselves. Readable immediately; unverified. */
+export interface BiotwinSubmission {
+  id: string;
+  version: number;
+  submitted_filename: string | null;
+  report_type: string | null;
+  schema_name: string | null;
+  review_state: string;
+  authority_asserted_in_file: boolean;
+  parsed_summary: Record<string, unknown> | null;
+  created_at: string;
+}
+
 interface BioTwinContextValue {
   loading: boolean;
   /** Null when this person has no imported BioTwin report. */
   report: BiotwinReport | null;
   statements: BiotwinStatement[];
+  /** The patient's own uploads, newest first. */
+  submissions: BiotwinSubmission[];
   error: string | null;
   importing: boolean;
   lastImport: BiotwinImportResult | null;
@@ -45,6 +61,7 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<BiotwinReport | null>(null);
   const [statements, setStatements] = useState<BiotwinStatement[]>([]);
+  const [submissions, setSubmissions] = useState<BiotwinSubmission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [lastImport, setLastImport] = useState<BiotwinImportResult | null>(null);
@@ -53,11 +70,21 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!userId) {
       setReport(null);
       setStatements([]);
+      setSubmissions([]);
       return;
     }
     setLoading(true);
     setError(null);
     try {
+      // The patient's own uploads are readable straight away, independently of
+      // whether a governed report exists.
+      const { data: subRows } = await db
+        .from("biotwin_patient_submissions")
+        .select("id, version, submitted_filename, report_type, schema_name, review_state, authority_asserted_in_file, parsed_summary, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      setSubmissions((subRows ?? []) as BiotwinSubmission[]);
+
       const { data: reportRow, error: reportErr } = await db
         .from("biotwin_reports")
         .select("*")
@@ -136,26 +163,34 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return res;
         }
 
-        const { data, error: fnError } = await supabase.functions.invoke(
+        // The server's own wording is what the patient reads, including when it
+        // declines to treat the upload as verified.
+        const invoked = await invokeClinicalResult<BiotwinImportResult>(
           "import-biotwin-report",
-          { body: { report: parsed, user_id: userId } },
+          { report: parsed, user_id: userId, filename: file.name },
         );
 
-        if (fnError) {
-          const res: BiotwinImportResult = {
-            imported: false,
-            refusal_code: "import_failed",
-            diagnostics: [
-              { level: "error", code: "import_failed", message: fnError.message },
-            ],
-          };
+        if (!invoked.ok) {
+          const fromServer = (invoked.body ?? null) as BiotwinImportResult | null;
+          const res: BiotwinImportResult = fromServer?.diagnostics
+            ? fromServer
+            : {
+                imported: false,
+                accepted: false,
+                refusal_code: "import_failed",
+                diagnostics: [
+                  { level: "error", code: "import_failed", message: invoked.message },
+                ],
+              };
           setLastImport(res);
           return res;
         }
 
-        const res = data as BiotwinImportResult;
+        const res = invoked.data;
         setLastImport(res);
-        if (res.imported || res.idempotent) await load();
+        // An accepted self-service upload is a success even though it is not an
+        // installed report, so the list must refresh for it too.
+        if (res.imported || res.idempotent || res.accepted) await load();
         return res;
       } finally {
         setImporting(false);
