@@ -40,8 +40,12 @@ The general emergency wording follows [NIMH's urgent-help guidance](https://www.
 - Full application suite after integration: **329 passed, one existing failure**, `src/lib/ppe/comparator.test.ts`, “POSSIBLE_SIGNAL when direction matches but overlap is high.” The same failure existed before this change; it was not altered here.
 - Production Vite build passed. Application TypeScript check passed. Deno checked the new engine and evidence modules.
 - PostgreSQL tests run the exact migration in PGlite against a minimal fixture of the pre-existing assessment/auth contract; these are not a claim that the complete production migration history has been replayed.
-- Complete Edge HTTP/live-model calls were not run against production. The local Deno endpoint check could not fetch the existing SDK from `esm.sh` because the environment refused that connection.
+- Live authenticated Edge round trip on `qvkekmdzgjgfaiyboozo` (2026-09-18): two isolated synthetic accounts, no real patient record touched. Executed against the deployed `cie-v33`: consent/start, 34 answered questions including one explicit `unknown` missingness answer, duplicate retry with a reused `request_id` (same revision returned, no second entry), pause, resume, review/finish, and two corrections that superseded the prior `nicotine` witnesses while retaining them in history. A second synthetic account answered the locked immediate-safety sentinel positively and entered `safety_hold`; a subsequent `start` returned the held session with no next question and could not self-clear. Unauthenticated call returned 401. Cross-patient read of another subject's session returned `state: null`.
+- Live consumer checks on the same backend: `generate-ask-anything-context` returned 200 with suggestions grounded only in v3.3 witnesses; `patient-chat` returned 200 with prose derived from the confirmed intake and witness-only grounding refs; `generate-terrain-render` returned 200 (`voice_validation_status: passed`, version 1) from v3.3 evidence with no fabricated v2.2 domain/gate scores. Legacy inventory after the migration: 25 `2.2.0` assessments unchanged.
 - Browser visual inspection could not connect to the local preview (`ERR_BLOCKED_BY_CLIENT`). React DOM interaction tests passed. An isolated synthetic visual fixture is included for reviewer use; it does not call the live backend.
+- Managed security scan after deployment: no new findings (two pre-existing `SECURITY DEFINER` advisories, previously dismissed, unchanged).
+- Open item observed during verification, not introduced by the migration: `generate-ask-anything-context` suggestion text can echo raw `witness_id` values to the patient. This is prompt-level and should be fixed separately.
+
 
 Reproduce:
 
@@ -57,17 +61,17 @@ npx vite --config tests/cie33/browser/vite.config.ts
 
 The lockfile was reconciled because the baseline `npm ci` failed on missing dependency entries. PGlite 0.5.8 is an exact development dependency used only for database tests.
 
-## Deployment order and current access limit
+## Deployment result (Lovable-managed path)
 
-Target: Patient Reveal, Lovable project `14971e66-0cd0-4af1-ab6e-16805aa9af66`; Supabase project **`qvkekmdzgjgfaiyboozo`**. Do not deploy this change to the separate `igjpoyxdigtnyscoleug` Supabase project.
+Target: Patient Reveal, Lovable project `14971e66-0cd0-4af1-ab6e-16805aa9af66`; Supabase project **`qvkekmdzgjgfaiyboozo`**. The separate `igjpoyxdigtnyscoleug` project is not a deployment target. The earlier external-access blocker no longer applies: this project's backend is Lovable-managed, and the migration and function deployments were executed from inside the project. No external Supabase credentials were used.
 
-The connected Supabase account lists only the separate project and explicitly denied the security-advisor request for Patient Reveal's project. Lovable allowed read-only schema verification. **No production schema, function, patient record or deployment was changed during implementation.** The PR is the reviewable implementation; it is not a claim of a live cutover.
+Completed on 2026-09-18, in this order:
 
-Once deployment access for the actual target is available:
-
-1. Apply `supabase/migrations/20260918031800_cie_v33_patient_intake.sql` through the project's normal migration mechanism. It was created with `supabase migration new`.
-2. Deploy `cie-v33` and updated shared dependencies. Deploy `cie-score-assessment`, `generate-terrain-render`, `generate-narrative`, `generate-ask-anything-context`, `patient-chat`, `generate-action-plan`, `generate-clusters` and `simulate-what-if`; the last two depend on the changed context loader even when their entry point changes are small or absent.
-3. Verify authenticated start/save/resume/correction and a synthetic confirmed-intake-to-terrain/chat round trip in the target environment. Run project security/performance advisors; these could not be run with current access.
-4. Release the frontend from the same commit. The frontend depends on the new schema/function; publishing it first will break the intake.
+1. **Migration applied.** The additive migration `supabase/migrations/20260918031800_cie_v33_patient_intake.sql` was applied through the managed tracked workflow as `drizzle/migrations/0000_cie_v33_patient_intake.sql`: `cie_assessments.instrument_version` (constrained to `2.2.0` / `3.3.0`), `cie33_sessions`, append-only `cie33_events`, owner-scoped RLS, the `cie33_guard_assessment` trigger and the service-only `cie33_commit` routine. Generated Supabase types were refreshed. Existing CIE 2.2 assessments, answers and scores were untouched.
+2. **Functions deployed.** `cie-v33`, `cie-score-assessment`, `generate-terrain-render`, `generate-narrative`, `generate-ask-anything-context`, `patient-chat`, `generate-action-plan`, `generate-clusters`, `simulate-what-if` — all deployed successfully. Existing authentication is preserved; `cie-v33` verifies the JWT via the shared `auth.getUser` helper.
+3. **Live verification passed.** See the live round-trip and consumer entries under Verification.
+4. **Frontend released** from the same commit, after the backend checks passed.
 
 Rollback is a coordinated application/function rollback. Preserve the additive v3.3 tables and event history; do not delete or reinterpret patient answers to roll back a UI. An older loader must not silently treat a v3.3 assessment as scored v2.2.
+
+Still outstanding, unchanged by this rollout: clinical/psychometric validity is not established, and this release has no clinician clearance endpoint — an operational care-team handoff workflow must be supplied separately before relying on the safety hold for clinical triage.
