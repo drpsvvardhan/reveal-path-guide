@@ -76,4 +76,37 @@ Completed on 2026-09-18, in this order:
 
 Rollback is a coordinated application/function rollback. Preserve the additive v3.3 tables and event history; do not delete or reinterpret patient answers to roll back a UI. An older loader must not silently treat a v3.3 assessment as scored v2.2.
 
-Still outstanding, unchanged by this rollout: clinical/psychometric validity is not established, and this release has no clinician clearance endpoint — an operational care-team handoff workflow must be supplied separately before relying on the safety hold for clinical triage.
+At the initial rollout above, clinical/psychometric validity was not established and a clinician disposition workflow was absent. The follow-up below records the subsequent work separately from those historical deployment results.
+
+## Clinician workflow follow-up — release verification pending
+
+The clinician workflow started in commit `a180d024`. The initial managed authority migration exists in production, but the interrupted build did not establish that the complete UI/function release or its live checks finished. Do not treat the historical security-scan and live-test results above as verification of this follow-up.
+
+The completed code provides:
+
+- `/admin/clinician-authority`: administrators authorize an existing clinician account for one named patient after recording a human credential-review reference and attestation. Authority has an expiry and can be revoked; grants and revocations are audited. Administrative access alone does not permit clinical review, and self-review is denied.
+- `/clinician/safety-review`: assigned clinicians inspect the exact safety question, answer, time and preserved history. A disposition requires an encounter time, assessment/contact documentation, rationale and patient instructions. It can retain the hold or permit questionnaire resumption. Resumption is not risk exclusion, medical clearance or treatment approval.
+- A permitted patient receives a fresh safety question. The original answer remains in history; a positive or missing fresh response reinstates the hold. Only the patient can answer. Clinician assessment and rationale remain private; the patient notice exposes only the designated patient instructions and disposition.
+- A forward consistency migration coordinates revocation with review commits, binds the same authorization and review identifiers across records, and supports durable retries. Existing migration history and patient testimony are preserved.
+- Publication explicitly rejects an outstanding safety recheck, even if an inconsistent state reaches the evidence boundary.
+
+### Operational setup
+
+After deployment is verified, a clinical operations lead must establish actual queue ownership, service hours, escalation/backup arrangements and how patients contact their care team. An authorized administrator can then open **Clinical review authority**, select the existing clinician and patient accounts, record the credential verification, and set the expiry. The clinician signs in with their own account and opens **Paused intakes for review**. No actual clinician authorization has been created by this implementation task. The application does not automatically contact a clinician or emergency service.
+
+### Clinical assessment and study package
+
+[Clinical validation protocol](validation/CIE33_CLINICAL_VALIDATION.md), [37-item review matrix](validation/CIE33_ITEM_REVIEW.csv), [source audit](validation/CIE33_SOURCE_AUDIT.json) and [blank study forms](validation/CIE33_STUDY_FORMS.csv) are merged in PR #4. The source audit verifies 32 core, three conditional and two opt-in questions, with four sentinels. The package records a desk assessment and proposed panel, cognitive-interview and paired-information study methods. **Clinical validity remains NOT_ESTABLISHED: no human panel ratings, participant data or clinical outcomes were produced.**
+
+### Comparator correction
+
+The old failing test mislabeled a low-overlap fixture as high overlap. Its original data have overlap `7/15` and consistency `0.8`, meeting the existing `SIGNAL_DETECTED` rule. The original case is now an explicit regression, alongside a true high-overlap fixture, exact policy boundaries and client/edge parity checks. Both production comparator implementations and their thresholds are unchanged. This fixes test evidence; it does not clinically calibrate the policy.
+
+### Verified so far and remaining release gate
+
+- Recovered implementation at `a180d024`: full suite **375/375 passed** and application TypeScript check passed locally.
+- Completed follow-up: full suite **397/397 passed across 34 files**, application TypeScript check passed, and production build passed. This includes the actual HTTP handler with mocked authentication/database transport, PostgreSQL/RLS tests against the forward migration, and UI interaction tests. PGlite cannot reproduce independent concurrent database connections; live revocation/commit scheduling remains a deployment verification item.
+- Independent source review verified the 37-item inventory and blank human-review fields; comparator tests **16/16 passed**.
+- Read-only production metadata inspection: all five CIE/clinical authority tables have RLS enabled; all three grant/revoke/review routines are `SECURITY INVOKER`, executable only by `service_role` and the database owner. There are zero clinician grants and zero clinical reviews; all 25 legacy CIE 2.2 assessments remain present. This targeted inspection is not a substitute for the requested fresh managed security scan.
+- Fresh `npm audit --omit=dev`: **12 affected package nodes (10 high, one moderate, one low)** in the pre-existing lockfile. The [dependency review](validation/CIE33_DEPENDENCY_REVIEW.md) records code applicability and available update targets. No exploit path was established for the inspected Router/WebSocket/Lodash usage, but findings remain open; this is not a clean audit. Dependency remediation is separate from the clinician feature and managed security scan.
+- Before release: apply the forward migration through the tracked managed workflow; deploy `clinician-authorization`, `cie33-safety-review`, `cie-v33` and all shared evidence consumers; run the fresh managed security scan; verify authorized/unauthorized synthetic HTTP flows including retry, revocation, expiry, hold/recheck and patient-notice privacy; remove only the exact new synthetic identities/records; publish the frontend after those checks pass. Record actual outcomes here. A queued Lovable request is not proof of deployment.

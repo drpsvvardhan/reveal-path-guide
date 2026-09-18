@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import CIE33Review from "./CIE33Review";
 import { currentEntries, MISSING_LABELS } from "@/lib/cie33Presentation";
+import { invokeClinical } from "@/lib/clinicalFunctions";
 import type {
   SemanticResponse,
   MissingEvidence,
@@ -30,6 +31,36 @@ export default function IntakeStep({
   const [missingKind, setMissingKind] = useState("");
   const [reason, setReason] = useState("");
   const [capability, setCapability] = useState(false);
+  const [noticeRefresh, setNoticeRefresh] = useState(0);
+  const [notice, setNotice] = useState<{ sessionId: string; patientInstructions: string; createdAt: string } | null>(null);
+  const [noticeError, setNoticeError] = useState<string | null>(null);
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const sessionId = state?.id;
+  const needsReviewStatus = state?.phase === "safety_hold" || state?.safety === "recheck_required" || !!state?.safetyReview;
+  useEffect(() => {
+    let cancelled = false;
+    setNotice(null);
+    setNoticeError(null);
+    if (!sessionId || readOnly || !needsReviewStatus) {
+      setNoticeLoading(false);
+      return;
+    }
+    setNoticeLoading(true);
+    void invokeClinical<{ notice: { disposition: string; patient_instructions: string; created_at: string } | null }>(
+      "cie33-safety-review", { action: "patient_notice", session_id: sessionId },
+    ).then(({ notice: latest }) => {
+      if (!cancelled && latest) setNotice({ sessionId, patientInstructions: latest.patient_instructions, createdAt: latest.created_at });
+    }).catch(() => {
+      if (!cancelled) setNoticeError("Your reviewer's instructions could not be loaded. Please check the status again or contact your care team directly.");
+    }).finally(() => {
+      if (!cancelled) setNoticeLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [sessionId, readOnly, needsReviewStatus, state?.safety, state?.safetyReview?.reviewId, noticeRefresh]);
+  const refreshStatus = () => {
+    setNoticeRefresh((value) => value + 1);
+    void reload();
+  };
   const q = state?.current?.instance;
   useEffect(() => {
     setResponse(undefined);
@@ -120,6 +151,25 @@ export default function IntakeStep({
           You are viewing this patient's intake. Only the patient can answer for
           themselves.
         </p>
+      )}
+      {!loading && !readOnly && needsReviewStatus && (
+        <section aria-label="Review status" className="mb-5 space-y-3 rounded-xl border p-4">
+          {state?.safety === "recheck_required" && (
+            <p role="status">
+              A clinician has permitted you to resume the questionnaire. This does not mean that risk is absent or that treatment is approved.
+              Please answer the safety question again yourself before continuing. Your earlier answer is preserved.
+            </p>
+          )}
+          {noticeLoading ? <p role="status">Checking for instructions from your reviewer…</p> : notice?.sessionId === sessionId ? (
+            <div className="space-y-2">
+              <h2 className="font-medium">Latest instructions from your reviewer</h2>
+              <p className="whitespace-pre-wrap">{notice.patientInstructions}</p>
+              <p className="text-sm text-muted-foreground">Recorded {new Date(notice.createdAt).toLocaleString()}</p>
+            </div>
+          ) : !noticeError && state?.phase === "safety_hold" ? <p>No reviewer instructions are available yet.</p> : null}
+          {noticeError && <p role="alert">{noticeError}</p>}
+          <Button type="button" variant="outline" disabled={busy || noticeLoading} onClick={refreshStatus}>Check review status</Button>
+        </section>
       )}
       {loading ? (
         <Loader2 aria-label="Loading" className="animate-spin" />

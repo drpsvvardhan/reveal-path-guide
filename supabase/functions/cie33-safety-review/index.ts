@@ -80,13 +80,45 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "invalid_json" }, 400, cors);
   }
 
+  // Patient notices are owner-only and deliberately omit private clinical notes.
+  // Resolve ownership from the verified caller, never from view-as/client fields.
+  if (body.action === "patient_notice") {
+    const sessionId = String(body.session_id ?? "");
+    if (!uuid.test(sessionId))
+      return jsonResponse({ error: "invalid_request" }, 400, cors);
+    const { data: session, error: sessionError } = await db
+      .from("cie33_sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .eq("user_id", clinician)
+      .maybeSingle();
+    if (sessionError)
+      return jsonResponse({ error: "review_unavailable" }, 500, cors);
+    if (!session)
+      return jsonResponse({ error: "not_authorized" }, 403, cors);
+    const { data: notice, error: noticeError } = await db
+      .from("cie33_safety_reviews")
+      .select("disposition, patient_instructions, created_at")
+      .eq("session_id", sessionId)
+      .eq("patient_user_id", clinician)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (noticeError)
+      return jsonResponse({ error: "review_unavailable" }, 500, cors);
+    return jsonResponse({ notice: notice ?? null }, 200, cors);
+  }
+
   const nowIso = new Date().toISOString();
   const { data: grantRows, error: grantError } = await db
     .from("clinician_patient_authorizations")
     .select("id, patient_user_id, expires_at")
     .eq("clinician_user_id", clinician)
     .is("revoked_at", null)
-    .gt("expires_at", nowIso);
+    .gt("expires_at", nowIso)
+    .order("granted_at", { ascending: false })
+    .order("id", { ascending: false });
   if (grantError) {
     console.error("cie33-safety-review authority lookup failed");
     return jsonResponse({ error: "review_unavailable" }, 500, cors);
@@ -96,6 +128,13 @@ Deno.serve(async (req: Request) => {
   ) as ActiveGrant[];
   const grantFor = (patient: string) =>
     grants.find((g) => g.patient_user_id === patient);
+
+  if (body.action === "access")
+    return jsonResponse(
+      { authorized_patients: new Set(grants.map((g) => g.patient_user_id)).size },
+      200,
+      cors,
+    );
 
   if (grants.length === 0)
     return jsonResponse(
@@ -111,7 +150,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (body.action === "queue") {
-      const patientIds = grants.map((g) => g.patient_user_id);
+      const patientIds = [...new Set(grants.map((g) => g.patient_user_id))];
       const { data: sessions, error } = await db
         .from("cie33_sessions")
         .select("id, user_id, revision, state, updated_at")
@@ -306,6 +345,139 @@ Deno.serve(async (req: Request) => {
           cors,
         );
 
+      const requestHash = contentHash({
+        clinician,
+        patient,
+        sessionId,
+        requestId,
+        disposition,
+        encounterAt,
+        assessmentNote,
+        rationale,
+        instructions,
+        sourceWitnessId,
+        expectedRevision,
+        expectedHash,
+      });
+
+      // Replays go through the same transactional authority check as new writes.
+      // Check receipts before CAS, and again if a concurrent commit changed state.
+      const recordReview = async (nextState: IntakeState | null) => {
+        const { data: rpcData, error: rpcError } = await db.rpc(
+          "cie33_submit_safety_review",
+          {
+            p_clinician: clinician,
+            p_patient: patient,
+            p_request_id: requestId,
+            p_request_hash: requestHash,
+            p_session_id: sessionId,
+            p_expected_revision: expectedRevision,
+            p_expected_hash: expectedHash,
+            p_disposition: disposition,
+            p_encounter_at: new Date(encounterAt).toISOString(),
+            p_assessment_note: assessmentNote,
+            p_rationale: rationale,
+            p_patient_instructions: instructions,
+            p_source_witness_id: sourceWitnessId,
+            p_state: nextState,
+          },
+        );
+        if (rpcError) {
+          const message = rpcError.message ?? "";
+          if (message.includes("IDEMPOTENCY_CONFLICT") || rpcError.code === "23505")
+            return jsonResponse(
+              {
+                error: "idempotency_conflict",
+                message:
+                  "This request ID was already used for a different review.",
+              },
+              409,
+              cors,
+            );
+          if (message.includes("STALE_STATE") || rpcError.code === "40001")
+            return jsonResponse(
+              {
+                error: "stale_state",
+                message:
+                  "This intake changed while you were writing. Reload and review the current state.",
+              },
+              409,
+              cors,
+            );
+          if (
+            message.includes("NOT_AUTHORIZED") ||
+            message.includes("SELF_REVIEW_FORBIDDEN")
+          )
+            return jsonResponse(
+              {
+                error: "not_authorized",
+                message:
+                  "Your authorization for this patient is missing, expired or revoked.",
+              },
+              403,
+              cors,
+            );
+          if (message.includes("NOT_HELD"))
+            return jsonResponse(
+              {
+                error: "not_held",
+                message: "This intake is not currently on a safety hold.",
+              },
+              409,
+              cors,
+            );
+          if (message.includes("SESSION_NOT_FOUND"))
+            return jsonResponse({ error: "session_not_found" }, 404, cors);
+          if (message.includes("INVALID_PERMIT"))
+            return jsonResponse(
+              {
+                error: "invalid_permit",
+                message: "The resumption state could not be verified. Reload.",
+              },
+              409,
+              cors,
+            );
+          throw rpcError;
+        }
+        return rpcData;
+      };
+      const responseFor = (rpcData: unknown) => {
+        if (rpcData instanceof Response) return rpcData;
+        const receipt = rpcData as {
+          review_id: string; replayed: boolean; disposition: string;
+        };
+        // The internal RPC state can contain the entire intake. The clinician
+        // HTTP response exposes only the receipt for this safety disposition.
+        return jsonResponse(
+          {
+            review: {
+              review_id: receipt.review_id,
+              replayed: receipt.replayed,
+              disposition: receipt.disposition ?? disposition,
+            },
+            disposition,
+            note:
+              disposition === "permit_resumption"
+                ? "Recorded as permission to resume intake. A fresh safety question has been issued to the patient; the original answer is retained."
+                : "Recorded. The safety hold remains in place.",
+          },
+          200,
+          cors,
+        );
+      };
+      const replayResponse = async (): Promise<Response | null> => {
+        const { data: receipt, error } = await db
+          .from("cie33_safety_reviews")
+          .select("id")
+          .eq("clinician_user_id", clinician)
+          .eq("request_id", requestId)
+          .maybeSingle();
+        if (error) throw error;
+        return receipt ? responseFor(await recordReview(null)) : null;
+      };
+      const replay = await replayResponse();
+      if (replay) return replay;
+
       const { data: row, error } = await db
         .from("cie33_sessions")
         .select("id, user_id, revision, state")
@@ -313,6 +485,14 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", patient)
         .maybeSingle();
       if (error) throw error;
+      if (
+        !row || row.revision !== expectedRevision ||
+        (row.state as IntakeState).stateHash !== expectedHash ||
+        (row.state as IntakeState).safety !== "handoff_required"
+      ) {
+        const concurrentReplay = await replayResponse();
+        if (concurrentReplay) return concurrentReplay;
+      }
       if (!row)
         return jsonResponse(
           { error: "session_not_found", message: "Intake not found." },
@@ -354,20 +534,6 @@ Deno.serve(async (req: Request) => {
           cors,
         );
 
-      const requestHash = contentHash({
-        clinician,
-        patient,
-        sessionId,
-        requestId,
-        disposition,
-        encounterAt,
-        assessmentNote,
-        rationale,
-        instructions,
-        sourceWitnessId,
-        expectedRevision,
-        expectedHash,
-      });
 
       let nextState: IntakeState | null = null;
       if (disposition === "permit_resumption") {
@@ -375,9 +541,8 @@ Deno.serve(async (req: Request) => {
         nextState = permitResumption(
           current,
           {
-            // The review row id is assigned in-transaction; the state pointer
-            // binds the clinician, their authorization and the original witness.
-            reviewId: requestId,
+            // SQL inserts this exact review ID and rechecks this exact grant.
+            reviewId: crypto.randomUUID(),
             authorizationId: grant.id,
             clinicianUserId: clinician,
             sourceWitnessId,
@@ -386,95 +551,8 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: rpcData, error: rpcError } = await db.rpc(
-        "cie33_submit_safety_review",
-        {
-          p_clinician: clinician,
-          p_patient: patient,
-          p_request_id: requestId,
-          p_request_hash: requestHash,
-          p_session_id: sessionId,
-          p_expected_revision: expectedRevision,
-          p_expected_hash: expectedHash,
-          p_disposition: disposition,
-          p_encounter_at: new Date(encounterAt).toISOString(),
-          p_assessment_note: assessmentNote,
-          p_rationale: rationale,
-          p_patient_instructions: instructions,
-          p_source_witness_id: sourceWitnessId,
-          p_state: nextState,
-        },
-      );
-      if (rpcError) {
-        const message = rpcError.message ?? "";
-        if (message.includes("IDEMPOTENCY_CONFLICT") || rpcError.code === "23505")
-          return jsonResponse(
-            {
-              error: "idempotency_conflict",
-              message:
-                "This request ID was already used for a different review.",
-            },
-            409,
-            cors,
-          );
-        if (message.includes("STALE_STATE") || rpcError.code === "40001")
-          return jsonResponse(
-            {
-              error: "stale_state",
-              message:
-                "This intake changed while you were writing. Reload and review the current state.",
-            },
-            409,
-            cors,
-          );
-        if (
-          message.includes("NOT_AUTHORIZED") ||
-          message.includes("SELF_REVIEW_FORBIDDEN")
-        )
-          return jsonResponse(
-            {
-              error: "not_authorized",
-              message:
-                "Your authorization for this patient is missing, expired or revoked.",
-            },
-            403,
-            cors,
-          );
-        if (message.includes("NOT_HELD"))
-          return jsonResponse(
-            {
-              error: "not_held",
-              message: "This intake is not currently on a safety hold.",
-            },
-            409,
-            cors,
-          );
-        if (message.includes("SESSION_NOT_FOUND"))
-          return jsonResponse({ error: "session_not_found" }, 404, cors);
-        if (message.includes("INVALID_PERMIT"))
-          return jsonResponse(
-            {
-              error: "invalid_permit",
-              message: "The resumption state could not be verified. Reload.",
-            },
-            409,
-            cors,
-          );
-        throw rpcError;
-      }
-
-      return jsonResponse(
-        {
-          review: rpcData,
-          disposition,
-          note:
-            disposition === "permit_resumption"
-              ? "Recorded as permission to resume intake. A fresh safety question has been issued to the patient; the original answer is retained."
-              : "Recorded. The safety hold remains in place.",
-        },
-        200,
-        cors,
-      );
+      const rpcData = await recordReview(nextState);
+      return responseFor(rpcData);
     }
 
     return jsonResponse({ error: "unknown_action" }, 400, cors);

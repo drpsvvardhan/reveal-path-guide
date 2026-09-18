@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { ClinicalFunctionError, invokeClinical } from "@/lib/clinicalFunctions";
+import { useAuth } from "@/context/AuthContext";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -63,7 +64,9 @@ const localNow = () => {
 };
 
 const ClinicianSafetyReview: React.FC = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [unauthorized, setUnauthorized] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [selected, setSelected] = useState<QueueRow | null>(null);
@@ -74,60 +77,69 @@ const ClinicianSafetyReview: React.FC = () => {
   const [rationale, setRationale] = useState("");
   const [instructions, setInstructions] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const inFlight = useRef(false);
+  const retry = useRef<{ fingerprint: string; requestId: string } | null>(null);
+  const loadVersion = useRef(0);
 
-  const call = async (body: Record<string, unknown>) => {
-    const { data, error } = await supabase.functions.invoke(
-      "cie33-safety-review",
-      { body },
-    );
-    if (error) {
-      // Non-2xx responses surface here; prefer the function's own message.
-      const message = (data as { message?: string } | null)?.message;
-      throw new Error(message ?? error.message);
-    }
-    if (data?.error) throw new Error(data.message ?? data.error);
-    return data;
-  };
+  const call = <T,>(body: Record<string, unknown>) => invokeClinical<T>("cie33-safety-review", body);
 
   const loadQueue = async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
+    setLoadError(null);
+    setSelected(null);
+    setDetail(null);
     try {
-      const data = await call({ action: "queue" });
+      const data = await call<{ sessions: QueueRow[] }>({ action: "queue" });
+      if (version !== loadVersion.current) return;
       setQueue(data.sessions ?? []);
       setUnauthorized(null);
     } catch (e: any) {
+      if (version !== loadVersion.current) return;
+      setQueue([]);
       const message = String(e?.message ?? e);
-      if (/authoriz/i.test(message)) setUnauthorized(message);
-      else toast.error(`Could not load the review queue: ${message}`);
+      if (e instanceof ClinicalFunctionError && e.status === 403 || /authoriz|forbidden/i.test(message)) setUnauthorized(message);
+      else setLoadError(`Could not load the review queue: ${message}`);
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   };
 
-  useEffect(() => { loadQueue(); }, []);
+  useEffect(() => {
+    setQueue([]);
+    setUnauthorized(null);
+    retry.current = null;
+    void loadQueue();
+    return () => { loadVersion.current++; };
+  }, [user?.id]);
 
   const open = async (row: QueueRow) => {
+    const version = ++loadVersion.current;
     setSelected(row);
     setDetail(null);
     setAssessment("");
     setRationale("");
     setInstructions("");
     setEncounterAt(localNow());
+    retry.current = null;
     try {
-      const data = await call({ action: "detail", session_id: row.session_id });
-      setDetail(data as Detail);
+      const data = await call<Detail>({ action: "detail", session_id: row.session_id });
+      if (version === loadVersion.current) setDetail(data);
     } catch (e: any) {
+      if (version !== loadVersion.current) return;
+      setSelected(null);
       toast.error(`Could not open this intake: ${e?.message ?? e}`);
+      if (e instanceof ClinicalFunctionError && e.status === 403) await loadQueue();
     }
   };
 
   const submit = async (disposition: "keep_hold" | "permit_resumption") => {
-    if (!selected || !detail) return;
+    if (!selected || !detail || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     try {
-      const data = await call({
+      const body = {
         action: "submit",
-        request_id: crypto.randomUUID(),
         session_id: selected.session_id,
         patient_user_id: selected.patient_user_id,
         disposition,
@@ -138,15 +150,22 @@ const ClinicianSafetyReview: React.FC = () => {
         source_witness_id: detail.session.safety_history.at(-1)?.witness_id,
         expected_revision: detail.session.revision,
         expected_hash: detail.session.state_hash,
-      });
+      };
+      const fingerprint = JSON.stringify(body);
+      if (retry.current?.fingerprint !== fingerprint) {
+        retry.current = { fingerprint, requestId: crypto.randomUUID() };
+      }
+      const data = await call<{ note?: string }>({ ...body, request_id: retry.current.requestId });
+      retry.current = null;
       toast.success(data.note ?? "Review recorded.");
       setSelected(null);
       setDetail(null);
       await loadQueue();
     } catch (e: any) {
       toast.error(`${e?.message ?? e}`);
-      if (/reload|changed/i.test(String(e?.message ?? ""))) await loadQueue();
+      if (e instanceof ClinicalFunctionError && (e.status === 403 || e.status === 409) || /reload|changed/i.test(String(e?.message ?? ""))) await loadQueue();
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -165,7 +184,7 @@ const ClinicianSafetyReview: React.FC = () => {
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
           <h1 className="font-serif text-2xl">Paused intakes for review</h1>
-          <Button variant="ghost" size="sm" className="ml-auto min-h-11" onClick={loadQueue}>
+          <Button variant="ghost" size="sm" className="ml-auto min-h-11" disabled={loading || submitting} onClick={loadQueue}>
             <RefreshCw className="mr-2 h-4 w-4" /> Refresh
           </Button>
         </div>
@@ -174,6 +193,11 @@ const ClinicianSafetyReview: React.FC = () => {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading
           </div>
+        ) : loadError ? (
+          <Card role="alert" className="space-y-3 p-6">
+            <p>{loadError}</p>
+            <Button variant="outline" onClick={loadQueue}>Try again</Button>
+          </Card>
         ) : unauthorized ? (
           <Card className="space-y-3 p-6">
             <div className="flex items-center gap-2">
@@ -196,7 +220,7 @@ const ClinicianSafetyReview: React.FC = () => {
               <Badge variant="outline">
                 {detail.session.safety === "handoff_required" ? "Paused for review" : "Waiting on the patient"}
               </Badge>
-              <Button variant="ghost" size="sm" className="ml-auto min-h-11" onClick={() => setSelected(null)}>
+              <Button variant="ghost" size="sm" className="ml-auto min-h-11" disabled={submitting} onClick={() => { loadVersion.current++; setSelected(null); setDetail(null); }}>
                 Close
               </Button>
             </div>
@@ -236,8 +260,9 @@ const ClinicianSafetyReview: React.FC = () => {
                 <h3 className="font-serif text-base">Your assessment</h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>When you assessed or spoke with this patient</Label>
+                    <Label htmlFor="encounter-time">When you assessed or spoke with this patient</Label>
                     <Input
+                      id="encounter-time"
                       type="datetime-local"
                       value={encounterAt}
                       onChange={(e) => setEncounterAt(e.target.value)}
@@ -245,16 +270,16 @@ const ClinicianSafetyReview: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>What you assessed and how you contacted them</Label>
-                  <Textarea rows={3} value={assessment} onChange={(e) => setAssessment(e.target.value)} />
+                  <Label htmlFor="assessment-note">What you assessed and how you contacted them</Label>
+                  <Textarea id="assessment-note" rows={3} disabled={submitting} value={assessment} onChange={(e) => setAssessment(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Your rationale for this decision</Label>
-                  <Textarea rows={3} value={rationale} onChange={(e) => setRationale(e.target.value)} />
+                  <Label htmlFor="review-rationale">Your rationale for this decision</Label>
+                  <Textarea id="review-rationale" rows={3} disabled={submitting} value={rationale} onChange={(e) => setRationale(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Follow-up and what the patient should do</Label>
-                  <Textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
+                  <Label htmlFor="patient-instructions">Follow-up and what the patient should do</Label>
+                  <Textarea id="patient-instructions" rows={3} disabled={submitting} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
                 </div>
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   Permitting the questions to continue is permission to resume the questionnaire only.
@@ -288,6 +313,8 @@ const ClinicianSafetyReview: React.FC = () => {
               </p>
             )}
           </Card>
+        ) : selected ? (
+          <p role="status" className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading this intake</p>
         ) : queue.length === 0 ? (
           <Card className="space-y-2 p-6">
             <h2 className="font-serif text-lg">Nothing is waiting for you</h2>

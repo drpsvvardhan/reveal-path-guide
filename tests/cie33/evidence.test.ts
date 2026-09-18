@@ -34,6 +34,16 @@ function finished() {
   return applyCommand(state, { action: "finish" }, crypto.randomUUID(), now);
 }
 describe("CIE 3.3 reasoning admission", () => {
+  it("rejects publication while a clinician-permitted safety recheck is outstanding", () => {
+    const state = finished();
+    state.safety = "recheck_required";
+    const { current: _q, route: _r, stateHash: _h, ...body } = state;
+    state.stateHash = contentHash(body);
+    // Even an internally consistent hash must not admit an outstanding recheck.
+    expect(() => publishedEvidence(state, owner, state.id)).toThrow(
+      "CIE33_PUBLISHED_STATE_INVALID",
+    );
+  });
   it("admits a confirmed intake without fabricating domain or gate scores", () => {
     const state = finished();
     const evidence = publishedEvidence(state, owner, state.id);
