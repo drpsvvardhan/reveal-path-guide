@@ -1,3 +1,4 @@
+import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
@@ -652,7 +653,7 @@ Deno.serve(async (req) => {
 
     // Build system prompt with cluster context
     const systemPrompt = buildNarrativeSystemPrompt(clusters);
-    const userMessage = composeUserMessage(manifest, patternList, gateScoresList);
+    const userMessage = composeUserMessage(manifest, patternList, gateScoresList) + formatCIE33Evidence(witnessContext.cie.v33);
 
     // Generation with voice validation
     const MAX_RETRIES = 3;

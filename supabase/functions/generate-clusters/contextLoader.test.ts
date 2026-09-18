@@ -1,3 +1,4 @@
+import { canonicalRegistry as cie33Registry } from "../_shared/cie33/reference/registry.ts";
 // ============================================================================
 // supabase/functions/generate-clusters/contextLoader.test.ts
 // ----------------------------------------------------------------------------
@@ -95,6 +96,12 @@ async function loadDbWitnessIdsOnce(): Promise<Set<string>> {
   _dbWitnessIds = new Set(
     (data ?? []).map((r: { witness_id: string }) => r.witness_id)
   );
+  const { data: sessions, error: cie33Error } = await sb.from("cie33_sessions")
+    .select("published_state").eq("user_id", TEST_USER_ID).not("published_state", "is", null);
+  if (cie33Error) throw new Error(`CIE 3.3 witness ids load: ${cie33Error.message}`);
+  for (const session of sessions ?? []) {
+    for (const entry of session.published_state?.entries ?? []) _dbWitnessIds.add(entry.witness.id);
+  }
   return _dbWitnessIds;
 }
 
@@ -129,6 +136,9 @@ Deno.test({
     }
   }
   // CIE
+  for (const w of ctx.cie.v33?.witnesses ?? []) {
+    if (!w.witness_id) missing.push("cie.v33 witness_id");
+  }
   for (const d of ctx.cie.domain_scores) {
     if (!d.witness_id) missing.push(`cie.domain_score ${d.domain_id}`);
   }
@@ -152,7 +162,7 @@ Deno.test({
 // ============================================================================
 
 Deno.test({
-  name: "P-2: every witness_id cited in context is present in witness_objects",
+  name: "P-2: every witness_id cited resolves to its versioned persisted source",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
@@ -163,6 +173,7 @@ Deno.test({
   for (const o of ctx.labs.observations) citedIds.add(o.observation_id);
   for (const o of ctx.inbody.observations) citedIds.add(o.observation_id);
   for (const o of ctx.fibroscan.observations) citedIds.add(o.observation_id);
+  for (const w of ctx.cie.v33?.witnesses ?? []) citedIds.add(w.witness_id);
   for (const d of ctx.cie.domain_scores) citedIds.add(d.witness_id);
   for (const g of ctx.cie.gate_scores) citedIds.add(g.witness_id);
   for (const r of ctx.cie.sample_responses) citedIds.add(r.response_id);
@@ -175,7 +186,7 @@ Deno.test({
   assertEquals(
     unresolved.length,
     0,
-    `P-2 violations: ${unresolved.length} witness_ids cited but not in witness_objects. ` +
+    `P-2 violations: ${unresolved.length} witness_ids cited but not in a governed source store. ` +
       `First few: ${unresolved.slice(0, 3).join(", ")}`
   );
   },
@@ -203,6 +214,13 @@ Deno.test({
   for (const o of ctx.fibroscan.observations) citedSignals.add(`fibroscan.${o.canonical_name}`);
 
   const unknownSignals: string[] = [];
+  for (const w of ctx.cie.v33?.witnesses ?? []) {
+    const concept = w.concept;
+    if (concept.kind !== "registered" || concept.registryVersion !== cie33Registry.version ||
+        !cie33Registry.registeredConcepts.some(c => c.code === concept.conceptCode)) {
+      unknownSignals.push(`cie.v33:${w.witness_id}`);
+    }
+  }
   for (const s of citedSignals) {
     if (!registrySignals.has(s)) unknownSignals.push(s);
   }

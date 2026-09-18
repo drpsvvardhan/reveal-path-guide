@@ -1,3 +1,4 @@
+import { formatCIE33Evidence, validateCIE33Assessment } from "../_shared/cie33/evidence.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
@@ -624,7 +625,7 @@ Deno.serve(async (req) => {
     // 2. Fetch assessment (still needed for assessment_id on terrain_renders insert)
     let assessmentFilter = supabase
       .from("cie_assessments")
-      .select("id, version, status, full_completed_at")
+      .select("id, version, instrument_version, status, full_completed_at")
       .eq("user_id", user_id)
       .eq("status", "complete")
       .order("created_at", { ascending: false })
@@ -633,7 +634,7 @@ Deno.serve(async (req) => {
     if (assessment_id) {
       assessmentFilter = supabase
         .from("cie_assessments")
-        .select("id, version, status, full_completed_at")
+        .select("id, version, instrument_version, status, full_completed_at")
         .eq("id", assessment_id)
         .eq("user_id", user_id)
         .eq("status", "complete")
@@ -658,7 +659,9 @@ Deno.serve(async (req) => {
     // CIE evidence index is missing or internally inconsistent. This prevents
     // mixed-state renders (e.g. one slide claims 75/75 answered, another says
     // "CIE not done") by short-circuiting before any LLM synthesis runs.
-    const evidenceCheck = validateCieEvidence({
+    const evidenceCheck = assessment.instrument_version === "3.3.0"
+      ? validateCIE33Assessment(assessment, witnessContext.cie.v33)
+      : validateCieEvidence({
       assessment,
       domainScores,
       gateScores,
@@ -741,6 +744,7 @@ Deno.serve(async (req) => {
     const inputData = {
       profile: { first_name: profile.first_name, age: profile.age, sex: profile.sex },
       assessment_id: assessment.id,
+      cie33_state_hash: witnessContext.cie.v33?.state_hash,
       domain_scores: domainScores.map((d) => ({ id: d.domain_id, score: d.final_score })),
       gate_scores: gateScores.map((g) => ({ id: g.gate_id, score: g.score, tl: g.traffic_light })),
       lab_count: labObs.length,
@@ -771,7 +775,11 @@ Deno.serve(async (req) => {
 
     // 6. Build system prompt with cluster context and LLM input
     const systemPrompt = buildTerrainSystemPrompt(clusters);
-    const userMessage = composeUserMessage(profile, domainScores, gateScores, responses, labObs);
+    const userMessage = witnessContext.cie.v33
+      ? formatCIE33Evidence(witnessContext.cie.v33) + "\nOther source-backed measurements: " + JSON.stringify(labObs) +
+        "\nPatient profile: " + JSON.stringify(profile) +
+        "\nRender only what these sources support in the required JSON schema. The Foundation intake is complete; numeric CIE domains and gates are not part of this instrument. Keep unsupported fields explicitly unknown."
+      : composeUserMessage(profile, domainScores, gateScores, responses, labObs);
     const startTime = Date.now();
 
     // 7. Generation loop with dual-audience voice validation

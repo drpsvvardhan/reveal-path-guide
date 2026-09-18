@@ -23,7 +23,8 @@
 //
 // Option M ship-gate properties this enforces (see P1A_STATE_SNAPSHOT.md § 11):
 //   P-1: every observation in context has a witness_id
-//   P-2: every witness_id cited is present in witness_objects
+//   P-2: each legacy witness_id resolves to witness_objects; CIE 3.3 IDs
+//        resolve to hash-verified published cie33_sessions/append-only events.
 //   P-3: no signal appears in context that isn't in witness_signal_registry
 //        for the seed version
 //   P-4: cluster generation completes without errors for VV-001
@@ -35,6 +36,8 @@
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { publishedEvidence, formatCIE33Evidence, type CIE33Evidence } from "./cie33/evidence.ts";
+import type { IntakeState } from "./cie33/engine.ts";
 
 // ============================================================================
 // TUNING CONSTANTS
@@ -77,6 +80,8 @@ export interface PatientTerrainContext {
   };
   cie: {
     has_assessment: boolean;
+    instrument_version?: string;
+    v33?: CIE33Evidence;
     domain_scores: Array<{
       domain_id: string;
       axis: string;
@@ -171,6 +176,8 @@ export interface PatientTerrainContext {
   witness_provenance: {
     registry_seed_version: string;
     total_witnesses: number;
+    cie33_registry_version?: string;
+    latest_cie_capture_timestamp?: string;
     /**
      * Newest biological_timestamp (short date) across ALL admitted witness
      * rows loaded for this patient — every witness class, not just the
@@ -327,6 +334,21 @@ export async function loadPatientContext(
     collection_date: shortDate(w.biological_timestamp),
   }));
 
+  // CIE 3.3 is a distinct, hash-verified source substrate. Never reinterpret
+  // legacy scored witnesses as current v3.3 patient testimony.
+  const { data: currentAssessment, error: assessmentError } = await sb.from("cie_assessments")
+    .select("id, instrument_version").eq("user_id", patientId).eq("status", "complete")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (assessmentError) throw new Error("contextLoader: assessment version could not be verified");
+  let cie33: CIE33Evidence | undefined;
+  if (currentAssessment?.instrument_version === "3.3.0") {
+    const { data: session, error } = await sb.from("cie33_sessions").select("published_state, state")
+      .eq("user_id", patientId).eq("id", currentAssessment.id).single();
+    if (error || !session?.published_state) throw new Error("contextLoader: confirmed CIE 3.3 evidence unavailable");
+    if ((session.state as IntakeState).safety === "handoff_required") throw new Error("CIE33_SAFETY_HANDOFF_REQUIRED");
+    cie33 = publishedEvidence(session.published_state as IntakeState, patientId, currentAssessment.id);
+  }
+
   // ---- Legacy: narrative + prior_patterns (unchanged) -------------------
   // These are not witnessed in P1a per audit. They remain readable from
   // legacy tables and are flagged for sunset in a later phase.
@@ -354,6 +376,8 @@ export async function loadPatientContext(
     sourceWindowCounts[w.source_window] = (sourceWindowCounts[w.source_window] ?? 0) + 1;
   }
 
+  if (cie33) sourceWindowCounts["CIE_v3.3"] = cie33.witnesses.length;
+
   return {
     patient_id: canonicalPatientId,
     profile: {
@@ -362,10 +386,12 @@ export async function loadPatientContext(
       sex: profile?.sex ?? null,
     },
     cie: {
-      has_assessment: hasAssessment,
-      domain_scores: domainScoreEntries,
-      gate_scores: gateScoreEntries,
-      sample_responses: sampleResponses,
+      has_assessment: !!cie33 || hasAssessment,
+      instrument_version: currentAssessment?.instrument_version,
+      v33: cie33,
+      domain_scores: cie33 ? [] : domainScoreEntries,
+      gate_scores: cie33 ? [] : gateScoreEntries,
+      sample_responses: cie33 ? [] : sampleResponses,
     },
     labs: {
       has_observations: labObservations.length > 0,
@@ -407,9 +433,11 @@ export async function loadPatientContext(
     },
     witness_provenance: {
       registry_seed_version: ACTIVE_REGISTRY_SEED_VERSION,
-      total_witnesses: witnesses.length,
+      cie33_registry_version: cie33?.registry_version,
+      latest_cie_capture_timestamp: cie33?.witnesses.map(w => w.captured_at).sort().at(-1),
+      total_witnesses: witnesses.length + (cie33?.witnesses.length ?? 0),
       latest_biological_timestamp: deriveLatestBiologicalTimestamp(witnesses),
-      depth_0_count: witnesses.filter((w) => w.compression_depth === 0).length,
+      depth_0_count: witnesses.filter((w) => w.compression_depth === 0).length + (cie33?.witnesses.length ?? 0),
       depth_1_count: witnesses.filter((w) => w.compression_depth === 1).length,
       depth_2_count: witnesses.filter((w) => w.compression_depth === 2).length,
       source_window_counts: sourceWindowCounts,
@@ -437,7 +465,8 @@ export function compressContextForCritique(context: PatientTerrainContext): stri
   );
   lines.push("");
 
-  if (context.cie.has_assessment) {
+  if (context.cie.v33) lines.push(formatCIE33Evidence(context.cie.v33));
+  if (context.cie.has_assessment && !context.cie.v33) {
     lines.push("## CIE DOMAIN SCORES (witness-backed)");
     lines.push("# format: witness_id|domain_id|axis|score|deep_dive");
     for (const d of context.cie.domain_scores) {

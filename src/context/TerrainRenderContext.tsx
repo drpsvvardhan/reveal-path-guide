@@ -189,7 +189,7 @@ export const TerrainRenderProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(true);
       setError(null);
 
-      if (currentAssessment?.status === "complete") {
+      if (currentAssessment?.status === "complete" && currentAssessment.instrument_version !== "3.3.0") {
         const { data: scoringResult, error: scoringError } = await supabase.functions.invoke("cie-score-assessment", {
           body: { assessment_id: currentAssessment.id },
         });

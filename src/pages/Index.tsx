@@ -7,7 +7,6 @@ import { NarrativeProvider } from "@/context/NarrativeContext";
 import { LabUploadsProvider } from "@/context/LabUploadsContext";
 import { SignatureColorProvider } from "@/context/SignatureColorContext";
 import { OnboardingProvider } from "@/context/OnboardingContext";
-import { IntakeProvider } from "@/context/IntakeContext";
 import { CIEAssessmentProvider } from "@/context/CIEAssessmentContext";
 import { TerrainRenderProvider } from "@/context/TerrainRenderContext";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
@@ -15,7 +14,6 @@ import PatientShell from "@/components/PatientShell";
 
 const Index = () => (
   <ManifestProvider>
-    <IntakeProvider>
       <CIEAssessmentProvider>
         <DocumentProvider>
           <QueueProvider>
@@ -39,7 +37,6 @@ const Index = () => (
           </QueueProvider>
         </DocumentProvider>
       </CIEAssessmentProvider>
-    </IntakeProvider>
   </ManifestProvider>
 );
 

@@ -580,6 +580,7 @@ export type Database = {
         Row: {
           created_at: string
           full_completed_at: string | null
+          instrument_version: string
           id: string
           layer1_completed_at: string | null
           layer2_completed_at: string | null
@@ -593,6 +594,7 @@ export type Database = {
         Insert: {
           created_at?: string
           full_completed_at?: string | null
+          instrument_version?: string
           id?: string
           layer1_completed_at?: string | null
           layer2_completed_at?: string | null
@@ -606,6 +608,7 @@ export type Database = {
         Update: {
           created_at?: string
           full_completed_at?: string | null
+          instrument_version?: string
           id?: string
           layer1_completed_at?: string | null
           layer2_completed_at?: string | null

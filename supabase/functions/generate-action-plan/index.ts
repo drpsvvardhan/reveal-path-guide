@@ -1,3 +1,4 @@
+import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import {
@@ -529,7 +530,7 @@ Deno.serve(async (req) => {
       }));
 
     // 7. Generate sequence explanation using LLM with cluster context + voice validation
-    let sequenceExplanation = "These actions are ordered by leverage — the first ones stabilize the foundation that makes later ones effective. Start with the top action. As it becomes habit, add the next.";
+    let sequenceExplanation = todayActions.length ? "Review these suggested actions with your care team before making changes." : "No actions were matched to the currently available evidence. Your intake remains available for discussion with your care team.";
     let voiceValidationStatus: string | null = null;
     let voiceValidationWarnings: VocabularyViolation[] | null = null;
 
@@ -560,8 +561,8 @@ Tier-licensed vocabulary rules: ${tierVocabSummary}
 
 Globally forbidden phrases: ${FORBIDDEN_VOCABULARY_GLOBAL.slice(0, 10).join(', ')}...
 
-Actions:\n${actionSummary}${clusterContext}`
-            : `Your previous attempt had vocabulary violations. Fix them and regenerate.\n\n${buildRetryFeedback(lastViolations)}\n\nActions:\n${actionSummary}${clusterContext}`;
+Actions:\n${actionSummary}${clusterContext}${formatCIE33Evidence(witnessContext.cie.v33)}`
+            : `Your previous attempt had vocabulary violations. Fix them and regenerate.\n\n${buildRetryFeedback(lastViolations)}\n\nActions:\n${actionSummary}${clusterContext}${formatCIE33Evidence(witnessContext.cie.v33)}`;
 
           const llmRes = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -665,7 +666,7 @@ Actions:\n${actionSummary}${clusterContext}`
     });
 
     if (insertError) {
-      console.error("Failed to persist action plan:", insertError);
+      throw new Error("Failed to persist action plan");
     }
 
     return new Response(
