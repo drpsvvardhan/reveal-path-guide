@@ -80,6 +80,14 @@ At the initial rollout above, clinical/psychometric validity was not established
 
 ## Clinician workflow follow-up — release verification pending
 
+### Reconciliation of parallel managed changes
+
+Lovable's branch `8320e1d0a862c42265827f72ef2b81b84cc9fdc5` applied `0002_patient_review_notice_invoker_security.sql` while GitHub PR #5 introduced a different migration numbered `0002`. Production's migration ledger confirms that the notice security migration was applied. Its exact file and snapshot are preserved; the still-pending consistency migration is renumbered to `0003_clinician_review_consistency.sql`, after the applied journal entry. Both branches are retained as merge ancestry.
+
+The integrated UI retains PR #5's permission-aware navigation and owner-only notice endpoint, which already cover the parallel branch's route and notice work. The parallel branch's timestamp fix is retained: review screens use the server-accepted answer time. Its earlier reported live rehearsal and scan do not substitute for live verification of the final merged code and consistency migration.
+
+Reconciliation verification: **399 tests passed across 34 files**. The suite now applies the exact production notice-security migration before the pending consistency migration, and verifies direct column-level privacy, cross-patient notice isolation and server-accepted timestamps. The preserved security migration's SHA-256 matches the production ledger (`e7371fc10df5e3f67a90ebcc8ba77719cdfcc82a408471e37f4304dd452338c0`); the live notice view reports `security_invoker=on`.
+
 The clinician workflow started in commit `a180d024`. The initial managed authority migration exists in production, but the interrupted build did not establish that the complete UI/function release or its live checks finished. Do not treat the historical security-scan and live-test results above as verification of this follow-up.
 
 The completed code provides:

@@ -57,7 +57,7 @@ function safetyDetail(state: IntakeState) {
     prompt: e.question.promptRendered,
     window: e.question.temporal?.range?.anchorText ?? null,
     answer: answerText(e),
-    submitted_at: e.answer.submittedAt,
+    submitted_at: e.answer.acceptedAt,
     supersedes: e.supersedes ?? null,
   }));
 }
@@ -190,7 +190,7 @@ Deno.serve(async (req: Request) => {
               safety_witness_id: safety?.witness.id ?? null,
               safety_prompt: safety?.question.promptRendered ?? null,
               safety_answer: answerText(safety),
-              safety_answered_at: safety?.answer.submittedAt ?? null,
+              safety_answered_at: safety?.answer.acceptedAt ?? null,
               updated_at: row.updated_at,
             };
           }),

@@ -228,7 +228,8 @@ beforeAll(async () => {
       "utf8",
     ),
   );
-  await db.exec(readFileSync("drizzle/migrations/0002_clinician_review_consistency.sql", "utf8"));
+  await db.exec(readFileSync("drizzle/migrations/0002_patient_review_notice_invoker_security.sql", "utf8"));
+  await db.exec(readFileSync("drizzle/migrations/0003_clinician_review_consistency.sql", "utf8"));
 }, 60000);
 
 beforeEach(async () => {
@@ -660,6 +661,21 @@ describe("access control on review records", () => {
       await db.query("select * from public.cie33_safety_review_notices")
     ).rows;
     expect(theirs).toHaveLength(0);
+  });
+
+  it("allows only owner-scoped notice columns and refuses private clinical columns", async () => {
+    await grant();
+    const held = await seedHeldSession();
+    await submit({ held });
+    await role("authenticated", patient);
+    for (const column of ["rationale", "assessment_note", "clinician_user_id", "request_hash"]) {
+      await expect(db.query(`select ${column} from public.cie33_safety_reviews`)).rejects.toThrow(/permission denied/i);
+    }
+    expect((await db.query("select patient_instructions from public.cie33_safety_reviews")).rows).toHaveLength(1);
+    await role("authenticated", other);
+    expect((await db.query("select patient_instructions from public.cie33_safety_reviews")).rows).toHaveLength(0);
+    await role("anon", patient);
+    await expect(db.query("select patient_instructions from public.cie33_safety_reviews")).rejects.toThrow(/permission denied/i);
   });
 
   it("lets a clinician read their own grants but not another clinician's", async () => {
