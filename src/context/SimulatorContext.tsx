@@ -389,32 +389,17 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [refresh]);
 
+  // Stopping is the patient's own decision and always goes through.
   const abandonExperiment = useCallback(async (experimentId: string) => {
-    await supabase
-      .from("simulator_experiments")
-      .update({ status: "abandoned", ended_at: new Date().toISOString() })
-      .eq("id", experimentId);
-    await refresh();
-  }, [refresh]);
+    setError(null);
+    await advancePhase(experimentId, "stopped", "patient_stopped");
+  }, [advancePhase]);
 
+  // The replication requirement is enforced in the database, not here.
   const graduateExperiment = useCallback(async (experimentId: string) => {
-    // Replication gate: refuse to graduate unless the learning has cycle_count ≥ 2.
-    const relevant = learnings.filter((l) => l.experiment_id === experimentId);
-    const totalCycles = relevant.reduce((n, l) => n + (l.cycle_count ?? 1), 0);
-    if (totalCycles < 2) {
-      setError("Graduation requires a replicated cycle. Run another cycle of the same protocol first.");
-      return;
-    }
-    await supabase
-      .from("simulator_experiments")
-      .update({ status: "graduated", ended_at: new Date().toISOString() })
-      .eq("id", experimentId);
-    await supabase
-      .from("simulator_learnings")
-      .update({ graduated: true, learning_status: "replicated" })
-      .eq("experiment_id", experimentId);
-    await refresh();
-  }, [refresh]);
+    setError(null);
+    await advancePhase(experimentId, "graduated");
+  }, [advancePhase]);
 
   return (
     <SimulatorContext.Provider
