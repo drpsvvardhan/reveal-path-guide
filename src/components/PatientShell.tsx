@@ -4,8 +4,9 @@ import { useManifest } from "@/context/ManifestContext";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
 import { NavigationProvider } from "@/context/NavigationContext";
-import { LogOut, ChevronDown, Users, ArrowLeft, Settings } from "lucide-react";
+import { LogOut, ChevronDown, Users, ArrowLeft, Settings, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import DesktopNav from "@/components/navigation/DesktopNav";
 import MobileNav from "@/components/navigation/MobileNav";
 import ManifestSwitcher from "@/components/ManifestSwitcher";
@@ -70,7 +71,25 @@ const PatientShell: React.FC = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [viewAsDialogOpen, setViewAsDialogOpen] = useState(false);
   const [viewAsTarget, setViewAsTarget] = useState<string | undefined>(undefined);
+  const [hasReviewAuthority, setHasReviewAuthority] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user?.id) { setHasReviewAuthority(false); return; }
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("clinician_patient_authorizations")
+        .select("id")
+        .eq("clinician_user_id", user.id)
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .limit(1);
+      if (active) setHasReviewAuthority((data?.length ?? 0) > 0);
+    })();
+    return () => { active = false; };
+  }, [user?.id]);
+
 
   useEffect(() => {
     if (flagLoaded && homeEnabled && !userNavigatedRef.current) {
@@ -173,6 +192,30 @@ const PatientShell: React.FC = () => {
                         >
                           <Users className="h-3.5 w-3.5 text-muted-foreground" />
                           All profiles
+                        </Link>
+                        <Link
+                          to="/admin/clinician-authority"
+                          onClick={() => setProfileOpen(false)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                          Clinical review authority
+                        </Link>
+                      </div>
+                    )}
+
+                    {/* Only shown to someone who actually holds review authority
+                        for at least one patient. Admin role alone shows nothing. */}
+                    {hasReviewAuthority && (
+                      <div className="border-b border-border py-1">
+                        <p className="px-3 py-1 text-[10px] text-muted-foreground font-sans uppercase tracking-wider">Clinician</p>
+                        <Link
+                          to="/clinician/safety-review"
+                          onClick={() => setProfileOpen(false)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-sans text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                          Paused intakes for review
                         </Link>
                       </div>
                     )}

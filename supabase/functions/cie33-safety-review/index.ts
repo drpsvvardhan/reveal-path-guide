@@ -57,7 +57,7 @@ function safetyDetail(state: IntakeState) {
     prompt: e.question.promptRendered,
     window: e.question.temporal?.range?.anchorText ?? null,
     answer: answerText(e),
-    submitted_at: e.answer.submittedAt,
+    submitted_at: e.answer.acceptedAt,
     supersedes: e.supersedes ?? null,
   }));
 }
@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
               safety_witness_id: safety?.witness.id ?? null,
               safety_prompt: safety?.question.promptRendered ?? null,
               safety_answer: answerText(safety),
-              safety_answered_at: safety?.answer.submittedAt ?? null,
+              safety_answered_at: safety?.answer.acceptedAt ?? null,
               updated_at: row.updated_at,
             };
           }),
@@ -305,6 +305,40 @@ Deno.serve(async (req: Request) => {
           400,
           cors,
         );
+
+      // A retry of a request that already succeeded must return what was
+      // recorded, not a conflict. The intake has moved on by then, so this
+      // replay check has to run before the compare-and-set below.
+      const { data: recorded } = await db
+        .from("cie33_safety_reviews")
+        .select("id, disposition, session_id, patient_user_id")
+        .eq("clinician_user_id", clinician)
+        .eq("request_id", requestId)
+        .maybeSingle();
+      if (recorded) {
+        if (
+          recorded.session_id !== sessionId ||
+          recorded.patient_user_id !== patient
+        )
+          return jsonResponse(
+            {
+              error: "idempotency_conflict",
+              message:
+                "This request ID was already used for a different review.",
+            },
+            409,
+            cors,
+          );
+        return jsonResponse(
+          {
+            review: { review_id: recorded.id, replayed: true },
+            disposition: recorded.disposition,
+            note: "This disposition was already recorded. Nothing was changed.",
+          },
+          200,
+          cors,
+        );
+      }
 
       const { data: row, error } = await db
         .from("cie33_sessions")

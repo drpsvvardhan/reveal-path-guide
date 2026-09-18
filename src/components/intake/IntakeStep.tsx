@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import CIE33Review from "./CIE33Review";
+import SafetyRecheckNotice from "./SafetyRecheckNotice";
 import { currentEntries, MISSING_LABELS } from "@/lib/cie33Presentation";
 import type {
   SemanticResponse,
@@ -120,6 +121,9 @@ export default function IntakeStep({
           You are viewing this patient's intake. Only the patient can answer for
           themselves.
         </p>
+      )}
+      {!loading && state?.safety === "recheck_required" && (
+        <SafetyRecheckNotice sessionId={state.id} />
       )}
       {loading ? (
         <Loader2 aria-label="Loading" className="animate-spin" />

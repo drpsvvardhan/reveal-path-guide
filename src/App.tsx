@@ -13,6 +13,8 @@ import ClinicalShare from "./pages/ClinicalShare.tsx";
 import AdminReviewQueue from "./pages/AdminReviewQueue.tsx";
 import AdminProfiles from "./pages/AdminProfiles.tsx";
 import AdminAccounts from "./pages/AdminAccounts.tsx";
+import AdminClinicianAuthority from "./pages/AdminClinicianAuthority.tsx";
+import ClinicianSafetyReview from "./pages/ClinicianSafetyReview.tsx";
 import Account from "./pages/Account.tsx";
 import ManifestPreview from "./pages/ManifestPreview.tsx";
 import { Loader2 } from "lucide-react";
@@ -82,6 +84,9 @@ const App = () => (
               <Route path="/admin/review-queue" element={<AdminRoute><AdminReviewQueue /></AdminRoute>} />
               <Route path="/admin/profiles" element={<AdminRoute><AdminProfiles /></AdminRoute>} />
               <Route path="/admin/accounts" element={<AdminRoute><AdminAccounts /></AdminRoute>} />
+              <Route path="/admin/clinician-authority" element={<AdminRoute><AdminClinicianAuthority /></AdminRoute>} />
+              {/* Authority is enforced server-side per patient; admins are not clinicians. */}
+              <Route path="/clinician/safety-review" element={<ProtectedRoute><ClinicianSafetyReview /></ProtectedRoute>} />
               <Route path="/manifest-preview" element={<ManifestPreview />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

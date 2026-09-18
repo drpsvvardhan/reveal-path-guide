@@ -77,3 +77,30 @@ Completed on 2026-09-18, in this order:
 Rollback is a coordinated application/function rollback. Preserve the additive v3.3 tables and event history; do not delete or reinterpret patient answers to roll back a UI. An older loader must not silently treat a v3.3 assessment as scored v2.2.
 
 Still outstanding, unchanged by this rollout: clinical/psychometric validity is not established, and this release has no clinician clearance endpoint — an operational care-team handoff workflow must be supplied separately before relying on the safety hold for clinical triage.
+
+## Clinician review of a safety hold (2026-09-18)
+
+A safety hold still cannot be cleared by the patient, and nothing about this workflow is a clinical validation claim. What it adds is a documented, audited path for a named clinician to permit a paused questionnaire to continue.
+
+### How authority works
+
+- An administrator grants authority for **one patient at a time**, with a credential-review reference, a written attestation of who verified that credential, and an expiry of at most 365 days. Grants are revocable, and every grant and revocation is recorded in `clinician_authorization_audit`.
+- An administrator cannot grant authority to their own account, and nobody can review their own intake. Holding the admin role is not review authority.
+- No real account was granted authority during this rollout. Setup: sign in as an administrator, open **Account menu → Clinical review authority** (`/admin/clinician-authority`), and record the clinician, the patient, the credential reference, the attestation and the expiry. Clinicians who hold at least one live grant then see **Paused intakes for review** (`/clinician/safety-review`).
+
+### What a review can and cannot do
+
+- Dispositions are `keep_hold` or `permit_resumption`. Both require the encounter time, an assessment note, a rationale and follow-up instructions for the patient, and both are written to the immutable, attributed `cie33_safety_reviews` table.
+- `permit_resumption` is permission to continue the questionnaire. It is not a finding that there is no risk. The patient's original positive answer is retained forever; a fresh, linked safety question is issued and only the patient can answer it. A fresh positive — or leaving it unanswered — restores the hold.
+- Patients read only the notice written for them (disposition, encounter time, instructions) through `cie33_safety_review_notices`. Assessment notes, rationale and clinician identity are not granted to patients at column level, so a direct query is refused.
+- Writes go through the service-only `cie33_submit_safety_review` routine: row lock, compare-and-set on revision and state hash, authority recheck, and idempotent replay of a retried request ID.
+
+### Evidence
+
+Migrations `drizzle/migrations/0001_clinician_review_authority.sql` and `0002_patient_review_notice_invoker_security.sql`. Functions deployed: `clinician-authorization`, `cie33-safety-review`, `cie-v33`.
+
+Tests: `npx vitest run` — 381 passed (engine review semantics 9, PostgreSQL/RLS/transaction 19, clinician screen 5). Typecheck and build clean. Security scan shows no new findings; the previous Security Definer View error was resolved by migration 0002.
+
+Live rehearsal on three throwaway synthetic accounts (patient, second patient, clinician) confirmed: hold on a positive answer; queue refused before a grant (403) and after revocation (403); self-grant refused; another patient's intake refused for both detail and submit; keep-hold recorded; permit recorded with the fresh question issued and the original answer retained; a retried request ID replayed the recorded review instead of conflicting; a stale revision rejected (409); fresh positive answer restored the hold; grant and revocation both present in the audit trail; patient could read the notice but not the private notes. All rehearsal accounts and their data were then deleted. One real completed v3.3 intake and 26 assessments remain untouched.
+
+Outstanding: clinical and psychometric validity remain unestablished, and the workflow assumes an out-of-band clinical encounter — the app does not contact anyone on the patient's behalf.
