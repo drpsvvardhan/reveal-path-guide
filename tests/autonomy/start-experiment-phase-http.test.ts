@@ -235,8 +235,18 @@ describe("starting is re-admitted at the moment of starting", () => {
     expect((await res.json()).admission.scope).toBe("cie_safety_handoff");
   });
 
+  async function attachSourceCard(cardId: string) {
+    const experiment = db.tables.simulator_experiments[0];
+    experiment.source_card_id = cardId;
+    // The experiment's source reference is part of the executable content, so
+    // the recorded hash is recomputed here — this test is about the card's
+    // current verdict, not about content drift.
+    db.tables.simulator_experiment_protocols[0].executable_sha256 =
+      await executableContentHash({ proposal, experiment });
+  }
+
   it("does not start a plan whose source suggestion has since been held", async () => {
-    db.tables.simulator_experiments[0].source_card_id = "card-held";
+    await attachSourceCard("card-held");
     const res = await post({ experiment_id: "exp-1", target_phase: "run_in" });
     expect(res.status).toBe(403);
     expect((await res.json()).admission.scope).toBe("source_suggestion_held");
@@ -244,7 +254,7 @@ describe("starting is re-admitted at the moment of starting", () => {
   });
 
   it("refuses a source suggestion that belongs to somebody else", async () => {
-    db.tables.simulator_experiments[0].source_card_id = "card-foreign";
+    await attachSourceCard("card-foreign");
     const res = await post({ experiment_id: "exp-1", target_phase: "run_in" });
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe("source_card_not_found");
