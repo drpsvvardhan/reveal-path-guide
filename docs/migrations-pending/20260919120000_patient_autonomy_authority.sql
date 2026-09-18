@@ -1,13 +1,11 @@
 -- ============================================================================
 -- Patient Reveal — patient autonomy with server-held clinical authority
 -- ----------------------------------------------------------------------------
--- STATUS: NOT APPLIED. This is the next ordered managed migration after 0004
--- (0005). It is held here deliberately: this project's migration tool applies
--- SQL in the same call that generates the journal entry and snapshot, and this
--- task is explicitly "no production apply before independent review". At
--- deployment time this exact file is passed to the migration tool byte-for-byte
--- so generation and application happen atomically, and the journal/snapshot
--- lineage continues from 0004 without a collision.
+-- STATUS: APPLIED on 2026-09-18 as
+-- drizzle/migrations/0005_patient_autonomy_authority.sql.
+-- This file retains the independently reviewed proposal for audit history.
+-- The managed migration is canonical and is used by the regression tests.
+-- Historical managed migrations 0000-0004 and their journal were preserved.
 --
 -- What it changes, and why:
 --   Patients keep every read and every genuinely patient-owned action. What

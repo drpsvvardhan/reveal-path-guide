@@ -170,6 +170,10 @@ Applied to this project's managed backend only, from merged main
   failure was a test fixture, not the product: a seeded statement row was rejected by the
   existing `biotwin_statements_authority_valid` check constraint. Patient writes to that
   table are refused at the grant level for every row, which the live run confirmed.
+  A subsequent independent live PostgreSQL probe used a valid fixture: its synthetic
+  authenticated owner could read the row and could not update truth/authority.
+  That probe passed and rolled back every synthetic row. The HTTP run remains
+  recorded as 72/73; the missed fixture case is covered by this additional SQL check.
 - What the live run proved: owner reads and self-logging work; a second account can neither
   read a plan nor attach an observation to it; release permission, attestation, statement
   truth status, card `patient_safe`, protocol admission, parent experiment phase and derived

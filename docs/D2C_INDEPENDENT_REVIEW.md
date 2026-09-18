@@ -84,3 +84,33 @@ From merged main `0adddccc271e8ea512ca609e46d4b0d477f0df55` (reviewed implementa
 A successful build and a passing live run are not evidence of clinical validation. Human
 clinical validity remains **NOT_ESTABLISHED**, and this release closes no unrelated security
 finding.
+
+
+## Independent post-release closeout
+
+The public custom domain served `/assets/index-DMUQCd7c.js`, whose SHA-256 is
+`149e70d4c11cf9132baf38a8f778aa949e9e68c9e5502d0777f9626a73af66e7`.
+The served bundle contains the saved-content download, checked activation controls,
+and patient-selectable plan catalogue. This confirms the published frontend,
+not only the preview.
+
+The single fixture failure above was resolved independently against the live
+managed PostgreSQL database. A valid synthetic statement with
+`clinical_authority='patient_facing'` was inserted in a rollback-only subtransaction.
+Under the authenticated role and its synthetic owner identity, the statement was
+readable and changing truth/authority was denied. The fixture was then rolled back.
+The database returned PASS, with the original 4 reports and 443 statements still
+present. This supplements the 72 successful signed-in HTTP checks; it does not
+claim a rerun of the entire HTTP harness. See `scripts/verify-autonomy-statement.sql`.
+
+Independent live permission inspection also confirmed all twelve examined
+protected columns deny patient updates, their tables deny patient insert/delete,
+and all four admission/comparison/graduation RPCs deny authenticated execution
+while permitting the service role. Owner report/statement/submission reads,
+observation insert/correction and suggestion dismissal remain granted. No broad
+ALL policy remains on the four reported tables.
+
+The managed migration preserves the reviewed executable SQL, adding an idempotent
+trigger replacement. Regression tests now load the actual managed 0005 migration.
+The two Deno compatibility changes are type assertions only. No further runtime
+change or production data modification was needed for this closeout.

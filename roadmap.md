@@ -38,3 +38,12 @@
 - [ ] Open: authenticated read exposure of RAE engine configuration tables and witness_signal_registry
 - [ ] Open: dependency audit — 12 affected package nodes (10 high, 1 moderate, 1 low) in the unchanged lockfile
 - [ ] Human clinical validity remains NOT_ESTABLISHED
+
+
+Patient autonomy post-release verification: the public custom-domain bundle was
+confirmed independently. The one live-test fixture failure was covered by a
+corrected rollback-only PostgreSQL owner-read/protected-write probe, which passed
+without retaining test data. Twelve protected column permissions and four
+service-only RPCs were independently checked. Existing dependency/security
+backlog and NOT_ESTABLISHED clinical validity are unchanged. See
+`docs/D2C_INDEPENDENT_REVIEW.md` for evidence and limits.
