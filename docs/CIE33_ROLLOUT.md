@@ -40,8 +40,12 @@ The general emergency wording follows [NIMH's urgent-help guidance](https://www.
 - Full application suite after integration: **329 passed, one existing failure**, `src/lib/ppe/comparator.test.ts`, “POSSIBLE_SIGNAL when direction matches but overlap is high.” The same failure existed before this change; it was not altered here.
 - Production Vite build passed. Application TypeScript check passed. Deno checked the new engine and evidence modules.
 - PostgreSQL tests run the exact migration in PGlite against a minimal fixture of the pre-existing assessment/auth contract; these are not a claim that the complete production migration history has been replayed.
-- Complete Edge HTTP/live-model calls were not run against production. The local Deno endpoint check could not fetch the existing SDK from `esm.sh` because the environment refused that connection.
+- Live authenticated Edge round trip on `qvkekmdzgjgfaiyboozo` (2026-09-18): two isolated synthetic accounts, no real patient record touched. Executed against the deployed `cie-v33`: consent/start, 34 answered questions including one explicit `unknown` missingness answer, duplicate retry with a reused `request_id` (same revision returned, no second entry), pause, resume, review/finish, and two corrections that superseded the prior `nicotine` witnesses while retaining them in history. A second synthetic account answered the locked immediate-safety sentinel positively and entered `safety_hold`; a subsequent `start` returned the held session with no next question and could not self-clear. Unauthenticated call returned 401. Cross-patient read of another subject's session returned `state: null`.
+- Live consumer checks on the same backend: `generate-ask-anything-context` returned 200 with suggestions grounded only in v3.3 witnesses; `patient-chat` returned 200 with prose derived from the confirmed intake and witness-only grounding refs; `generate-terrain-render` returned 200 (`voice_validation_status: passed`, version 1) from v3.3 evidence with no fabricated v2.2 domain/gate scores. Legacy inventory after the migration: 25 `2.2.0` assessments unchanged.
 - Browser visual inspection could not connect to the local preview (`ERR_BLOCKED_BY_CLIENT`). React DOM interaction tests passed. An isolated synthetic visual fixture is included for reviewer use; it does not call the live backend.
+- Managed security scan after deployment: no new findings (two pre-existing `SECURITY DEFINER` advisories, previously dismissed, unchanged).
+- Open item observed during verification, not introduced by the migration: `generate-ask-anything-context` suggestion text can echo raw `witness_id` values to the patient. This is prompt-level and should be fixed separately.
+
 
 Reproduce:
 
