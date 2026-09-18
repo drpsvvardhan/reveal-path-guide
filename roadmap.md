@@ -43,9 +43,19 @@
 ## Upload extraction + clinician walkthrough (Sep 18, 2026)
 - [x] Duplicate-upload guard fixed so a file that produced no results can be re-read
 - [x] process-lab-pdf and process-fibroscan deployed with the fix
-- [ ] Run Vishnu's two real lab PDFs through the live pipeline and report extracted values, conditions, safety flags
-- [ ] Confirm the stuck "Processing" card resolves (no hanging spinner)
-- [ ] New extraction-detail page: per-document values/conditions found plus what was skipped (detailed view for owner/admin, plain-language view for patients)
+- [x] Root cause of the hanging spinner: DB check constraints rejected the
+      identity-confirmation statuses the processors write. Migration
+      `0006_allow_upload_identity_confirmation_states.sql` widened
+      `patient_lab_uploads_status_check` and
+      `patient_lab_uploads_name_match_status_check`; types regenerated.
+- [x] Both real lab PDFs processed live on the owner account: Nov 20 2025 panel
+      99 values read (9 new), Dec 23 2025 heart panel 21 values read (4 new).
+      The two stuck `processing` rows were removed.
+- [x] New "What each file gave us" page (`ExtractionSection`): per-file values
+      the Twin reasons with vs. read-but-unrecognised, paged read so a full
+      history is not truncated, markers deduped per draw.
+- [ ] Only 105 of 1028 extracted markers carry a canonical concept binding —
+      ontology coverage is the real extraction gap to close next.
 - [ ] Wire extracted biomarkers and conditions into the CIE 3.3 recheck so labs affect the safety verdict
 - [ ] Clinician review walkthrough on the real account: authorize clinician Vishnu Vardhan, submit review, confirm hold + fresh sentinel, revoke grant
 
