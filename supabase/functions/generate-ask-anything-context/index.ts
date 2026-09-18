@@ -89,6 +89,12 @@ The patient's full terrain context is provided. Generate exactly 4 questions tha
 - Are each under 25 words
 - Never use words like "optimize", "biohack", "wellness", "holistic", "journey" (in the wellness sense)
 
+ABSOLUTE OUTPUT RULE — internal identifiers are forbidden in question text:
+- Never include any ID, UUID, hash, hex fragment, or database field name. Never write "witness_id", "witness id", "packet_id", "observation_id", "assessment_id", "user_id", "concept_id", "session_id", "sha256", "state_hash", "registry_seed_version", or any similar internal term.
+- Never include citation or template markers such as {cluster:...}, [[ref]], or <placeholder>.
+- Refer to findings only by their human name and value (for example "your ApoB at 128 mg/dL"), never by any identifier.
+- A question containing an identifier is discarded entirely, so write it cleanly the first time.
+
 Return JSON: { "questions": ["q1", "q2", "q3", "q4"] }`;
 
 Deno.serve(async (req) => {
