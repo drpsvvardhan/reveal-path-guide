@@ -1,4 +1,5 @@
 import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
+import { sanitizeSuggestedQuestions } from "../_shared/patientQuestionGuard.ts";
 // Using built-in Deno.serve (no remote std import) — std@0.168.0 was returning 500 from the bundler.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
@@ -144,7 +145,12 @@ Deno.serve(async (req) => {
     const cacheKey = `${user_id}::${effectiveAssessmentId || "none"}::${terrainVersion}`;
     const cached = cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return new Response(JSON.stringify(cached.data), {
+      // Guard cached payloads as well: a response cached before this guard
+      // existed must never reach a patient with internal identifiers.
+      const cachedData = cached.data as { suggested_questions?: unknown };
+      const cachedGuard = sanitizeSuggestedQuestions(cachedData?.suggested_questions);
+      const safeCached = { ...(cachedData as Record<string, unknown>), suggested_questions: cachedGuard.questions };
+      return new Response(JSON.stringify(safeCached), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -364,10 +370,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fallback
-    if (suggestedQuestions.length === 0) {
-      suggestedQuestions = ["Tell me what I should be paying attention to right now"];
+    // Deterministic final-output guard: validate every question as a non-empty
+    // string and drop any that carries an internal identifier or technical
+    // marker. Witness grounding and evidence IDs are untouched internally.
+    const guard = sanitizeSuggestedQuestions(suggestedQuestions);
+    if (guard.dropped > 0 || guard.usedFallback) {
+      console.warn("suggested_questions guard:", JSON.stringify({ dropped: guard.dropped, used_fallback: guard.usedFallback }));
     }
+    suggestedQuestions = guard.questions;
 
     const result = {
       biomarker_chips: {
