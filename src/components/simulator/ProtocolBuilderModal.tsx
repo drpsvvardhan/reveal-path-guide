@@ -46,6 +46,8 @@ interface Props {
   submitting: boolean;
   /** The server's decision, once it has answered. */
   admission?: ServerAdmission | null;
+  /** The server's own wording when something did not go through. */
+  serverMessage?: string | null;
   onClose: () => void;
   onConfirm: (payload: any) => Promise<void>;
 }
@@ -56,6 +58,7 @@ export default function ProtocolBuilderModal({
   template = null,
   submitting,
   admission = null,
+  serverMessage = null,
   onClose,
   onConfirm,
 }: Props) {
@@ -302,6 +305,13 @@ export default function ProtocolBuilderModal({
                 This is your own idea, so it is saved as a proposal you can read, edit and ask
                 questions about. Ready-made plans can be started straight away.
               </span>
+            </div>
+          )}
+
+          {serverMessage && !admission && (
+            <div className="rounded-lg border border-amber-400/40 bg-amber-400/5 p-3 text-xs text-amber-800 flex items-start gap-2">
+              <Info className="h-4 w-4 shrink-0 mt-0.5" />
+              <span className="break-words">{serverMessage}</span>
             </div>
           )}
 
