@@ -125,8 +125,9 @@ beforeEach(async () => {
           admission_verdict: "BLOCK",
           patient_safe: false,
           safety_flags: ["unresolved_anaemia"],
+          updated_at: "2026-01-01T00:00:00+00:00",
         },
-        { id: "card-foreign", user_id: other, admission_verdict: "ADMIT", patient_safe: true, safety_flags: [] },
+        { id: "card-foreign", user_id: other, admission_verdict: "ADMIT", patient_safe: true, safety_flags: [], updated_at: "2026-01-01T00:00:00+00:00" },
       ],
     },
     async (name, args) => {

@@ -26,7 +26,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0
 import { loadPatientContext } from "../contextLoader.ts";
 import { derivePatientGuards } from "../aae/patientGuards.ts";
 import type { AdmissionContext } from "./actionPolicy.ts";
-import { sha256Hex } from "./protocolContent.ts";
+
 
 export interface LoadedAdmissionContext extends AdmissionContext {
   /** Fingerprint of everything the decision was computed from (for CAS). */
@@ -93,14 +93,16 @@ export async function loadAdmissionContext(
   };
 
   try {
-    const [terrain, cie33] = await Promise.all([
-      loadPatientContext(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        userId,
-      ),
-      readCie33SafetyState(service, userId),
-    ]);
+    const before = await service.rpc("simulator_admission_fingerprint", { p_user_id: userId });
+    if (before.error || typeof before.data !== "string") throw new Error("Admission snapshot unavailable");
+    const cie33 = await readCie33SafetyState(service, userId);
+    empty.cieSafetyHold = cie33.hold;
+    empty.cieRecheckPending = cie33.recheckPending;
+    const terrain = await loadPatientContext(
+      Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, userId,
+    );
+    const after = await service.rpc("simulator_admission_fingerprint", { p_user_id: userId });
+    if (after.error || after.data !== before.data) throw new Error("Admission context changed during assessment");
 
     const { biomarkers, flags } = derivePatientGuards(terrain);
     const sources = {
@@ -112,15 +114,7 @@ export async function loadAdmissionContext(
       cie33_sessions_inspected: cie33.inspected,
     };
 
-    const fingerprint = `sha256:${await sha256Hex(
-      JSON.stringify({
-        biomarkers: [...biomarkers].sort(),
-        flags: [...flags].sort(),
-        cie_safety_hold: cie33.hold,
-        cie_recheck_pending: cie33.recheckPending,
-        sources,
-      }),
-    )}`;
+    const fingerprint = before.data;
 
     return {
       biomarkers: [...biomarkers],

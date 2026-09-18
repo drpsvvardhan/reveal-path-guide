@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { admitExperiment } from "../aae/experimentAdmission.ts";
+import { canonicalProtocolContent } from "./protocolContent.ts";
 
 export type ActionVerdict = "ADMIT" | "ADMIT_WITH_REVIEW" | "BLOCK";
 
@@ -401,7 +402,6 @@ export function collectProposalText(p: ProposalForReview): string {
     p.rationale ?? "",
     p.hypothesis_question ?? "",
     p.perturbation_category ?? "",
-    p.patient_note ?? "",
   ];
   const walk = (value: unknown) => {
     if (value == null) return;
@@ -491,7 +491,7 @@ export function buildCanonicalAction(req: CanonicalActionRequest): CanonicalActi
   // 1. Parameters: only the template's own fields, strictly typed and bounded.
   const supplied = (req.intervention ?? {}) as Record<string, unknown>;
   for (const key of Object.keys(supplied)) {
-    if (!template.fields[key]) {
+    if (!Object.hasOwn(template.fields, key)) {
       problems.push(`"${key.replace(/_/g, " ")}" is not part of this ready-made plan.`);
     }
   }
@@ -542,13 +542,17 @@ export function buildCanonicalAction(req: CanonicalActionRequest): CanonicalActi
   if (!ALLOWED_CADENCES.has(cadence)) problems.push("That logging rhythm is not one we support.");
 
   // 3. Duration: inside the template's own window.
-  const days = exactNumber(req.intervention_days) ?? template.minInterventionDays;
+  const parsedDays = exactNumber(req.intervention_days);
+  if (req.intervention_days != null && (parsedDays == null || !Number.isInteger(parsedDays))) problems.push("Plan days must be a whole number.");
+  const days = parsedDays ?? template.minInterventionDays;
   if (days < template.minInterventionDays || days > template.maxInterventionDays) {
     problems.push(
       `This plan runs between ${template.minInterventionDays} and ${template.maxInterventionDays} days.`,
     );
   }
-  const runIn = exactNumber(req.run_in_days) ?? 0;
+  const parsedRunIn = exactNumber(req.run_in_days);
+  if (req.run_in_days != null && (parsedRunIn == null || !Number.isInteger(parsedRunIn))) problems.push("Settling-in days must be a whole number.");
+  const runIn = parsedRunIn ?? 0;
   if (runIn < 0 || runIn > template.maxRunInDays) {
     problems.push(`The settling-in period for this plan is at most ${template.maxRunInDays} days.`);
   }
@@ -602,7 +606,8 @@ export function matchesCanonicalAction(p: ProposalForReview): { ok: boolean; pro
   });
   if (!rebuilt.ok || !rebuilt.proposal) return { ok: false, problems: rebuilt.problems };
   const strip = (x: ProposalForReview) => ({ ...x, patient_note: null, confidence: null, predicted_deltas: [] });
-  const same = JSON.stringify(strip(rebuilt.proposal)) === JSON.stringify(strip(p));
+  const same = canonicalProtocolContent(strip(rebuilt.proposal)) === canonicalProtocolContent(strip(p))
+    && rebuilt.proposal.rationale === p.rationale;
   return {
     ok: same,
     problems: same ? [] : ["This plan's content no longer matches the ready-made plan it claims to be."],
@@ -651,9 +656,9 @@ export function assessProposal(p: ProposalForReview, ctx: AdmissionContext): Act
     const norm = (outcome.name ?? "").toLowerCase().replace(/[\s_]+/g, "");
     const bound = [...biomarkers].some((b) => {
       const bn = b.toLowerCase().replace(/[\s_]+/g, "");
-      return bn === norm || bn.includes(norm) || norm.includes(bn);
+      return Boolean(norm && bn && bn === norm);
     });
-    if (!bound && norm) unbound_outcomes.push(outcome.name);
+    if (!bound) unbound_outcomes.push(outcome.name || "unnamed outcome");
   }
 
   const base = {
@@ -668,7 +673,7 @@ export function assessProposal(p: ProposalForReview, ctx: AdmissionContext): Act
 
   // 0. An unresolved CIE 3.3 positive sentinel holds anything that changes the
   //    body. Tracking, reading and asking are untouched.
-  if (ctx.cieSafetyHold && !template?.observationOnly) {
+  if ((ctx.cieSafetyHold || ctx.cieRecheckPending) && !template?.observationOnly) {
     return {
       ...base,
       verdict: "BLOCK",
@@ -703,7 +708,7 @@ export function assessProposal(p: ProposalForReview, ctx: AdmissionContext): Act
       ],
       next_steps: [
         "Keep it saved and bring it to your clinician.",
-        "You can start any of the ready-made plans right now instead.",
+        "You can explore other plans or choose observation-only tracking.",
       ],
       patient_message:
         "This one came from a suggestion that is held for safety, so it is saved rather than started. Only this action is affected.",
@@ -743,7 +748,7 @@ export function assessProposal(p: ProposalForReview, ctx: AdmissionContext): Act
       next_steps: [
         "This is saved exactly as you wrote it — nothing was changed or deleted.",
         "Discuss it with your clinician before doing it.",
-        "You can start any of the ready-made plans right now instead.",
+        "You can explore other plans or choose observation-only tracking.",
       ],
       patient_message:
         "This one belongs in a conversation with your clinician, so it is not something to start here. Only this action is held — reading, asking, tracking and your other plans all continue.",

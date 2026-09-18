@@ -1,6 +1,7 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Upload, Loader2, CheckCircle2, XCircle, AlertTriangle, Info } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useBioTwin } from "@/context/BioTwinContext";
 import type { BiotwinDiagnostic } from "@/lib/biotwin/types";
 
@@ -20,6 +21,20 @@ const LEVEL_STYLE: Record<
 const BioTwinImportCard: React.FC = () => {
   const { importReportFile, importing, lastImport, report, submissions } = useBioTwin();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const downloadSubmission = async (id: string) => {
+    setDownloadError(null);
+    try {
+      const { data, error } = await (supabase as any).from("biotwin_patient_submissions")
+        .select("raw_submission").eq("id", id).single();
+      if (error || !data) throw new Error("unavailable");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data.raw_submission, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url; link.download = "my-biotwin-submission.json";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setDownloadError("Your saved content could not be downloaded. Please retry."); }
+  };
 
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -35,8 +50,8 @@ const BioTwinImportCard: React.FC = () => {
         <div className="min-w-0">
           <h3 className="font-serif text-base break-words">BioTwin clinical evidence report</h3>
           <p className="font-sans text-xs text-muted-foreground mt-1 max-w-prose break-words">
-            Upload your own report whenever you like. It is kept exactly as you sent
-            it and is yours to read straight away. It is recorded as information you
+            Upload your own report whenever you like. Its content is saved and
+            available to download straight away. It is recorded as information you
             contributed — not as a sign-off — so nothing in the file approves
             treatment or replaces a report already on your account.
           </p>
@@ -151,6 +166,7 @@ const BioTwinImportCard: React.FC = () => {
           <h4 className="font-sans text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             What you have uploaded
           </h4>
+          {downloadError && <p role="alert" className="text-sm text-destructive">{downloadError}</p>}
           <ul className="mt-2 space-y-2">
             {submissions.map((s) => (
               <li
@@ -168,6 +184,9 @@ const BioTwinImportCard: React.FC = () => {
                       ? "replaced by a newer upload of yours"
                       : "saved and readable · not checked yet"}
                 </p>
+                <button type="button" onClick={() => downloadSubmission(s.id)} className="text-xs text-primary min-h-[44px]">
+                  Download saved content
+                </button>
               </li>
             ))}
           </ul>

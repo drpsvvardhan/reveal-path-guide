@@ -170,8 +170,8 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
           { report: parsed, user_id: userId, filename: file.name },
         );
 
-        if (!invoked.ok) {
-          const fromServer = (invoked.body ?? null) as BiotwinImportResult | null;
+        if (invoked.ok === false) {
+          const fromServer = (invoked.body ?? null) as unknown as BiotwinImportResult | null;
           const res: BiotwinImportResult = fromServer?.diagnostics
             ? fromServer
             : {

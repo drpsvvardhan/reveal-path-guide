@@ -36,14 +36,14 @@ const NEXT: Record<string, string> = {
   run_in: "intervention",
   intervention: "ready_to_compare",
   washout: "ready_to_compare",
-  ready_to_compare: "completed",
+  completed: "run_in",
 };
 
 /** Phases a patient may always reach, whatever the evidence says. */
 const PATIENT_OWNED = new Set(["stopped", "paused"]);
 
 /** Terminal phases. Nothing restarts from here. */
-const TERMINAL = new Set(["stopped", "completed", "graduated", "not_interpretable"]);
+const TERMINAL = new Set(["stopped", "graduated", "not_interpretable"]);
 
 const ERROR_MESSAGES: Record<string, { status: number; message: string }> = {
   STALE_PHASE: {
@@ -59,6 +59,7 @@ const ERROR_MESSAGES: Record<string, { status: number; message: string }> = {
     status: 409,
     message: "The plan changed after it was checked, so it was not started. Review it once more.",
   },
+  SOURCE_CHANGED: { status: 409, message: "The source suggestion changed. Review this plan again." },
   CONTEXT_CHANGED: {
     status: 409,
     message: "Your information changed while this was being started, so it was not started. Open it again for a fresh check.",
@@ -78,11 +79,20 @@ function mapDbError(raw: string | undefined | null) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405, corsHeaders);
   try {
     const authRes = await authenticateRequest(req);
     if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
 
-    const { experiment_id, target_phase, stopped_reason } = await req.json();
+    const payload = await req.json().catch(() => null);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return jsonResponse({ error: "invalid_request" }, 400, corsHeaders);
+    }
+    const { experiment_id, target_phase, stopped_reason } = payload;
+    if ((target_phase != null && typeof target_phase !== "string") ||
+        (stopped_reason != null && (typeof stopped_reason !== "string" || stopped_reason.length > 2000))) {
+      return jsonResponse({ error: "invalid_request" }, 400, corsHeaders);
+    }
     if (!experiment_id) {
       return jsonResponse({ error: "experiment_id required" }, 400, corsHeaders);
     }
@@ -100,6 +110,7 @@ Deno.serve(async (req) => {
     const owner = await resolveTargetUserId(authRes.auth, experiment.user_id as string);
     if (!owner.ok) return jsonResponse(owner.error.body, owner.error.status, corsHeaders);
     const userId = owner.targetUserId;
+    if (owner.isViewAs) return jsonResponse({ error: "account_holder_required" }, 403, corsHeaders);
 
     const current = (experiment.phase as string) || "draft";
     const desired = (target_phase as string) || NEXT[current];
@@ -225,11 +236,11 @@ Deno.serve(async (req) => {
     if (experiment.source_card_id) {
       const { data: card, error: cardErr } = await supabase
         .from("simulator_what_if_cards")
-        .select("id, user_id, admission_verdict, patient_safe, safety_flags")
+        .select("id, user_id, admission_verdict, patient_safe, safety_flags, updated_at")
         .eq("id", experiment.source_card_id as string)
         .maybeSingle();
       if (cardErr) throw cardErr;
-      if (card && (card as Record<string, unknown>).user_id !== userId) {
+      if (!card || (card as Record<string, unknown>).user_id !== userId) {
         return jsonResponse(
           { error: "source_card_not_found", message: "That plan's source does not belong to this account." },
           403,
@@ -275,7 +286,12 @@ Deno.serve(async (req) => {
       p_protocol_version: protocol.protocol_version,
       p_executable_sha: recomputedSha,
       p_context_fingerprint: context.fingerprint,
-      p_admission: assessment,
+      p_admission: {
+        ...assessment,
+        protocol_snapshot: protocol,
+        experiment_snapshot: experiment,
+        source_card_updated_at: sourceCard?.updated_at ?? null,
+      },
       p_stopped_reason: null,
     });
     if (transErr) {

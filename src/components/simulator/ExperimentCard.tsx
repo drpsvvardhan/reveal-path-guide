@@ -40,7 +40,7 @@ const ExperimentCard: React.FC<Props> = ({
   const allComplete = dueCheckpoints.length > 0 && dueCheckpoints.every((c) => c.status === "completed");
   const phase = (experiment as any).phase as string | undefined;
   const canCompare = phase === "ready_to_compare" || phase === "intervention";
-  const canGraduate = (allComplete || phase === "completed") && cycleCount >= 2;
+  const canGraduate = phase === "completed" && cycleCount >= 2;
 
   return (
     <motion.article
@@ -57,8 +57,8 @@ const ExperimentCard: React.FC<Props> = ({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-muted-foreground">
-            {status === "graduated" ? "Graduated" : status === "abandoned" ? "Set aside" : "Running"}
-            {` · started ${new Date(experiment.started_at).toLocaleDateString()}`}
+            {status === "graduated" ? "Graduated" : status === "abandoned" ? "Set aside" : phase === "draft" ? "Saved proposal — not started" : phase === "completed" ? "Cycle completed" : "Running"}
+            {` · saved ${new Date(experiment.started_at).toLocaleDateString()}`}
             {cycleCount > 0 && ` · cycle ${cycleCount}`}
           </p>
           <h3 className="font-serif text-lg leading-snug text-foreground break-words">
@@ -93,6 +93,11 @@ const ExperimentCard: React.FC<Props> = ({
         );
       })()}
 
+      {phase === "draft" && protocol && (
+        <p className="text-sm text-muted-foreground">
+          {(protocol.admission_reasons as any)?.patient_message || "Saved for a fresh check before starting."}
+        </p>
+      )}
       {comparison && <ComparisonResultPanel comp={comparison} />}
 
       {dueCheckpoints.length > 0 && (
@@ -153,6 +158,11 @@ const ExperimentCard: React.FC<Props> = ({
 
       {!isClosed && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
+          {["draft", "run_in"].includes(phase ?? "") && onAdvancePhase && (
+            <button onClick={() => onAdvancePhase()} className="rounded-lg border border-primary/30 px-3 py-2 text-xs text-primary min-h-[44px]">
+              {phase === "draft" ? "Check and start tracking" : "Check and start intervention"}
+            </button>
+          )}
           {canCompare && onCompare && (
             <button
               onClick={() => onCompare()}
