@@ -52,6 +52,35 @@ Local review completed on 2026-09-18 before managed deployment:
 - Live baseline before deployment remained 15 users, 4 reports, 443 statements,
   39 suggestions, 4 experiments and 0 protocols. No real patient row was changed.
 
-Managed migration/function deployment and signed-in live checks remain pending;
-record their actual outcome in the release closeout. A successful build is not evidence of clinical
-validation, and this review does not close unrelated security findings.
+## Managed release, executed 2026-09-18
+
+From merged main `0adddccc271e8ea512ca609e46d4b0d477f0df55` (reviewed implementation
+`32e69f3afd02f305469832a6d6bf60cc949079c4`), inside this project's managed backend only.
+
+- Final checks before release: 492 tests across 41 files passed, app typecheck and
+  production build passed, and `deno check` passed on all six changed functions after two
+  type assertions in `design-experiment-protocol` were widened through `unknown`.
+- The reviewed pending SQL was applied as the next ordered managed migration,
+  `drizzle/migrations/0005_patient_autonomy_authority.sql`. Migrations 0000–0004, their
+  journal entries and all existing rows were preserved.
+- Deployed: `design-experiment-protocol`, `start-experiment-phase`,
+  `compare-experiment-phases`, `simulate-what-if`, `import-biotwin-report`,
+  `admin-import-biotwin`, `compare-experiment-checkpoint`.
+- Signed-in live verification with two temporary accounts passed 72 of 73 checks. The single
+  failure was a test fixture rejected by an existing statement check constraint; patient
+  writes to that table are refused at the grant level for every row, which the run confirmed.
+  Full detail is in `docs/PATIENT_AUTONOMY.md`.
+- Cleanup removed only those two accounts and their rows. Post-cleanup counts match the
+  pre-release baseline exactly: 15 users, 4 reports, 443 statements, 39 suggestions,
+  4 experiments, 0 protocols, 0 submissions, 26 CIE assessments, 15 profiles. No real
+  patient row was changed and no real clinician grant was created.
+- Fresh managed security scan: no critical findings. The earlier protected-write findings now
+  read as fail-closed. Still open: `celf_feature_map` readable by any signed-in user, two
+  previously dismissed SECURITY DEFINER execute warnings, and authenticated read exposure of
+  the RAE engine configuration tables and `witness_signal_registry`.
+- The documented dependency audit (12 affected nodes: 10 high, 1 moderate, 1 low) remains
+  open in the unchanged lockfile.
+
+A successful build and a passing live run are not evidence of clinical validation. Human
+clinical validity remains **NOT_ESTABLISHED**, and this release closes no unrelated security
+finding.

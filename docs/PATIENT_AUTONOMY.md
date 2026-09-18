@@ -150,3 +150,46 @@ not a diagnosis, a treatment approval, or clinical proof of causality.
   the accompanying migration and its own SQL tests; these tests do not prove them.
 - **No clinician release exists for experiments.** The CIE 3.3 clinician resume is a safety
   handoff, not treatment authority, and the UI must not offer it as one.
+
+## Release closeout (2026-09-18)
+
+Applied to this project's managed backend only, from merged main
+`0adddccc271e8ea512ca609e46d4b0d477f0df55` (reviewed implementation
+`32e69f3afd02f305469832a6d6bf60cc949079c4`).
+
+- Managed migration: `drizzle/migrations/0005_patient_autonomy_authority.sql`, the next
+  ordered migration after 0004, with journal and snapshot recorded. Migrations 0000–0004
+  and their journal entries were left untouched.
+- Functions deployed: `design-experiment-protocol`, `start-experiment-phase`,
+  `compare-experiment-phases`, `simulate-what-if`, `import-biotwin-report`,
+  `admin-import-biotwin`, `compare-experiment-checkpoint` (shared autonomy, guard,
+  context-loader and BioTwin modules ship with them).
+- Two type assertions in `design-experiment-protocol` were widened through `unknown` so
+  `deno check` passes. No authority boundary, threshold or test was changed.
+- Live signed-in verification with two temporary accounts: 72 of 73 checks passed. The one
+  failure was a test fixture, not the product: a seeded statement row was rejected by the
+  existing `biotwin_statements_authority_valid` check constraint. Patient writes to that
+  table are refused at the grant level for every row, which the live run confirmed.
+- What the live run proved: owner reads and self-logging work; a second account can neither
+  read a plan nor attach an observation to it; release permission, attestation, statement
+  truth status, card `patient_safe`, protocol admission, parent experiment phase and derived
+  comparisons/learnings are all refused to a signed-in patient; the service RPCs are not
+  callable with a patient token; card dismissal and observation correction work while
+  provenance stays immutable; a canonical sleep-window plan with no lab data at all is saved
+  and activated to `run_in`, confirmed by database read-back; a medication dose-change
+  proposal sent with `clinician_review_required=false` and forged admission flags is saved
+  and readable but refused activation; a CIE handoff and a pending recheck both refuse a
+  body-changing activation while tracking-only still starts and stopping still works;
+  stopping works with no protocol and no context, is idempotent and cannot be undone; a
+  self-uploaded file carrying a forged clinician attestation and release permission is kept
+  as the patient's own unverified submission, readable and downloadable, and created no
+  governed report, no statement and no witness object, and did not supersede the existing
+  trusted report; a repeated comparison replays one cycle and one cycle cannot graduate.
+- Cleanup: 13 observations, 6 experiments, 5 protocols, 6 checkpoints, 1 comparison,
+  1 learning, 1 card, 1 report, 1 submission, 2 profiles and both accounts removed.
+  Post-cleanup counts match the pre-release baseline exactly: 15 users, 4 reports,
+  443 statements, 39 cards, 4 experiments, 0 protocols, 26 CIE assessments, 15 profiles.
+
+Clinical validity remains **NOT_ESTABLISHED**. Admin installation identity is not a
+clinician attestation. Reading, questions, tracking and eligible routine choices remain
+open to the patient without a clinician.
