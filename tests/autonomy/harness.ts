@@ -132,6 +132,8 @@ export function createFakeDb(
             id: row.id ?? `row-${table}-${tables[table].length + 1}`,
             version: row.version ?? 1,
             review_state: row.review_state ?? "received",
+            // Columns the real tables fill by default.
+            created_at: row.created_at ?? new Date().toISOString(),
             ...row,
           }));
           tables[table].push(...stored);
