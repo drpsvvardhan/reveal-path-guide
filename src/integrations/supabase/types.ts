@@ -2887,6 +2887,7 @@ export type Database = {
           focus: string | null
           horizon_days: number
           id: string
+          lab_concerns: Json
           lever: string
           patient_safe: boolean
           perturbation_category: string | null
@@ -2914,6 +2915,7 @@ export type Database = {
           focus?: string | null
           horizon_days?: number
           id?: string
+          lab_concerns?: Json
           lever: string
           patient_safe?: boolean
           perturbation_category?: string | null
@@ -2941,6 +2943,7 @@ export type Database = {
           focus?: string | null
           horizon_days?: number
           id?: string
+          lab_concerns?: Json
           lever?: string
           patient_safe?: boolean
           perturbation_category?: string | null

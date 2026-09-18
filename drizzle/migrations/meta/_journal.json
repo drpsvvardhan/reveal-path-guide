@@ -50,6 +50,13 @@
       "when": 1789762501173,
       "tag": "0006_allow_upload_identity_confirmation_states",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789765181297,
+      "tag": "0007_what_if_card_lab_concerns",
+      "breakpoints": true
     }
   ]
 }
