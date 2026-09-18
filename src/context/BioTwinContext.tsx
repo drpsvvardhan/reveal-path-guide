@@ -204,6 +204,7 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
       loading,
       report,
       statements,
+      submissions,
       error,
       importing,
       lastImport,
@@ -211,7 +212,7 @@ export const BioTwinProvider: React.FC<{ children: React.ReactNode }> = ({ child
       importReportFile,
       clearLastImport: () => setLastImport(null),
     }),
-    [loading, report, statements, error, importing, lastImport, load, importReportFile],
+    [loading, report, statements, submissions, error, importing, lastImport, load, importReportFile],
   );
 
   return <BioTwinContext.Provider value={value}>{children}</BioTwinContext.Provider>;
