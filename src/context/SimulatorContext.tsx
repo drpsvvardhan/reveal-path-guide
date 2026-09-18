@@ -166,6 +166,27 @@ export interface ExperimentComparison {
   computed_at: string;
 }
 
+/**
+ * The server's own decision about a plan. The app displays this; it never
+ * computes it, and it never sends a safety flag of its own.
+ */
+export interface ServerAdmission {
+  verdict: "ADMIT" | "ADMIT_WITH_REVIEW" | "BLOCK";
+  activation_allowed: boolean;
+  clinician_review_required: boolean;
+  risk_class: string;
+  scope: string;
+  template_id: string | null;
+  observation_only: boolean;
+  evidence_label: string;
+  reasons: string[];
+  next_steps: string[];
+  patient_message: string;
+  still_available: string[];
+  unbound_outcomes: string[];
+  safety_flags: string[];
+}
+
 interface SimulatorContextValue {
   cards: WhatIfCard[];
   blockedCards: WhatIfCard[];
@@ -180,8 +201,16 @@ interface SimulatorContextValue {
   error: string | null;
   refresh: () => Promise<void>;
   generateCards: (focus?: string) => Promise<void>;
-  designProtocol: (payload: any) => Promise<{ experiment: Experiment; protocol: ExperimentProtocol } | null>;
-  advancePhase: (experimentId: string, target?: string, stoppedReason?: string) => Promise<void>;
+  designProtocol: (
+    payload: any,
+  ) => Promise<
+    { experiment: Experiment; protocol: ExperimentProtocol; admission: ServerAdmission } | null
+  >;
+  advancePhase: (
+    experimentId: string,
+    target?: string,
+    stoppedReason?: string,
+  ) => Promise<{ ok: boolean; admission?: ServerAdmission; message?: string }>;
   logDailyObservation: (payload: any) => Promise<void>;
   comparePhases: (experimentId: string) => Promise<ExperimentComparison | null>;
   dismissCard: (cardId: string) => Promise<void>;
