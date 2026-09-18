@@ -79,6 +79,16 @@ export interface BiotwinDiagnostic {
 
 export interface BiotwinImportResult {
   imported: boolean;
+  /**
+   * The self-service path accepts and keeps a patient's own file without
+   * treating it as an installed, governed report. `accepted` true with
+   * `imported` false is the normal, successful outcome there.
+   */
+  accepted?: boolean;
+  submission_id?: string;
+  review_state?: string;
+  authority_asserted_in_file?: boolean;
+  parsed_summary?: Record<string, unknown>;
   idempotent?: boolean;
   report_id?: string;
   version?: number;

@@ -33,15 +33,52 @@ export interface PersistResult {
   body: Record<string, unknown>;
 }
 
+/**
+ * Who is installing this report. Resolved on the server from a verified
+ * identity and role — never from a request field. A patient's own upload has
+ * no actor of this kind and goes to the self-service submission path instead.
+ */
+export interface TrustedImportActor {
+  kind: "admin_compiler" | "trusted_service";
+  actorId: string;
+}
+
+const TRUSTED_ACTOR_KINDS = new Set(["admin_compiler", "trusted_service"]);
+
 export async function persistBiotwinImport(args: {
   serviceClient: SupabaseClient;
   userId: string;
   raw: unknown;
   uploadId?: string | null;
+  trustedActor: TrustedImportActor;
 }): Promise<PersistResult> {
-  const { serviceClient, userId, raw } = args;
+  const { serviceClient, userId, raw, trustedActor } = args;
   const uploadId = args.uploadId ?? null;
   const diagnostics: BiotwinDiagnostic[] = [];
+
+  // Governed persistence is reachable only from a trusted server-resolved actor.
+  if (!trustedActor || !TRUSTED_ACTOR_KINDS.has(trustedActor.kind) || !trustedActor.actorId) {
+    return {
+      status: 403,
+      body: {
+        imported: false,
+        refusal_code: "untrusted_actor",
+        diagnostics: [
+          {
+            level: "error",
+            code: "untrusted_actor",
+            message:
+              "A governed report can only be installed through the trusted server path. An uploaded file cannot install itself.",
+          },
+        ],
+      },
+    };
+  }
+  diagnostics.push({
+    level: "info",
+    code: "trusted_actor",
+    message: `Installed through the trusted ${trustedActor.kind.replace("_", " ")} path.`,
+  });
 
   const detected = detectBiotwinReport(raw);
   if (!detected.accepted) {

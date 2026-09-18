@@ -161,6 +161,9 @@ Deno.serve(async (req) => {
     userId: targetUserId,
     raw: reportToImport,
     uploadId: typeof payload.upload_id === "string" ? payload.upload_id : null,
+    // Resolved here from the verified admin identity and role, not from the body.
+    // Admin identity is an installation actor; it is not a clinician's attestation.
+    trustedActor: { kind: "admin_compiler", actorId: userData.user.id },
   });
 
   return json(

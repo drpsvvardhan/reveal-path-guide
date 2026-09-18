@@ -166,6 +166,27 @@ export interface ExperimentComparison {
   computed_at: string;
 }
 
+/**
+ * The server's own decision about a plan. The app displays this; it never
+ * computes it, and it never sends a safety flag of its own.
+ */
+export interface ServerAdmission {
+  verdict: "ADMIT" | "ADMIT_WITH_REVIEW" | "BLOCK";
+  activation_allowed: boolean;
+  clinician_review_required: boolean;
+  risk_class: string;
+  scope: string;
+  template_id: string | null;
+  observation_only: boolean;
+  evidence_label: string;
+  reasons: string[];
+  next_steps: string[];
+  patient_message: string;
+  still_available: string[];
+  unbound_outcomes: string[];
+  safety_flags: string[];
+}
+
 interface SimulatorContextValue {
   cards: WhatIfCard[];
   blockedCards: WhatIfCard[];
@@ -180,8 +201,16 @@ interface SimulatorContextValue {
   error: string | null;
   refresh: () => Promise<void>;
   generateCards: (focus?: string) => Promise<void>;
-  designProtocol: (payload: any) => Promise<{ experiment: Experiment; protocol: ExperimentProtocol } | null>;
-  advancePhase: (experimentId: string, target?: string, stoppedReason?: string) => Promise<void>;
+  designProtocol: (
+    payload: any,
+  ) => Promise<
+    { experiment: Experiment; protocol: ExperimentProtocol; admission: ServerAdmission } | null
+  >;
+  advancePhase: (
+    experimentId: string,
+    target?: string,
+    stoppedReason?: string,
+  ) => Promise<{ ok: boolean; admission?: ServerAdmission; message?: string }>;
   logDailyObservation: (payload: any) => Promise<void>;
   comparePhases: (experimentId: string) => Promise<ExperimentComparison | null>;
   dismissCard: (cardId: string) => Promise<void>;
@@ -293,14 +322,25 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [uid, refresh]);
 
   const advancePhase = useCallback(async (experimentId: string, target?: string, stoppedReason?: string) => {
+    // Every transition — including stopping — goes through the server. Stopping
+    // is always permitted there; starting is re-checked against current data.
     try {
-      const { error: err } = await supabase.functions.invoke("start-experiment-phase", {
+      const { data, error: err } = await supabase.functions.invoke("start-experiment-phase", {
         body: { experiment_id: experimentId, target_phase: target, stopped_reason: stoppedReason },
       });
-      if (err) throw err;
+      const body = (data ?? {}) as any;
+      if (err || body?.error) {
+        const message = body?.message || err?.message || "That step did not go through.";
+        setError(message);
+        await refresh();
+        return { ok: false, admission: body?.admission, message };
+      }
       await refresh();
+      return { ok: true, admission: body?.admission };
     } catch (e: any) {
-      setError(e.message || "Failed to advance phase");
+      const message = e.message || "That step did not go through.";
+      setError(message);
+      return { ok: false, message };
     }
   }, [refresh]);
 
@@ -349,32 +389,17 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [refresh]);
 
+  // Stopping is the patient's own decision and always goes through.
   const abandonExperiment = useCallback(async (experimentId: string) => {
-    await supabase
-      .from("simulator_experiments")
-      .update({ status: "abandoned", ended_at: new Date().toISOString() })
-      .eq("id", experimentId);
-    await refresh();
-  }, [refresh]);
+    setError(null);
+    await advancePhase(experimentId, "stopped", "patient_stopped");
+  }, [advancePhase]);
 
+  // The replication requirement is enforced in the database, not here.
   const graduateExperiment = useCallback(async (experimentId: string) => {
-    // Replication gate: refuse to graduate unless the learning has cycle_count ≥ 2.
-    const relevant = learnings.filter((l) => l.experiment_id === experimentId);
-    const totalCycles = relevant.reduce((n, l) => n + (l.cycle_count ?? 1), 0);
-    if (totalCycles < 2) {
-      setError("Graduation requires a replicated cycle. Run another cycle of the same protocol first.");
-      return;
-    }
-    await supabase
-      .from("simulator_experiments")
-      .update({ status: "graduated", ended_at: new Date().toISOString() })
-      .eq("id", experimentId);
-    await supabase
-      .from("simulator_learnings")
-      .update({ graduated: true, learning_status: "replicated" })
-      .eq("experiment_id", experimentId);
-    await refresh();
-  }, [refresh]);
+    setError(null);
+    await advancePhase(experimentId, "graduated");
+  }, [advancePhase]);
 
   return (
     <SimulatorContext.Provider
