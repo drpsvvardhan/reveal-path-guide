@@ -2,34 +2,56 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
-import { useLabUploads } from "@/context/LabUploadsContext";
 import PatientSectionLayout from "@/components/layout/PatientSectionLayout";
 import AsideInfoPanel from "@/components/layout/AsideInfoPanel";
 import {
-  FileText, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Calendar, Building2,
+  FileText, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, Calendar, Building2, ShieldAlert, EyeOff,
 } from "lucide-react";
 
 /**
  * Extraction transparency surface.
  *
- * For every uploaded file this shows exactly which values were read, which of
- * them the Twin can reason with (they carry a canonical concept binding), and
- * which were read but not yet recognised — the honest "what is being missed"
- * list. No thresholds, verdicts or interpretation are produced here.
+ * Per uploaded file: the values kept and reasoned with, the values read but not
+ * yet recognised, the safety concerns those values raise, and what this kind of
+ * document does not yield at all. Every threshold and concern comes from the
+ * server (extraction-report → assessLabEvidence); this file renders only.
  */
-interface ExtractedRow {
+interface ValueRowData {
   id: string;
-  upload_id: string;
   raw_name: string;
   canonical_name: string;
   display_name: string | null;
   value: number;
-  unit: string;
-  ref_low: number | null;
-  ref_high: number | null;
+  unit: string | null;
   flag: string | null;
-  collection_date: string;
-  canonical_concept_id: string | null;
+}
+
+interface Concern {
+  marker: string;
+  severity: "raise_concern" | "maintain_hold";
+  explanation: string;
+  resolution: string;
+}
+
+interface FileReport {
+  upload_id: string;
+  filename: string;
+  source_lab: string | null;
+  collection_date: string | null;
+  status: string;
+  counts: {
+    extracted: number;
+    kept: number;
+    recognised: number;
+    unrecognised: number;
+    duplicates_of_existing: number;
+    outside_range: number;
+  };
+  recognised: ValueRowData[];
+  unrecognised: ValueRowData[];
+  safety_concerns: Concern[];
+  not_read: string[];
+  problem: string | null;
 }
 
 const FlagPill: React.FC<{ flag: string | null }> = ({ flag }) => {
@@ -46,7 +68,7 @@ const FlagPill: React.FC<{ flag: string | null }> = ({ flag }) => {
   );
 };
 
-const ValueRow: React.FC<{ row: ExtractedRow }> = ({ row }) => (
+const ValueRow: React.FC<{ row: ValueRowData }> = ({ row }) => (
   <div className="flex items-baseline justify-between gap-3 py-1.5 border-b border-border/40 last:border-0">
     <span className="text-xs text-foreground/90 break-words min-w-0">
       {row.display_name || row.canonical_name}
@@ -61,69 +83,44 @@ const ValueRow: React.FC<{ row: ExtractedRow }> = ({ row }) => (
 );
 
 const ExtractionSection: React.FC = () => {
-  const { uploads, loading: uploadsLoading } = useLabUploads();
   const { user } = useAuth();
   const { effectiveUserId } = useViewAs();
   const targetUserId = effectiveUserId || user?.id || null;
 
-  const [rows, setRows] = useState<ExtractedRow[]>([]);
+  const [files, setFiles] = useState<FileReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      if (!targetUserId) { setRows([]); setLoading(false); return; }
+      if (!targetUserId) { setFiles([]); setLoading(false); return; }
       setLoading(true);
-      // Paged read: a full lab history exceeds the single-request row cap, and
-      // a truncated read would understate what was actually extracted.
-      const page = 1000;
-      const all: ExtractedRow[] = [];
-      for (let from = 0; ; from += page) {
-        const { data, error } = await supabase
-          .from("patient_lab_observations")
-          .select("id, upload_id, raw_name, canonical_name, display_name, value, unit, ref_low, ref_high, flag, collection_date, canonical_concept_id")
-          .eq("user_id", targetUserId)
-          .order("collection_date", { ascending: false })
-          .range(from, from + page - 1);
-        if (error) break;
-        const batch = (data ?? []) as ExtractedRow[];
-        all.push(...batch);
-        if (batch.length < page) break;
+      setError(null);
+      const { data, error: err } = await supabase.functions.invoke("extraction-report", {
+        body: effectiveUserId && effectiveUserId !== user?.id ? { user_id: effectiveUserId } : {},
+      });
+      if (cancelled) return;
+      if (err) {
+        setError("We could not load this right now. Try again in a moment.");
+        setFiles([]);
+      } else {
+        setFiles(((data as any)?.files ?? []) as FileReport[]);
       }
-      if (!cancelled) {
-        setRows(all);
-        setLoading(false);
-      }
+      setLoading(false);
     };
-    load();
+    void load();
     return () => { cancelled = true; };
-  }, [targetUserId]);
+  }, [targetUserId, effectiveUserId, user?.id]);
 
-  /**
-   * One marker can exist twice for the same draw: an older unbound row and a
-   * canonicalized one. Collapse them so the page reports markers, not rows,
-   * and prefer the bound row so "not yet recognised" stays truthful.
-   */
-  const byUpload = useMemo(() => {
-    const map = new Map<string, Map<string, ExtractedRow>>();
-    for (const r of rows) {
-      const perUpload = map.get(r.upload_id) ?? new Map<string, ExtractedRow>();
-      const key = `${r.canonical_name}|${r.collection_date}`;
-      const existing = perUpload.get(key);
-      if (!existing || (!existing.canonical_concept_id && r.canonical_concept_id)) {
-        perUpload.set(key, r);
-      }
-      map.set(r.upload_id, perUpload);
-    }
-    const out = new Map<string, ExtractedRow[]>();
-    for (const [uploadId, markers] of map) out.set(uploadId, [...markers.values()]);
-    return out;
-  }, [rows]);
-
-  const markers = useMemo(() => [...byUpload.values()].flat(), [byUpload]);
-  const recognisedCount = markers.filter((r) => r.canonical_concept_id).length;
-  const unrecognisedCount = markers.length - recognisedCount;
+  const totals = useMemo(() => ({
+    files: files.length,
+    kept: files.reduce((n, f) => n + f.counts.kept, 0),
+    recognised: files.reduce((n, f) => n + f.counts.recognised, 0),
+    unrecognised: files.reduce((n, f) => n + f.counts.unrecognised, 0),
+    concerns: files.reduce((n, f) => n + f.safety_concerns.length, 0),
+  }), [files]);
 
   const toggle = (id: string) =>
     setOpen((prev) => {
@@ -136,73 +133,73 @@ const ExtractionSection: React.FC = () => {
     <AsideInfoPanel
       title="What has been read"
       items={[
-        { label: "Files", value: uploads.length.toString() },
-        { label: "Values read", value: markers.length.toString(), tone: "accent" },
-        { label: "Used by your Twin", value: recognisedCount.toString() },
-        { label: "Not yet recognised", value: unrecognisedCount.toString() },
+        { label: "Files", value: totals.files.toString() },
+        { label: "Values read", value: totals.kept.toString(), tone: "accent" },
+        { label: "Used by your Twin", value: totals.recognised.toString() },
+        { label: "Not yet recognised", value: totals.unrecognised.toString() },
+        { label: "Concerns raised", value: totals.concerns.toString() },
       ]}
     />
   );
-
-  const busy = loading || uploadsLoading;
 
   return (
     <PatientSectionLayout
       eyebrow="WHAT EACH FILE GAVE US"
       title="Exactly what we read from every file you uploaded"
-      intro="One card per file. Inside each: the values your Twin can reason with, and the values we read but could not yet place. Anything missing from both lists was not readable in that file."
+      intro="One card per file. Inside each: the values your Twin reasons with, the values we read but could not place, anything those values raise a concern about, and what that kind of document never gives us."
       aside={aside}
       asideSticky
     >
-      {busy && (
+      {loading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading what was read…
         </div>
       )}
 
-      {!busy && uploads.length === 0 && (
+      {!loading && error && <p className="text-sm text-muted-foreground">{error}</p>}
+
+      {!loading && !error && files.length === 0 && (
         <p className="text-sm text-muted-foreground">
           No files uploaded yet. Add a report from Medical Records and it will appear here.
         </p>
       )}
 
       <div className="space-y-3">
-        {!busy && uploads.map((u: any) => {
-          const list = byUpload.get(u.id) ?? [];
-          const recognised = list.filter((r) => r.canonical_concept_id);
-          const unrecognised = list.filter((r) => !r.canonical_concept_id);
-          const abnormal = list.filter((r) => r.flag && r.flag !== "normal");
-          const isOpen = open.has(u.id);
+        {!loading && !error && files.map((f) => {
+          const isOpen = open.has(f.upload_id);
           return (
-            <div key={u.id} className="rounded-lg border border-border/60 bg-card">
+            <div key={f.upload_id} className="rounded-lg border border-border/60 bg-card">
               <button
-                onClick={() => toggle(u.id)}
+                onClick={() => toggle(f.upload_id)}
                 className="w-full flex items-start justify-between gap-3 px-3 py-3 text-left min-h-[44px]"
               >
                 <span className="flex items-start gap-2 min-w-0">
                   <FileText className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0">
-                    <span className="block text-sm text-foreground break-words">
-                      {u.original_filename}
-                    </span>
+                    <span className="block text-sm text-foreground break-words">{f.filename}</span>
                     <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-sans text-[10px] uppercase tracking-[0.05em] text-muted-foreground">
-                      {u.collection_date && (
+                      {f.collection_date && (
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(u.collection_date).toLocaleDateString()}
+                          {new Date(f.collection_date).toLocaleDateString()}
                         </span>
                       )}
-                      {u.source_lab && (
+                      {f.source_lab && (
                         <span className="inline-flex items-center gap-1">
-                          <Building2 className="h-3 w-3" />{u.source_lab}
+                          <Building2 className="h-3 w-3" />{f.source_lab}
                         </span>
                       )}
                       <span className="inline-flex items-center gap-1">
-                        {list.length > 0
-                          ? <><CheckCircle2 className="h-3 w-3 text-teal-600" />{list.length} values kept</>
+                        {f.counts.kept > 0
+                          ? <><CheckCircle2 className="h-3 w-3 text-teal-600" />{f.counts.kept} values kept</>
                           : <><AlertCircle className="h-3 w-3 text-orange-600" />nothing kept from this file</>}
                       </span>
-                      {abnormal.length > 0 && <span>{abnormal.length} outside range</span>}
+                      {f.counts.outside_range > 0 && <span>{f.counts.outside_range} outside range</span>}
+                      {f.safety_concerns.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-amber-700">
+                          <ShieldAlert className="h-3 w-3" />{f.safety_concerns.length} raised a concern
+                        </span>
+                      )}
                     </span>
                   </span>
                 </span>
@@ -213,36 +210,72 @@ const ExtractionSection: React.FC = () => {
 
               {isOpen && (
                 <div className="border-t border-border/50 px-3 py-3 space-y-4">
-                  {list.length === 0 && (
+                  {f.problem && (
+                    <p className="text-xs text-orange-700">{f.problem}</p>
+                  )}
+
+                  {f.counts.kept === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {u.status === "complete"
+                      {f.status === "complete"
                         ? "Every value in this file was already on record from another upload, so nothing new was added."
-                        : u.status === "awaiting_identity_confirmation"
+                        : f.status === "awaiting_identity_confirmation"
                           ? "This file is waiting for you to confirm it is yours before anything is added."
                           : "No values were kept from this file yet."}
                     </p>
                   )}
 
-                  {recognised.length > 0 && (
-                    <div>
-                      <h4 className="font-sans text-[10px] uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
-                        Your Twin reasons with these ({recognised.length})
+                  {f.safety_concerns.length > 0 && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
+                      <h4 className="font-sans text-[10px] uppercase tracking-[0.08em] text-amber-800 mb-1.5">
+                        What these values raise a concern about ({f.safety_concerns.length})
                       </h4>
-                      <div>{recognised.map((r) => <ValueRow key={r.id} row={r} />)}</div>
+                      <div className="space-y-2.5">
+                        {f.safety_concerns.map((c, i) => (
+                          <div key={`${c.marker}-${i}`} className="text-xs leading-relaxed">
+                            <p className="text-foreground/90">{c.explanation}</p>
+                            <p className="mt-0.5 text-muted-foreground">What could change it: {c.resolution}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        A concern can pause or narrow an action. It never clears a pause on its own, and none of this
+                        is a diagnosis.
+                      </p>
                     </div>
                   )}
 
-                  {unrecognised.length > 0 && (
+                  {f.recognised.length > 0 && (
                     <div>
                       <h4 className="font-sans text-[10px] uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
-                        Read, but not yet recognised ({unrecognised.length})
+                        Your Twin reasons with these ({f.recognised.length})
+                      </h4>
+                      <div>{f.recognised.map((r) => <ValueRow key={r.id} row={r} />)}</div>
+                    </div>
+                  )}
+
+                  {f.unrecognised.length > 0 && (
+                    <div>
+                      <h4 className="font-sans text-[10px] uppercase tracking-[0.08em] text-muted-foreground mb-1.5">
+                        Read, but not yet recognised ({f.unrecognised.length})
                       </h4>
                       <p className="text-[11px] text-muted-foreground mb-1.5">
                         These were read correctly but are not yet part of what your Twin can reason with.
                       </p>
-                      <div>{unrecognised.map((r) => <ValueRow key={r.id} row={r} />)}</div>
+                      <div>{f.unrecognised.map((r) => <ValueRow key={r.id} row={r} />)}</div>
                     </div>
                   )}
+
+                  <div>
+                    <h4 className="font-sans text-[10px] uppercase tracking-[0.08em] text-muted-foreground mb-1.5 inline-flex items-center gap-1">
+                      <EyeOff className="h-3 w-3" /> Not taken from this file at all
+                    </h4>
+                    <ul className="text-[11px] text-muted-foreground list-disc pl-4 space-y-0.5">
+                      {f.not_read.map((n) => <li key={n}>{n}</li>)}
+                    </ul>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      If something here matters, tell your Twin directly — it will not be picked up from the document.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
