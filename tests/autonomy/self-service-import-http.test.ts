@@ -27,8 +27,8 @@ let db: FakeDb;
 function selfCertifyingReport(extra: Record<string, unknown> = {}) {
   return {
     schema: {
-      name: "biotwin_clinical_evidence_report",
-      report_type: "final_corrected_clinical_evidence_report",
+      name: "Vizzhy BioTwin Clinical Evidence Report",
+      report_type: "FINAL_CORRECTED_CLINICAL_EVIDENCE_REPORT",
       version: "1.0",
     },
     generated_date: "2026-01-04",
