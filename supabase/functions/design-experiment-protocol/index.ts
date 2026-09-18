@@ -83,11 +83,15 @@ function validateProposal(p: RequestPayload): string[] {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405, corsHeaders);
   try {
     const authRes = await authenticateRequest(req);
     if (!authRes.ok) return jsonResponse(authRes.error.body, authRes.error.status, corsHeaders);
 
-    const payload = (await req.json()) as RequestPayload;
+    const payload = await req.json().catch(() => null) as RequestPayload | null;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return jsonResponse({ error: "invalid_request" }, 400, corsHeaders);
+    }
 
     // Identity binding: never trust the body alone.
     const owner = await resolveTargetUserId(authRes.auth, payload.user_id ?? null);
@@ -242,8 +246,8 @@ Deno.serve(async (req) => {
         intervention_days: proposal.intervention_days,
         washout_days: proposal.washout_days,
         crossover: null,
-        min_observations_per_phase: payload.min_observations_per_phase ?? 5,
-        min_adherence_pct: payload.min_adherence_pct ?? 0.7,
+        min_observations_per_phase: 5,
+        min_adherence_pct: 0.7,
         stop_criteria: proposal.stop_criteria,
         contraindications: proposal.contraindications,
         patient_note: proposal.patient_note,

@@ -24,7 +24,9 @@ Clinician involvement is deliberately **narrow and scoped**:
 - a significant safety issue raised by the CIE 3.3 intake (positive sentinel handoff)
 
 A hold blocks **the relevant action only**. Reading, asking, learning, tracking, and
-unrelated plans continue. There is no global doctor gate, and a treatment hold never
+unrelated plans continue. An unresolved CIE sentinel temporarily holds all new
+body-changing plans until its existing handoff/recheck workflow is resolved;
+reading, questions and observation-only tracking remain available. There is no global doctor gate, and a treatment hold never
 makes the app or the report unavailable.
 
 Four distinctions the system keeps explicit:
@@ -43,7 +45,7 @@ server itself authored* from a server-owned catalogue entry plus strictly typed,
 parameters (`buildCanonicalAction`). The patient chooses the plan and its parameters; the
 server writes every executable word, including the safety text. Numbers are parsed
 exactly — `"20 arbitrary text"` is not twenty. A field that is not part of the template
-is a refusal, not an ignored extra. If stored content is not byte-identical to what the
+is a refusal, not an ignored extra. If stored content does not match the canonical content to what the
 server would author today, it is not executable.
 
 **Free-form proposals** are saved exactly as written, readable, editable, and never
@@ -66,7 +68,12 @@ watching changes nothing.
 **Binding and re-check.** Every decision is bound to the exact executable content hash,
 the protocol version and a context fingerprint, and is re-computed at the moment of
 starting. The commit happens through a service-only transactional RPC that re-checks
-phase, protocol version, content hash and context under a row lock.
+phase, protocol version, actual stored row snapshots, content hash and current
+context. A brief database transaction holds SHARE locks on the three context source
+tables while recomputing the fingerprint, excluding concurrent source writes and
+new safety holds during activation. No network/model calls run under those locks.
+This can briefly delay context writes; a more granular snapshot protocol may be
+needed at higher traffic.
 
 **Stopping and pausing** are handled before any staleness or admission check, are
 idempotent, and never reopen a stopped plan.
@@ -76,7 +83,7 @@ safety-flagged suggestion into an executable plan, and the suggestion's *current
 is re-read at start.
 
 **Uploads.** A patient can upload their own documents immediately. The file is kept
-verbatim with provenance as an owner-bound, versioned submission they can read at once.
+as parsed JSON with provenance as an owner-bound, versioned submission they can read at once.
 It never writes the governed report/statement tables, never projects witness objects, and
 never supersedes an existing trusted active report. A file that contains an attestation,
 a "released" status or a treatment approval is told plainly that this wording is kept as
@@ -117,7 +124,15 @@ Regression tests in `tests/autonomy/`:
   and unauthenticated/unauthorized callers refused, and no governed report, statement or
   witness write on this path, with an existing trusted report left untouched.
 
-Run: `npx vitest run tests/autonomy/` — 63 tests passing at the time of writing.
+Run: `npx vitest run tests/autonomy/ tests/d2c-independent-review.test.ts tests/d2c-independent-permissions.test.ts`.
+Final release counts are recorded in `docs/D2C_INDEPENDENT_REVIEW.md`.
+
+**Comparison provenance.** Cycles have a server-assigned index. Observations retain
+that index when corrected. Comparison and learning rows are immutable snapshots,
+one per cycle; rerunning after editing logs returns that cycle's existing snapshot.
+Completed cycles can begin another cycle only after a fresh admission check. Two
+separate cycles are required for the personal graduation marker. This marker is
+not a diagnosis, a treatment approval, or clinical proof of causality.
 
 ## Limits, stated plainly
 

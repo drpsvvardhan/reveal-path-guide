@@ -320,7 +320,7 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // A plan that cannot start yet is still saved. The list is refreshed either
     // way so the patient can read, revise and discuss what they proposed.
     await refresh();
-    if (!res.ok) {
+    if (res.ok === false) {
       setError(res.message);
       return {
         ok: false,
@@ -347,7 +347,7 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         stopped_reason: stoppedReason,
       });
       await refresh();
-      if (!res.ok) {
+      if (res.ok === false) {
         setError(res.message);
         return {
           ok: false,

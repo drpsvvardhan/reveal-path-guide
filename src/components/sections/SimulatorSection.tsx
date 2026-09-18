@@ -91,7 +91,7 @@ const SimulatorInner: React.FC = () => {
     setDesigning(true);
     setDesignMessage(null);
     const res = await designProtocol(payload);
-    if (!res.ok) {
+    if (res.ok === false) {
       // The plan is saved; it simply cannot start. Show why, and keep it open
       // so the patient can revise it.
       setDesignAdmission(res.admission ?? null);
@@ -133,7 +133,7 @@ const SimulatorInner: React.FC = () => {
     <PatientSectionLayout
       eyebrow="BIOLOGICAL SIMULATOR"
       title="Your plan now"
-      intro="Concrete moves grounded in your current biology. We start with the highest-value, lowest-risk actions, watch how you respond, and adjust — no need to wait for proof before we act."
+      intro="Choose a plan, track what changes, and ask questions about your results. Each plan is checked against the information available before it starts."
       headerExtra={<LoopBar activeId={activeStep} />}
     >
       {error && (
@@ -226,7 +226,7 @@ const SimulatorInner: React.FC = () => {
               <p className="font-serif text-base text-foreground break-words leading-snug">{t.label}</p>
               <p className="mt-1 text-sm text-muted-foreground leading-relaxed break-words">{t.summary}</p>
               <p className="mt-2 text-[10px] font-sans uppercase tracking-wider text-muted-foreground break-words">
-                {t.category} · tracks {t.primary_outcome.name}
+                {t.category} · tracks {t.manualOutcomes[0]}
               </p>
             </button>
           ))}
@@ -236,7 +236,7 @@ const SimulatorInner: React.FC = () => {
       <section className="space-y-3 pt-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <Telescope className="h-4 w-4 text-emerald-600 shrink-0" />
-          <h2 className="font-serif text-xl text-foreground break-words">Plans in motion</h2>
+          <h2 className="font-serif text-xl text-foreground break-words">Your plans and proposals</h2>
         </div>
         {activeExperiments.length === 0 ? (
           <p className="text-sm text-muted-foreground leading-relaxed">
@@ -249,7 +249,7 @@ const SimulatorInner: React.FC = () => {
               const proto = protocols.find((p) => p.experiment_id === e.id) ?? null;
               const cmp = comparisons.find((c) => c.experiment_id === e.id) ?? null;
               const relevantLearnings = learnings.filter((l) => l.experiment_id === e.id);
-              const totalCycles = relevantLearnings.reduce((n, l) => n + (l.cycle_count ?? 1), 0);
+              const totalCycles = new Set(comparisons.filter((c) => c.experiment_id === e.id && (c as any).cycle_index != null && ["SIGNAL_DETECTED", "POSSIBLE_SIGNAL", "NO_DETECTABLE_SIGNAL"].includes(c.result)).map((c) => (c as any).cycle_index)).size;
               const obsForExp = dailyObservations.filter((o) => o.experiment_id === e.id);
               return (
                 <ExperimentCard
@@ -262,7 +262,7 @@ const SimulatorInner: React.FC = () => {
                   checkpoints={checkpoints}
                   index={i}
                   onRunCheckpoint={handleCheckpoint}
-                  onAdvancePhase={(target, reason) => advancePhase(e.id, target, reason)}
+                  onAdvancePhase={async (target, reason) => { await advancePhase(e.id, target, reason); }}
                   onCompare={async () => { await comparePhases(e.id); }}
                   onAbandon={() => abandonExperiment(e.id)}
                   onGraduate={() => graduateExperiment(e.id)}
@@ -326,8 +326,8 @@ const SimulatorInner: React.FC = () => {
             <h2 className="font-serif text-xl text-foreground break-words">Graduated scaffolds</h2>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Predictions you have confirmed across enough cycles that they no longer
-            need scaffolding — you can feel them in your own decisions.
+            Personal observations repeated across separate cycles. These can inform
+            your routines and questions; they do not establish a treatment effect.
           </p>
           <ul className="grid gap-2 md:grid-cols-2 min-w-0">
             {graduated.map((g) => (

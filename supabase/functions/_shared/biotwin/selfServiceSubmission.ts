@@ -120,7 +120,7 @@ export async function saveSelfServiceSubmission(args: {
       level: "info",
       code: "kept_as_your_own_evidence",
       message:
-        "Your file is saved exactly as you uploaded it and is yours to read right away. It is recorded as information you contributed, so nothing in it is treated as a clinician's sign-off.",
+        "Your document content is saved and is yours to read right away. It is recorded as information you contributed, so nothing in it is treated as a clinician's sign-off.",
     },
   ];
   if (authority) {

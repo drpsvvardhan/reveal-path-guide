@@ -50,7 +50,10 @@ export async function invokeClinicalResult<T>(
   name: string,
   body?: Record<string, unknown>,
 ): Promise<ClinicalInvokeResult<T>> {
-  const { data, error } = await supabase.functions.invoke(name, body ? { body } : undefined);
+  let invocation;
+  try { invocation = await supabase.functions.invoke(name, body ? { body } : undefined); }
+  catch { return { ok: false, message: "Connection interrupted. Please retry.", body: null }; }
+  const { data, error } = invocation;
   if (error || (data as { error?: string } | null)?.error) {
     let payload = (data ?? null) as Record<string, unknown> | null;
     const context = (error as { context?: any } | null)?.context;

@@ -15,7 +15,7 @@
 --   status, clinical authority, holds, release/attestation, admission verdicts,
 --   review requirements and phase transitions are written by the backend only.
 --
---   Permission-only plus additive columns and two service-only functions. No
+--   Permission-only plus additive columns and service-only functions. No
 --   table, column or row is dropped; no column type changes; no data is edited.
 -- ============================================================================
 
@@ -262,23 +262,46 @@ ALTER TABLE public.simulator_experiment_protocols
   ADD COLUMN IF NOT EXISTS admission_context_fingerprint text,
   ADD COLUMN IF NOT EXISTS admission_computed_at timestamptz;
 
--- A comparison is identified by the exact observations it was computed from, so
--- calling the comparator again over the same entries cannot masquerade as a
--- second cycle. This changes no comparator arithmetic.
+-- Cycle identity is assigned by the server lifecycle, never by editing a log.
+-- Legacy observations/comparisons retain a NULL cycle and remain readable.
+ALTER TABLE public.simulator_experiments
+  ADD COLUMN IF NOT EXISTS cycle_index integer NOT NULL DEFAULT 1;
+ALTER TABLE public.simulator_daily_observations
+  ADD COLUMN IF NOT EXISTS cycle_index integer;
 ALTER TABLE public.simulator_experiment_comparisons
+  ADD COLUMN IF NOT EXISTS cycle_index integer,
   ADD COLUMN IF NOT EXISTS observation_fingerprint text;
-
-CREATE UNIQUE INDEX IF NOT EXISTS simulator_comparisons_cycle_uniq
-  ON public.simulator_experiment_comparisons (experiment_id, phase_a, phase_b, observation_fingerprint)
-  WHERE observation_fingerprint IS NOT NULL;
-
 ALTER TABLE public.simulator_learnings
+  ADD COLUMN IF NOT EXISTS cycle_index integer,
   ADD COLUMN IF NOT EXISTS comparison_id uuid,
   ADD COLUMN IF NOT EXISTS observation_fingerprint text;
-
+CREATE UNIQUE INDEX IF NOT EXISTS simulator_comparisons_cycle_uniq
+  ON public.simulator_experiment_comparisons (experiment_id, cycle_index);
 CREATE UNIQUE INDEX IF NOT EXISTS simulator_learnings_cycle_uniq
-  ON public.simulator_learnings (experiment_id, observation_fingerprint)
-  WHERE observation_fingerprint IS NOT NULL;
+  ON public.simulator_learnings (experiment_id, cycle_index);
+
+CREATE OR REPLACE FUNCTION public.simulator_observation_cycle()
+RETURNS trigger LANGUAGE plpgsql SET search_path TO '' AS $$
+BEGIN
+  IF TG_OP='INSERT' THEN
+    SELECT e.cycle_index INTO NEW.cycle_index FROM public.simulator_experiments e
+      WHERE e.id=NEW.experiment_id AND e.user_id=NEW.user_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'EXPERIMENT_NOT_FOUND' USING ERRCODE='42501'; END IF;
+    NEW.logged_at := now();
+    NEW.created_at := now();
+  ELSIF NEW.experiment_id IS DISTINCT FROM OLD.experiment_id
+     OR NEW.user_id IS DISTINCT FROM OLD.user_id
+     OR NEW.cycle_index IS DISTINCT FROM OLD.cycle_index
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR NEW.logged_at IS DISTINCT FROM OLD.logged_at THEN
+    RAISE EXCEPTION 'OBSERVATION_PROVENANCE_IMMUTABLE' USING ERRCODE='42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER sdo_bind_cycle BEFORE INSERT OR UPDATE
+  ON public.simulator_daily_observations FOR EACH ROW
+  EXECUTE FUNCTION public.simulator_observation_cycle();
 
 -- ---------------------------------------------------------------------------
 -- 6. Transactional phase transition (service-only).
@@ -288,6 +311,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS simulator_learnings_cycle_uniq
 --    caller. Deliberately NOT security definer: it runs as the caller and
 --    EXECUTE is granted to service_role only, so a patient JWT cannot reach it.
 -- ---------------------------------------------------------------------------
+-- Snapshot of the exact stored inputs used by the trusted context loader.
+-- Read before and after the external computation, and again under table locks
+-- at activation. Table locks are held only for this short database transaction;
+-- no network call or model execution takes place under a lock.
+CREATE OR REPLACE FUNCTION public.simulator_admission_fingerprint(p_user_id uuid)
+RETURNS text LANGUAGE sql STABLE SET search_path TO '' AS $$
+  SELECT pg_catalog.md5(pg_catalog.jsonb_build_array(
+    (SELECT coalesce(jsonb_agg(to_jsonb(w) ORDER BY w.witness_id), '[]'::jsonb)
+       FROM public.witness_objects w WHERE w.user_id=p_user_id),
+    (SELECT coalesce(jsonb_agg(to_jsonb(s) ORDER BY s.id), '[]'::jsonb)
+       FROM public.cie33_sessions s WHERE s.user_id=p_user_id),
+    (SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY a.id), '[]'::jsonb)
+       FROM public.cie_assessments a WHERE a.user_id=p_user_id)
+  )::text)
+$$;
+REVOKE ALL ON FUNCTION public.simulator_admission_fingerprint(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.simulator_admission_fingerprint(uuid) TO service_role;
+
 DROP FUNCTION IF EXISTS public.simulator_transition_phase(
   uuid, uuid, text, text, uuid, text, jsonb, text);
 
@@ -309,7 +350,8 @@ AS $$
 DECLARE
   exp public.simulator_experiments%ROWTYPE;
   proto public.simulator_experiment_protocols%ROWTYPE;
-  terminal text[] := ARRAY['stopped', 'completed', 'graduated', 'not_interpretable'];
+  source_card public.simulator_what_if_cards%ROWTYPE;
+  terminal text[] := ARRAY['stopped', 'graduated', 'not_interpretable'];
   allowed_next text;
 BEGIN
   SELECT * INTO exp FROM public.simulator_experiments
@@ -360,7 +402,7 @@ BEGIN
                     WHEN 'run_in' THEN 'intervention'
                     WHEN 'intervention' THEN 'ready_to_compare'
                     WHEN 'washout' THEN 'ready_to_compare'
-                    WHEN 'ready_to_compare' THEN 'completed'
+                    WHEN 'completed' THEN 'run_in'
                     ELSE NULL
                   END;
   IF p_to_phase IS DISTINCT FROM allowed_next AND p_to_phase <> 'not_interpretable' THEN
@@ -390,13 +432,36 @@ BEGIN
     RAISE EXCEPTION 'PROTOCOL_CHANGED' USING ERRCODE = '40001';
   END IF;
 
+  -- Compare the actual locked rows, not only a previously stored hash field.
+  IF to_jsonb(proto) IS DISTINCT FROM p_admission->'protocol_snapshot'
+     OR to_jsonb(exp) IS DISTINCT FROM p_admission->'experiment_snapshot' THEN
+    RAISE EXCEPTION 'PROTOCOL_CHANGED' USING ERRCODE = '40001';
+  END IF;
+
+  IF exp.source_card_id IS NOT NULL THEN
+    SELECT * INTO source_card FROM public.simulator_what_if_cards
+      WHERE id=exp.source_card_id AND user_id=p_user_id FOR SHARE;
+    IF NOT FOUND OR source_card.updated_at IS DISTINCT FROM
+          (p_admission->>'source_card_updated_at')::timestamptz
+       OR source_card.patient_safe IS NOT TRUE
+       OR source_card.admission_verdict='BLOCK'
+       OR coalesce(jsonb_array_length(source_card.safety_flags),0)>0 THEN
+      RAISE EXCEPTION 'SOURCE_CHANGED' USING ERRCODE = '40001';
+    END IF;
+  END IF;
+
   -- The decision must have been computed from the context recorded against this
   -- protocol. If the person's own information moved on — a new safety hold, a
   -- new result — the fingerprints differ and nothing is activated.
-  IF p_context_fingerprint IS NULL
-     OR proto.admission_context_fingerprint IS NULL
-     OR proto.admission_context_fingerprint IS DISTINCT FROM p_context_fingerprint THEN
-    RAISE EXCEPTION 'CONTEXT_CHANGED' USING ERRCODE = '40001';
+  IF NOT coalesce((p_admission->>'observation_only')::boolean,false) THEN
+    LOCK TABLE public.cie33_sessions, public.cie_assessments,
+      public.witness_objects IN SHARE MODE;
+    IF p_context_fingerprint IS NULL
+       OR public.simulator_admission_fingerprint(p_user_id) IS DISTINCT FROM p_context_fingerprint
+       OR EXISTS (SELECT 1 FROM public.cie33_sessions s WHERE s.user_id=p_user_id
+                    AND s.state->>'safety' IN ('handoff_required','recheck_required')) THEN
+      RAISE EXCEPTION 'CONTEXT_CHANGED' USING ERRCODE = '40001';
+    END IF;
   END IF;
 
   IF coalesce((p_admission->>'activation_allowed')::boolean, false) = false
@@ -406,7 +471,8 @@ BEGIN
 
   UPDATE public.simulator_experiment_protocols
      SET admission_verdict = p_admission->>'verdict',
-         admission_reasons = p_admission,
+         admission_reasons = p_admission - 'protocol_snapshot' - 'experiment_snapshot' - 'source_card_updated_at',
+         admission_context_fingerprint = p_context_fingerprint,
          clinician_review_required =
            coalesce((p_admission->>'clinician_review_required')::boolean, proto.clinician_review_required),
          activation_allowed = true,
@@ -418,10 +484,13 @@ BEGIN
      SET phase = p_to_phase,
          phase_started_at = now(),
          status = 'active',
+         cycle_index = CASE WHEN exp.phase='completed' AND p_to_phase='run_in'
+                            THEN exp.cycle_index+1 ELSE exp.cycle_index END,
          run_in_started_at = CASE WHEN p_to_phase = 'run_in' THEN now() ELSE run_in_started_at END,
          intervention_started_at = CASE WHEN p_to_phase = 'intervention'
                                         THEN now() ELSE intervention_started_at END,
-         ended_at = CASE WHEN p_to_phase IN ('completed', 'not_interpretable') THEN now() ELSE ended_at END,
+         ended_at = CASE WHEN p_to_phase='run_in' THEN NULL
+                         WHEN p_to_phase='not_interpretable' THEN now() ELSE ended_at END,
          updated_at = now()
    WHERE id = p_experiment_id;
 
@@ -438,7 +507,7 @@ GRANT EXECUTE ON FUNCTION public.simulator_transition_phase(
 
 -- ---------------------------------------------------------------------------
 -- 7. Graduation gate (service-only). "Replication" means two INDEPENDENT
---    cycles: two comparisons computed from different sets of daily entries.
+--    cycles: two server-assigned cycles with separate observations.
 --    Repeating the same comparison over the same entries is one cycle, counted
 --    once. This adds no claim about clinical efficacy.
 -- ---------------------------------------------------------------------------
@@ -451,19 +520,24 @@ SET search_path TO ''
 AS $$
 DECLARE
   cycles integer;
+  exp public.simulator_experiments%ROWTYPE;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM public.simulator_experiments
-     WHERE id = p_experiment_id AND user_id = p_user_id
-  ) THEN
+  SELECT * INTO exp FROM public.simulator_experiments
+    WHERE id=p_experiment_id AND user_id=p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
     RAISE EXCEPTION 'EXPERIMENT_NOT_FOUND' USING ERRCODE = '42501';
   END IF;
 
-  SELECT count(DISTINCT c.observation_fingerprint) INTO cycles
+  IF exp.phase='graduated' THEN RETURN jsonb_build_object('graduated',true,'idempotent',true); END IF;
+  IF exp.phase <> 'completed' THEN
+    RAISE EXCEPTION 'INVALID_TRANSITION' USING ERRCODE='22023';
+  END IF;
+
+  SELECT count(DISTINCT c.cycle_index) INTO cycles
     FROM public.simulator_experiment_comparisons c
    WHERE c.experiment_id = p_experiment_id
      AND c.user_id = p_user_id
-     AND c.observation_fingerprint IS NOT NULL
+     AND c.cycle_index IS NOT NULL
      AND c.result IN ('SIGNAL_DETECTED', 'POSSIBLE_SIGNAL', 'NO_DETECTABLE_SIGNAL');
 
   IF coalesce(cycles, 0) < 2 THEN
@@ -471,7 +545,7 @@ BEGIN
   END IF;
 
   UPDATE public.simulator_experiments
-     SET status = 'graduated', ended_at = now(), updated_at = now()
+     SET status = 'graduated', phase='graduated', ended_at = now(), updated_at = now()
    WHERE id = p_experiment_id AND user_id = p_user_id;
   UPDATE public.simulator_learnings
      SET graduated = true, learning_status = 'replicated'
@@ -484,3 +558,63 @@ $$;
 REVOKE ALL ON FUNCTION public.simulator_graduate_experiment(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.simulator_graduate_experiment(uuid, uuid) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.simulator_graduate_experiment(uuid, uuid) TO service_role;
+
+-- Atomically persist a comparison and end that cycle. A repeated call or a log
+-- correction cannot create another cycle. Historical comparisons are snapshots
+-- of self-reported observations, not clinical confirmation of efficacy.
+CREATE OR REPLACE FUNCTION public.simulator_complete_comparison(
+  p_user_id uuid, p_experiment_id uuid, p_cycle_index integer,
+  p_experiment_snapshot jsonb, p_comparison jsonb
+) RETURNS jsonb LANGUAGE plpgsql SET search_path TO '' AS $$
+DECLARE
+  exp public.simulator_experiments%ROWTYPE;
+  cmp public.simulator_experiment_comparisons%ROWTYPE;
+  next_phase text;
+BEGIN
+  SELECT * INTO exp FROM public.simulator_experiments
+    WHERE id=p_experiment_id AND user_id=p_user_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'EXPERIMENT_NOT_FOUND' USING ERRCODE='42501'; END IF;
+  SELECT * INTO cmp FROM public.simulator_experiment_comparisons
+    WHERE experiment_id=p_experiment_id AND user_id=p_user_id AND cycle_index=p_cycle_index;
+  IF FOUND THEN RETURN jsonb_build_object('comparison',to_jsonb(cmp),'next_phase',exp.phase,'replayed',true); END IF;
+  IF exp.cycle_index IS DISTINCT FROM p_cycle_index
+     OR to_jsonb(exp) IS DISTINCT FROM p_experiment_snapshot
+     OR exp.phase NOT IN ('intervention','ready_to_compare') THEN
+    RAISE EXCEPTION 'STALE_PHASE' USING ERRCODE='40001';
+  END IF;
+  INSERT INTO public.simulator_experiment_comparisons (
+    experiment_id,user_id,cycle_index,phase_a,phase_b,n_a,n_b,median_a,median_b,
+    abs_change,pct_change,direction_consistency_pct,overlap_ratio,adherence_pct,
+    missingness_pct,confounder_burden,result,reasons,human_summary,observation_fingerprint
+  ) VALUES (
+    p_experiment_id,p_user_id,p_cycle_index,'run_in','intervention',
+    (p_comparison->>'n_a')::integer,(p_comparison->>'n_b')::integer,
+    (p_comparison->>'median_a')::numeric,(p_comparison->>'median_b')::numeric,
+    (p_comparison->>'abs_change')::numeric,(p_comparison->>'pct_change')::numeric,
+    (p_comparison->>'direction_consistency_pct')::numeric,(p_comparison->>'overlap_ratio')::numeric,
+    (p_comparison->>'adherence_pct')::numeric,(p_comparison->>'missingness_pct')::numeric,
+    (p_comparison->>'confounder_burden')::numeric,p_comparison->>'result',
+    p_comparison->'reasons',p_comparison->>'human_summary',p_comparison->>'observation_fingerprint'
+  ) RETURNING * INTO cmp;
+  next_phase := CASE cmp.result WHEN 'STOPPED_FOR_SAFETY' THEN 'stopped'
+    WHEN 'NOT_INTERPRETABLE' THEN 'not_interpretable' ELSE 'completed' END;
+  UPDATE public.simulator_experiments SET phase=next_phase,ended_at=now(),updated_at=now()
+    WHERE id=p_experiment_id;
+  IF next_phase='completed' THEN
+    INSERT INTO public.simulator_learnings (
+      user_id,experiment_id,cycle_index,comparison_id,observation_fingerprint,kind,
+      headline,body,confidence,evidence_witness_ids,graduated,learning_status,cycle_count
+    ) VALUES (
+      p_user_id,p_experiment_id,p_cycle_index,cmp.id,cmp.observation_fingerprint,'n1_cycle_result',
+      exp.lever || ' — personal observation',cmp.human_summary,
+      CASE cmp.result WHEN 'SIGNAL_DETECTED' THEN 0.65 WHEN 'POSSIBLE_SIGNAL' THEN 0.4 ELSE 0.3 END,
+      ARRAY[]::uuid[],false,'provisional',1
+    );
+  END IF;
+  RETURN jsonb_build_object('comparison',to_jsonb(cmp),'next_phase',next_phase,'replayed',false);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.simulator_complete_comparison(uuid,uuid,integer,jsonb,jsonb)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.simulator_complete_comparison(uuid,uuid,integer,jsonb,jsonb)
+  TO service_role;
