@@ -209,6 +209,60 @@ export type Database = {
           },
         ]
       }
+      biotwin_patient_submissions: {
+        Row: {
+          actor_kind: string
+          authority_asserted_in_file: boolean
+          content_sha256: string
+          created_at: string
+          diagnostics: Json
+          id: string
+          parsed_summary: Json
+          raw_submission: Json
+          report_type: string | null
+          review_state: string
+          schema_name: string | null
+          submitted_by: string | null
+          submitted_filename: string | null
+          user_id: string
+          version: number
+        }
+        Insert: {
+          actor_kind?: string
+          authority_asserted_in_file?: boolean
+          content_sha256: string
+          created_at?: string
+          diagnostics?: Json
+          id?: string
+          parsed_summary?: Json
+          raw_submission: Json
+          report_type?: string | null
+          review_state?: string
+          schema_name?: string | null
+          submitted_by?: string | null
+          submitted_filename?: string | null
+          user_id: string
+          version?: number
+        }
+        Update: {
+          actor_kind?: string
+          authority_asserted_in_file?: boolean
+          content_sha256?: string
+          created_at?: string
+          diagnostics?: Json
+          id?: string
+          parsed_summary?: Json
+          raw_submission?: Json
+          report_type?: string | null
+          review_state?: string
+          schema_name?: string | null
+          submitted_by?: string | null
+          submitted_filename?: string | null
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       biotwin_reports: {
         Row: {
           adapter_version: string
@@ -2387,6 +2441,7 @@ export type Database = {
           actual_time: string | null
           confounders: Json
           created_at: string
+          cycle_index: number | null
           energy: number | null
           experiment_id: string
           id: string
@@ -2409,6 +2464,7 @@ export type Database = {
           actual_time?: string | null
           confounders?: Json
           created_at?: string
+          cycle_index?: number | null
           energy?: number | null
           experiment_id: string
           id?: string
@@ -2431,6 +2487,7 @@ export type Database = {
           actual_time?: string | null
           confounders?: Json
           created_at?: string
+          cycle_index?: number | null
           energy?: number | null
           experiment_id?: string
           id?: string
@@ -2463,6 +2520,7 @@ export type Database = {
           adherence_pct: number | null
           computed_at: string
           confounder_burden: number | null
+          cycle_index: number | null
           direction_consistency_pct: number | null
           experiment_id: string
           human_summary: string | null
@@ -2472,6 +2530,7 @@ export type Database = {
           missingness_pct: number | null
           n_a: number
           n_b: number
+          observation_fingerprint: string | null
           overlap_ratio: number | null
           pct_change: number | null
           phase_a: string
@@ -2485,6 +2544,7 @@ export type Database = {
           adherence_pct?: number | null
           computed_at?: string
           confounder_burden?: number | null
+          cycle_index?: number | null
           direction_consistency_pct?: number | null
           experiment_id: string
           human_summary?: string | null
@@ -2494,6 +2554,7 @@ export type Database = {
           missingness_pct?: number | null
           n_a: number
           n_b: number
+          observation_fingerprint?: string | null
           overlap_ratio?: number | null
           pct_change?: number | null
           phase_a: string
@@ -2507,6 +2568,7 @@ export type Database = {
           adherence_pct?: number | null
           computed_at?: string
           confounder_burden?: number | null
+          cycle_index?: number | null
           direction_consistency_pct?: number | null
           experiment_id?: string
           human_summary?: string | null
@@ -2516,6 +2578,7 @@ export type Database = {
           missingness_pct?: number | null
           n_a?: number
           n_b?: number
+          observation_fingerprint?: string | null
           overlap_ratio?: number | null
           pct_change?: number | null
           phase_a?: string
@@ -2536,14 +2599,20 @@ export type Database = {
       }
       simulator_experiment_protocols: {
         Row: {
+          activation_allowed: boolean
+          admission_computed_at: string | null
+          admission_context: Json
+          admission_context_fingerprint: string | null
           admission_reasons: Json | null
           admission_verdict: string | null
           allowed_cointerventions: string[]
           clinician_review_required: boolean
+          content_sha256: string | null
           contraindications: string[]
           created_at: string
           crossover: Json | null
           evidence_refs: Json
+          executable_sha256: string | null
           expected_direction: string | null
           experiment_id: string
           hold_stable: string[]
@@ -2553,25 +2622,33 @@ export type Database = {
           intervention_days: number
           min_adherence_pct: number
           min_observations_per_phase: number
+          patient_note: string | null
           perturbation_category: string
           primary_outcome: Json
           protocol_version: number
           run_in_days: number
           secondary_outcomes: Json
           stop_criteria: string[]
+          template_id: string | null
           updated_at: string
           user_id: string
           washout_days: number | null
         }
         Insert: {
+          activation_allowed?: boolean
+          admission_computed_at?: string | null
+          admission_context?: Json
+          admission_context_fingerprint?: string | null
           admission_reasons?: Json | null
           admission_verdict?: string | null
           allowed_cointerventions?: string[]
           clinician_review_required?: boolean
+          content_sha256?: string | null
           contraindications?: string[]
           created_at?: string
           crossover?: Json | null
           evidence_refs?: Json
+          executable_sha256?: string | null
           expected_direction?: string | null
           experiment_id: string
           hold_stable?: string[]
@@ -2581,25 +2658,33 @@ export type Database = {
           intervention_days?: number
           min_adherence_pct?: number
           min_observations_per_phase?: number
+          patient_note?: string | null
           perturbation_category: string
           primary_outcome: Json
           protocol_version?: number
           run_in_days?: number
           secondary_outcomes?: Json
           stop_criteria?: string[]
+          template_id?: string | null
           updated_at?: string
           user_id: string
           washout_days?: number | null
         }
         Update: {
+          activation_allowed?: boolean
+          admission_computed_at?: string | null
+          admission_context?: Json
+          admission_context_fingerprint?: string | null
           admission_reasons?: Json | null
           admission_verdict?: string | null
           allowed_cointerventions?: string[]
           clinician_review_required?: boolean
+          content_sha256?: string | null
           contraindications?: string[]
           created_at?: string
           crossover?: Json | null
           evidence_refs?: Json
+          executable_sha256?: string | null
           expected_direction?: string | null
           experiment_id?: string
           hold_stable?: string[]
@@ -2609,12 +2694,14 @@ export type Database = {
           intervention_days?: number
           min_adherence_pct?: number
           min_observations_per_phase?: number
+          patient_note?: string | null
           perturbation_category?: string
           primary_outcome?: Json
           protocol_version?: number
           run_in_days?: number
           secondary_outcomes?: Json
           stop_criteria?: string[]
+          template_id?: string | null
           updated_at?: string
           user_id?: string
           washout_days?: number | null
@@ -2632,6 +2719,7 @@ export type Database = {
       simulator_experiments: {
         Row: {
           created_at: string
+          cycle_index: number
           ended_at: string | null
           horizon_days: number
           id: string
@@ -2654,6 +2742,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          cycle_index?: number
           ended_at?: string | null
           horizon_days?: number
           id?: string
@@ -2676,6 +2765,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          cycle_index?: number
           ended_at?: string | null
           horizon_days?: number
           id?: string
@@ -2710,9 +2800,11 @@ export type Database = {
         Row: {
           body: string | null
           checkpoint_id: string | null
+          comparison_id: string | null
           confidence: number | null
           created_at: string
           cycle_count: number
+          cycle_index: number | null
           evidence_witness_ids: string[]
           experiment_id: string | null
           graduated: boolean
@@ -2720,6 +2812,7 @@ export type Database = {
           id: string
           kind: string
           learning_status: string
+          observation_fingerprint: string | null
           replicated_by_experiment_id: string | null
           updated_at: string
           user_id: string
@@ -2727,9 +2820,11 @@ export type Database = {
         Insert: {
           body?: string | null
           checkpoint_id?: string | null
+          comparison_id?: string | null
           confidence?: number | null
           created_at?: string
           cycle_count?: number
+          cycle_index?: number | null
           evidence_witness_ids?: string[]
           experiment_id?: string | null
           graduated?: boolean
@@ -2737,6 +2832,7 @@ export type Database = {
           id?: string
           kind?: string
           learning_status?: string
+          observation_fingerprint?: string | null
           replicated_by_experiment_id?: string | null
           updated_at?: string
           user_id: string
@@ -2744,9 +2840,11 @@ export type Database = {
         Update: {
           body?: string | null
           checkpoint_id?: string | null
+          comparison_id?: string | null
           confidence?: number | null
           created_at?: string
           cycle_count?: number
+          cycle_index?: number | null
           evidence_witness_ids?: string[]
           experiment_id?: string | null
           graduated?: boolean
@@ -2754,6 +2852,7 @@ export type Database = {
           id?: string
           kind?: string
           learning_status?: string
+          observation_fingerprint?: string | null
           replicated_by_experiment_id?: string | null
           updated_at?: string
           user_id?: string
@@ -3383,6 +3482,39 @@ export type Database = {
           p_concept_id?: string
           p_queue_item_id: string
           p_reviewer_notes?: string
+        }
+        Returns: Json
+      }
+      simulator_admission_fingerprint: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
+      simulator_complete_comparison: {
+        Args: {
+          p_comparison: Json
+          p_cycle_index: number
+          p_experiment_id: string
+          p_experiment_snapshot: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      simulator_graduate_experiment: {
+        Args: { p_experiment_id: string; p_user_id: string }
+        Returns: Json
+      }
+      simulator_transition_phase: {
+        Args: {
+          p_admission: Json
+          p_context_fingerprint: string
+          p_executable_sha: string
+          p_experiment_id: string
+          p_from_phase: string
+          p_protocol_id: string
+          p_protocol_version: number
+          p_stopped_reason: string
+          p_to_phase: string
+          p_user_id: string
         }
         Returns: Json
       }
