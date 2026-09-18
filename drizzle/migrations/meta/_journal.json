@@ -43,6 +43,13 @@
       "when": 1789758536038,
       "tag": "0005_patient_autonomy_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789762501173,
+      "tag": "0006_allow_upload_identity_confirmation_states",
+      "breakpoints": true
     }
   ]
 }
