@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
+import { invokeClinicalResult } from "@/lib/clinicalFunctions";
 
 export interface PredictedDelta {
   biomarker: string;
@@ -186,6 +187,14 @@ export interface ServerAdmission {
   unbound_outcomes: string[];
   safety_flags: string[];
 }
+
+/**
+ * A plan the patient proposed is always saved. `ok` says whether it can start
+ * now; `admission` carries the server's reasons either way.
+ */
+export type DesignResult =
+  | { ok: true; experiment: Experiment; protocol: ExperimentProtocol; admission: ServerAdmission | null }
+  | { ok: false; message: string; admission?: ServerAdmission | null };
 
 interface SimulatorContextValue {
   cards: WhatIfCard[];
