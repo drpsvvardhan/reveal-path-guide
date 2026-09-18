@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useViewAs } from "@/context/ViewAsContext";
+import { invokeClinicalResult } from "@/lib/clinicalFunctions";
 
 export interface PredictedDelta {
   biomarker: string;
@@ -187,6 +188,14 @@ export interface ServerAdmission {
   safety_flags: string[];
 }
 
+/**
+ * A plan the patient proposed is always saved. `ok` says whether it can start
+ * now; `admission` carries the server's reasons either way.
+ */
+export type DesignResult =
+  | { ok: true; experiment: Experiment; protocol: ExperimentProtocol; admission: ServerAdmission | null }
+  | { ok: false; message: string; admission?: ServerAdmission | null };
+
 interface SimulatorContextValue {
   cards: WhatIfCard[];
   blockedCards: WhatIfCard[];
@@ -201,11 +210,7 @@ interface SimulatorContextValue {
   error: string | null;
   refresh: () => Promise<void>;
   generateCards: (focus?: string) => Promise<void>;
-  designProtocol: (
-    payload: any,
-  ) => Promise<
-    { experiment: Experiment; protocol: ExperimentProtocol; admission: ServerAdmission } | null
-  >;
+  designProtocol: (payload: any) => Promise<DesignResult>;
   advancePhase: (
     experimentId: string,
     target?: string,
@@ -306,37 +311,52 @@ export const SimulatorProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [uid, refresh]);
 
-  const designProtocol = useCallback(async (payload: any) => {
-    if (!uid) return null;
-    try {
-      const { data, error: err } = await supabase.functions.invoke("design-experiment-protocol", {
-        body: { ...payload, user_id: uid },
-      });
-      if (err) throw err;
-      await refresh();
-      return data as any;
-    } catch (e: any) {
-      setError(e.message || "Failed to design protocol");
-      return null;
+  const designProtocol = useCallback(async (payload: any): Promise<DesignResult> => {
+    if (!uid) return { ok: false, message: "Please sign in first." };
+    const res = await invokeClinicalResult<any>("design-experiment-protocol", {
+      ...payload,
+      user_id: uid,
+    });
+    // A plan that cannot start yet is still saved. The list is refreshed either
+    // way so the patient can read, revise and discuss what they proposed.
+    await refresh();
+    if (!res.ok) {
+      setError(res.message);
+      return {
+        ok: false,
+        message: res.message,
+        admission: (res.body?.admission as ServerAdmission) ?? null,
+      };
     }
+    setError(null);
+    return {
+      ok: true,
+      experiment: res.data.experiment,
+      protocol: res.data.protocol,
+      admission: res.data.admission ?? null,
+    };
   }, [uid, refresh]);
 
   const advancePhase = useCallback(async (experimentId: string, target?: string, stoppedReason?: string) => {
     // Every transition — including stopping — goes through the server. Stopping
     // is always permitted there; starting is re-checked against current data.
     try {
-      const { data, error: err } = await supabase.functions.invoke("start-experiment-phase", {
-        body: { experiment_id: experimentId, target_phase: target, stopped_reason: stoppedReason },
+      const res = await invokeClinicalResult<any>("start-experiment-phase", {
+        experiment_id: experimentId,
+        target_phase: target,
+        stopped_reason: stoppedReason,
       });
-      const body = (data ?? {}) as any;
-      if (err || body?.error) {
-        const message = body?.message || err?.message || "That step did not go through.";
-        setError(message);
-        await refresh();
-        return { ok: false, admission: body?.admission, message };
-      }
       await refresh();
-      return { ok: true, admission: body?.admission };
+      if (!res.ok) {
+        setError(res.message);
+        return {
+          ok: false,
+          admission: (res.body?.admission as ServerAdmission) ?? undefined,
+          message: res.message,
+        };
+      }
+      setError(null);
+      return { ok: true, admission: res.data?.admission };
     } catch (e: any) {
       const message = e.message || "That step did not go through.";
       setError(message);

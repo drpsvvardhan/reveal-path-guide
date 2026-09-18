@@ -18,7 +18,7 @@ const LEVEL_STYLE: Record<
  * document extraction, and never rendered on public or demo routes.
  */
 const BioTwinImportCard: React.FC = () => {
-  const { importReportFile, importing, lastImport, report } = useBioTwin();
+  const { importReportFile, importing, lastImport, report, submissions } = useBioTwin();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,8 +35,10 @@ const BioTwinImportCard: React.FC = () => {
         <div className="min-w-0">
           <h3 className="font-serif text-base break-words">BioTwin clinical evidence report</h3>
           <p className="font-sans text-xs text-muted-foreground mt-1 max-w-prose break-words">
-            A structured final report is read exactly as written. It is validated and
-            imported directly — never interpreted by a language model on the way in.
+            Upload your own report whenever you like. It is kept exactly as you sent
+            it and is yours to read straight away. It is recorded as information you
+            contributed — not as a sign-off — so nothing in the file approves
+            treatment or replaces a report already on your account.
           </p>
         </div>
         <button
@@ -73,6 +75,23 @@ const BioTwinImportCard: React.FC = () => {
                   ledger.
                 </span>
               </>
+            ) : lastImport.accepted && lastImport.idempotent ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-700" />
+                <span className="break-words">
+                  You had already sent this exact file, so we kept the copy from before
+                  rather than adding a duplicate. It is saved under your uploads.
+                </span>
+              </>
+            ) : lastImport.accepted ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-700" />
+                <span className="break-words">
+                  Saved as your upload{lastImport.version ? ` (number ${lastImport.version})` : ""}.
+                  You can read it now. It has not been checked by anyone yet, so it is not
+                  part of your verified record.
+                </span>
+              </>
             ) : lastImport.idempotent ? (
               <>
                 <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -90,8 +109,16 @@ const BioTwinImportCard: React.FC = () => {
 
           {lastImport.clinician_review_required && (
             <p className="font-sans text-xs text-amber-700 break-words">
-              This report is held for treating-clinician review. Its own release rules stay in
-              force everywhere it is used.
+              Parts of this report are held for a treating clinician to look at before they
+              are used for medication or treatment decisions. Everything else — reading it,
+              asking questions about it, tracking how you feel — stays open to you.
+            </p>
+          )}
+
+          {lastImport.authority_asserted_in_file && (
+            <p className="font-sans text-xs text-muted-foreground break-words">
+              The file includes sign-off wording. We keep that wording as part of your
+              document, but it does not make anything here approved.
             </p>
           )}
 
@@ -117,6 +144,34 @@ const BioTwinImportCard: React.FC = () => {
             </ul>
           )}
         </motion.div>
+      )}
+
+      {submissions.length > 0 && (
+        <div className="mt-5 border-t border-border pt-4 min-w-0">
+          <h4 className="font-sans text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            What you have uploaded
+          </h4>
+          <ul className="mt-2 space-y-2">
+            {submissions.map((s) => (
+              <li
+                key={s.id}
+                className="rounded border border-border bg-background px-3 py-2 min-w-0"
+              >
+                <p className="font-sans text-sm text-foreground break-words">
+                  {s.submitted_filename || s.report_type || `Upload ${s.version}`}
+                </p>
+                <p className="font-sans text-xs text-muted-foreground break-words">
+                  {new Date(s.created_at).toLocaleDateString()} ·{" "}
+                  {s.review_state === "verified"
+                    ? "checked and in your verified record"
+                    : s.review_state === "superseded"
+                      ? "replaced by a newer upload of yours"
+                      : "saved and readable · not checked yet"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

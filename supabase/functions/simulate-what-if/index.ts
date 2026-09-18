@@ -10,6 +10,7 @@ import { formatCIE33Evidence } from "../_shared/cie33/evidence.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { admitExperiments } from "../_shared/aae/experimentAdmission.ts";
 import { loadPatientContext } from "../_shared/contextLoader.ts";
+import { derivePatientGuards } from "../_shared/aae/patientGuards.ts";
 import { authenticateRequest, resolveTargetUserId, jsonResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
@@ -122,44 +123,6 @@ async function loadCompactContext(supabase: any, userId: string) {
 // Fat), FibroScan, and CIE domains/gates — everything RAE admitted — so a real
 // admitted marker can never be falsely rejected as "unbound" due to a raw-table
 // column mismatch. (Raw reads previously missed InBody entirely.)
-function derivePatientGuards(wc: any): { biomarkers: Set<string>; flags: Set<string> } {
-  const biomarkers = new Set<string>();
-  const add = (s: unknown) => { if (s) biomarkers.add(String(s)); };
-
-  // All four admitted observation sources carry canonical_name.
-  for (const o of wc?.labs?.observations ?? []) add(o.canonical_name);
-  for (const o of wc?.inbody?.observations ?? []) add(o.canonical_name);     // Phase Angle, Visceral Fat
-  for (const o of wc?.fibroscan?.observations ?? []) add(o.canonical_name);
-  // CIE domains + gates (axis names + domain/gate ids the LLM may reference).
-  for (const d of wc?.cie?.domain_scores ?? []) { add(d.domain_id); add(d.axis); }
-  for (const g of wc?.cie?.gate_scores ?? []) { add(g.gate_id); add(g.gate_name); }
-
-  const flags = new Set<string>();
-  // Build a name→value map across all numeric observation sources for flag rules.
-  const byName: Record<string, number> = {};
-  const ingest = (obs: any[]) => {
-    for (const o of obs ?? []) {
-      const v = typeof o.value === "number" ? o.value : parseFloat(o.value);
-      const n = String(o.canonical_name || "").toLowerCase();
-      if (n && !isNaN(v)) byName[n] = v;
-    }
-  };
-  ingest(wc?.labs?.observations);
-  ingest(wc?.inbody?.observations);
-  ingest(wc?.fibroscan?.observations);
-
-  for (const [n, v] of Object.entries(byName)) {
-    if (n.includes("hrv") && v < 30) flags.add("low_hrv");
-    if ((n.includes("bmi") || n.includes("body mass index")) && v < 18.5) flags.add("underweight");
-    if (n.includes("egfr") && v < 60) flags.add("ckd");
-    if ((n.includes("troponin") || n.includes("coronary") || n.includes("cac")) && v > 0) flags.add("cardiac_risk");
-  }
-  // NOTE: ed_history and pregnancy are NOT inferable from observations — they
-  // need a profile/condition source. Until wired, those contraindication rules
-  // cannot fire. Known gap (carried from v0.1).
-  return { biomarkers, flags };
-}
-
 async function callClaude(ctx: any, focus: string | null, subjectiveEvidence = ""): Promise<GeneratedCard[] | null> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return null;
