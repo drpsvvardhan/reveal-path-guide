@@ -223,6 +223,12 @@ beforeAll(async () => {
       "utf8",
     ),
   );
+  await db.exec(
+    readFileSync(
+      "drizzle/migrations/0002_patient_review_notice_invoker_security.sql",
+      "utf8",
+    ),
+  );
 }, 60000);
 
 beforeEach(async () => {
