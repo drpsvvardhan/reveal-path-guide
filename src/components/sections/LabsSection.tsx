@@ -18,7 +18,7 @@ const STEPS = [
 
 const LabsSection: React.FC = () => {
   const { uploads, observations, loading, observationsAsTimeline } = useLabUploads();
-  const nav = useNavigation() as any;
+  const { navigateTo } = useNavigation();
   const pilotUrl = getLabsPilotUrl();
   const timeline = useMemo(() => observationsAsTimeline(), [observations]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -51,7 +51,7 @@ const LabsSection: React.FC = () => {
               ))}
             </ul>
           )}
-          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => nav?.onNavigate?.("records")}>
+          <Button variant="outline" size="sm" className="min-h-[44px]" onClick={() => navigateTo("records")}>
             Add or manage reports in Medical Records
           </Button>
         </section>
